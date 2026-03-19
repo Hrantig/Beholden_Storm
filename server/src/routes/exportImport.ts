@@ -2,6 +2,8 @@
 import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
+import { requireAdmin } from "../middleware/auth.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 import {
   rowToCampaign,
   rowToAdventure,
@@ -30,7 +32,7 @@ export function registerExportImportRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
 
   // ── Export campaign ───────────────────────────────────────────────────────
-  app.get("/api/campaigns/:campaignId/export", (req, res) => {
+  app.get("/api/campaigns/:campaignId/export", memberOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
 
@@ -119,7 +121,7 @@ export function registerExportImportRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Import campaign ───────────────────────────────────────────────────────
-  app.post("/api/campaigns/import", ctx.upload.single("file"), (req, res) => {
+  app.post("/api/campaigns/import", requireAdmin, ctx.upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, message: "No file uploaded" });
 
     let doc: Record<string, unknown>;
@@ -385,7 +387,7 @@ export function registerExportImportRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Legacy: full data export (debug) ─────────────────────────────────────
-  app.get("/api/user/export", (_req, res) => {
+  app.get("/api/user/export", requireAdmin, (_req, res) => {
     const campaigns = (
       db.prepare("SELECT id, name, color, image_url, created_at, updated_at FROM campaigns").all() as Record<string, unknown>[]
     ).map(rowToCampaign);

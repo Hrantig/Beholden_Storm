@@ -3,6 +3,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
+import { dmOrAdmin } from "../middleware/campaignAuth.js";
 
 const ReorderBody = z.object({
   ids: z.array(z.string()),
@@ -36,7 +37,7 @@ export function registerReorderRoutes(app: Express, ctx: ServerContext) {
     })();
   }
 
-  app.post("/api/campaigns/:campaignId/adventures/reorder", (req, res) => {
+  app.post("/api/campaigns/:campaignId/adventures/reorder", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const { ids } = parseBody(ReorderBody, req);
@@ -45,7 +46,7 @@ export function registerReorderRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.post("/api/adventures/:adventureId/encounters/reorder", (req, res) => {
+  app.post("/api/adventures/:adventureId/encounters/reorder", dmOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const aRow = db
@@ -58,7 +59,7 @@ export function registerReorderRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.post("/api/campaigns/:campaignId/notes/reorder", (req, res) => {
+  app.post("/api/campaigns/:campaignId/notes/reorder", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const { ids } = parseBody(ReorderBody, req);
@@ -67,7 +68,7 @@ export function registerReorderRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.post("/api/adventures/:adventureId/notes/reorder", (req, res) => {
+  app.post("/api/adventures/:adventureId/notes/reorder", dmOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const aRow = db

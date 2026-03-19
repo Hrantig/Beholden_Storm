@@ -38,8 +38,16 @@ export interface StoredDeathSaves {
 // Collections
 // ---------------------------------------------------------------------------
 
+export interface StoredUser extends Timestamps {
+  id: Id;
+  username: string;
+  name: string;
+  isAdmin: boolean;
+}
+
 export interface StoredCharacter extends Timestamps {
   id: Id;
+  userId: Id | null;
   campaignId: Id;
   name: string;
   className: string;

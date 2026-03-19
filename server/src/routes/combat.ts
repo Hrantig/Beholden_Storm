@@ -4,6 +4,7 @@ import type { ServerContext } from "../server/context.js";
 import type { StoredCombatant, StoredCombatState } from "../server/userData.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 import { rowToPlayer, rowToCombatant, parseJson, PLAYER_COLS, COMBATANT_COLS } from "../lib/db.js";
 import { extractLeadingNumber, extractDetails } from "../lib/text.js";
 import {
@@ -70,7 +71,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   const { now, uid } = ctx.helpers;
 
   // ── Encounter combatants (merged view) ────────────────────────────────────
-  app.get("/api/encounters/:encounterId/combatants", (req, res) => {
+  app.get("/api/encounters/:encounterId/combatants", memberOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     ensureCombat(db, encounterId);
@@ -112,7 +113,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Persisted combat state (round + active combatant) ─────────────────────
-  app.get("/api/encounters/:encounterId/combatState", (req, res) => {
+  app.get("/api/encounters/:encounterId/combatState", memberOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     ensureCombat(db, encounterId);
@@ -130,7 +131,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
     res.json(state);
   });
 
-  app.put("/api/encounters/:encounterId/combatState", (req, res) => {
+  app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     ensureCombat(db, encounterId);
@@ -155,7 +156,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Add all campaign players ──────────────────────────────────────────────
-  app.post("/api/encounters/:encounterId/combatants/addPlayers", (req, res) => {
+  app.post("/api/encounters/:encounterId/combatants/addPlayers", dmOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     const encRow = db
@@ -192,7 +193,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Add single player ─────────────────────────────────────────────────────
-  app.post("/api/encounters/:encounterId/combatants/addPlayer", (req, res) => {
+  app.post("/api/encounters/:encounterId/combatants/addPlayer", dmOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     const encRow = db
@@ -227,7 +228,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Add monster ───────────────────────────────────────────────────────────
-  app.post("/api/encounters/:encounterId/combatants/addMonster", (req, res) => {
+  app.post("/api/encounters/:encounterId/combatants/addMonster", dmOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     const encRow = db
@@ -322,7 +323,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   });
 
   // ── Add iNPC ──────────────────────────────────────────────────────────────
-  app.post("/api/encounters/:encounterId/combatants/addInpc", (req, res) => {
+  app.post("/api/encounters/:encounterId/combatants/addInpc", dmOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
     if (!encounterId) return;
     const encRow = db
@@ -373,6 +374,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   // ── Update combatant ──────────────────────────────────────────────────────
   app.put(
     "/api/encounters/:encounterId/combatants/:combatantId",
+    dmOrAdmin(db),
     (req, res) => {
       const encounterId = requireParam(req, res, "encounterId");
       if (!encounterId) return;
@@ -461,6 +463,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   // ── Delete combatant ──────────────────────────────────────────────────────
   app.delete(
     "/api/encounters/:encounterId/combatants/:combatantId",
+    dmOrAdmin(db),
     (req, res) => {
       const encounterId = requireParam(req, res, "encounterId");
       if (!encounterId) return;

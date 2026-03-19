@@ -4,6 +4,7 @@ import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { rowToTreasure, nextSortFor, TREASURE_COLS } from "../lib/db.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 
 const TreasureQtyBody = z.object({
   qty: z.number().int().min(1),
@@ -33,7 +34,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now, normalizeKey } = ctx.helpers;
 
-  app.get("/api/campaigns/:campaignId/treasure", (req, res) => {
+  app.get("/api/campaigns/:campaignId/treasure", memberOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const c = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);
@@ -46,7 +47,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToTreasure));
   });
 
-  app.get("/api/adventures/:adventureId/treasure", (req, res) => {
+  app.get("/api/adventures/:adventureId/treasure", memberOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const a = db.prepare("SELECT id FROM adventures WHERE id = ?").get(adventureId);
@@ -59,7 +60,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToTreasure));
   });
 
-  app.patch("/api/treasure/:treasureId/qty", (req, res) => {
+  app.patch("/api/treasure/:treasureId/qty", dmOrAdmin(db), (req, res) => {
     const treasureId = requireParam(req, res, "treasureId");
     if (!treasureId) return;
     const row = db.prepare("SELECT campaign_id FROM treasure WHERE id = ?").get(treasureId) as { campaign_id: string } | undefined;
@@ -70,7 +71,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true, qty });
   });
 
-  app.post("/api/campaigns/:campaignId/treasure", (req, res) => {
+  app.post("/api/campaigns/:campaignId/treasure", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const c = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);
@@ -88,7 +89,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
     res.json(out.entry);
   });
 
-  app.post("/api/adventures/:adventureId/treasure", (req, res) => {
+  app.post("/api/adventures/:adventureId/treasure", dmOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const aRow = db
@@ -108,7 +109,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
     res.json(out.entry);
   });
 
-  app.delete("/api/treasure/:treasureId", (req, res) => {
+  app.delete("/api/treasure/:treasureId", dmOrAdmin(db), (req, res) => {
     const treasureId = requireParam(req, res, "treasureId");
     if (!treasureId) return;
     const row = db

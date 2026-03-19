@@ -21,7 +21,15 @@ const SAME_ORIGIN_IS_DIRECT_PORT = (() => {
 async function apiError(res: Response): Promise<Error> {
   try {
     const body = await res.json() as unknown;
-    const msg = (body as Record<string, unknown>)?.message ?? (body as Record<string, unknown>)?.error;
+    const b = body as Record<string, unknown>;
+    // Prefer first Zod issue message over generic message.
+    const issues = b?.issues as Array<{ path: string; message: string }> | undefined;
+    if (Array.isArray(issues) && issues.length > 0) {
+      const first = issues[0];
+      const label = first.path ? `${first.path}: ${first.message}` : first.message;
+      return new Error(label);
+    }
+    const msg = b?.message ?? b?.error;
     if (msg) return new Error(String(msg));
   } catch {
     // ignore JSON parse errors — fall through to status text
@@ -29,10 +37,32 @@ async function apiError(res: Response): Promise<Error> {
   return new Error(`${res.status} ${res.statusText}`);
 }
 
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem("beholden_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function mergeInit(init?: RequestInit): RequestInit {
+  const authHeaders = getAuthHeaders();
+  return {
+    ...init,
+    headers: { ...authHeaders, ...(init?.headers ?? {}) },
+  };
+}
+
+/** Raw fetch helper — no automatic auth header injection. Used by AuthContext for login/me. */
+export async function apiRaw<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
+  if (!res.ok) throw await apiError(res);
+  return (await res.json()) as T;
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const merged = mergeInit(init);
+
   // Non-API paths: just fetch as-is.
   if (!path.startsWith("/api")) {
-    const res = await fetch(path, init);
+    const res = await fetch(path, merged);
     if (!res.ok) throw await apiError(res);
     return (await res.json()) as T;
   }
@@ -40,7 +70,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   // Prefer same-origin first (works with Vite proxy, reverse proxies, and prod single-port).
   let proxyError: Error | null = null;
   try {
-    const res = await fetch(path, init);
+    const res = await fetch(path, merged);
 
     // Client errors (4xx) are real — don't retry.
     if (res.ok) return (await res.json()) as T;
@@ -59,7 +89,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   // Fallback: direct server port (dev split-port mode only).
-  const res2 = await fetch(directServerUrl(path), init);
+  const res2 = await fetch(directServerUrl(path), merged);
   if (!res2.ok) throw await apiError(res2);
   return (await res2.json()) as T;
 }

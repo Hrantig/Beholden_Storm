@@ -2,22 +2,24 @@ import React from "react";
 import { theme, withAlpha } from "@/theme/theme";
 import { IconCompendiumAlt, IconSpells, IconNotes, IconMonster, IconChest } from "@/icons";
 import type { CompendiumSection } from "@/views/CompendiumView/CompendiumView";
+import { useAuth } from "@/contexts/AuthContext";
 
-const NAV_ITEMS: { section: CompendiumSection; label: string; Icon: React.FC<{ size?: number }> }[] = [
-  { section: "compendium", label: "Compendium",          Icon: IconCompendiumAlt },
-  { section: "items",      label: "Items",           Icon: IconChest },
-  { section: "monsters",   label: "Monsters",        Icon: IconMonster },
-  { section: "rules",      label: "Rules Reference", Icon: IconNotes },
-  { section: "spells",     label: "Spells",          Icon: IconSpells },
+const NAV_ITEMS: { section: CompendiumSection; label: string; Icon: React.FC<{ size?: number }>; adminOnly?: boolean }[] = [
+  { section: "compendium", label: "Compendium",    Icon: IconCompendiumAlt, adminOnly: true },
+  { section: "items",      label: "Items",          Icon: IconChest },
+  { section: "monsters",   label: "Monsters",       Icon: IconMonster },
+  { section: "rules",      label: "Rules Reference",Icon: IconNotes },
+  { section: "spells",     label: "Spells",         Icon: IconSpells },
 ];
 
 export function CompendiumNavMenu(props: {
   activeSection: CompendiumSection;
   onSetSection: (s: CompendiumSection) => void;
 }) {
+  const { user } = useAuth();
   return (
     <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      {NAV_ITEMS.map(({ section, label, Icon }) => {
+      {NAV_ITEMS.filter((item) => !item.adminOnly || user?.isAdmin).map(({ section, label, Icon }) => {
         const active = props.activeSection === section;
         return (
           <button

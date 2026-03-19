@@ -4,6 +4,7 @@ import type { ServerContext } from "../server/context.js";
 import type { StoredCombatant } from "../server/userData.js";
 import { parseBody } from "../shared/validate.js";
 import { requireParam } from "../lib/routeHelpers.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 import {
   rowToAdventure,
   rowToEncounter,
@@ -81,7 +82,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
 
-  app.get("/api/campaigns/:campaignId/adventures", (req, res) => {
+  app.get("/api/campaigns/:campaignId/adventures", memberOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const rows = db
@@ -92,7 +93,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToAdventure));
   });
 
-  app.post("/api/campaigns/:campaignId/adventures", (req, res) => {
+  app.post("/api/campaigns/:campaignId/adventures", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const body = parseBody(AdventureCreateBody, req);
@@ -112,7 +113,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
 
   // ── Export adventure ──────────────────────────────────────────────────────
 
-  app.get("/api/adventures/:adventureId/export", (req, res) => {
+  app.get("/api/adventures/:adventureId/export", memberOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const advRow = db
@@ -189,7 +190,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
 
   // ── Import adventure ──────────────────────────────────────────────────────
 
-  app.post("/api/campaigns/:campaignId/adventures/import", (req, res) => {
+  app.post("/api/campaigns/:campaignId/adventures/import", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
 
@@ -274,7 +275,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  app.put("/api/adventures/:adventureId", (req, res) => {
+  app.put("/api/adventures/:adventureId", dmOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const advRow = db
@@ -295,7 +296,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
     res.json({ ...a, name, updatedAt: t });
   });
 
-  app.delete("/api/adventures/:adventureId", (req, res) => {
+  app.delete("/api/adventures/:adventureId", dmOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const advRow = db

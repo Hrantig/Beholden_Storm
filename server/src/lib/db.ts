@@ -51,7 +51,7 @@ export const CONDITION_COLS =
   "id, campaign_id, key, name, description, sort, created_at, updated_at";
 
 export const CHARACTER_COLS =
-  "id, campaign_id, name, class_name, species, level, " +
+  "id, user_id, campaign_id, name, class_name, species, level, " +
   "hp_max, hp_current, temp_hp, ac, speed, " +
   "str_score, dex_score, con_score, int_score, wis_score, cha_score, " +
   "notes, created_at, updated_at";
@@ -263,8 +263,29 @@ CREATE TABLE IF NOT EXISTS compendium_spells (
   data_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  passhash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS campaign_membership (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK(role IN ('dm', 'player')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(campaign_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS characters (
   id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   class_name TEXT NOT NULL DEFAULT '',
@@ -295,6 +316,8 @@ CREATE INDEX IF NOT EXISTS idx_treasure_campaign     ON treasure(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_conditions_campaign   ON conditions(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_combatants_encounter  ON combatants(encounter_id);
 CREATE INDEX IF NOT EXISTS idx_characters_campaign   ON characters(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_membership_campaign   ON campaign_membership(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_membership_user       ON campaign_membership(user_id);
 CREATE INDEX IF NOT EXISTS idx_compmon_name          ON compendium_monsters(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_compmon_typekey       ON compendium_monsters(type_key);
 CREATE INDEX IF NOT EXISTS idx_compmon_size          ON compendium_monsters(size);
@@ -340,6 +363,13 @@ function runMigrations(db: Db): void {
   if (!combatantCols.includes("used_legendary_resistances")) {
     db.exec("ALTER TABLE combatants ADD COLUMN used_legendary_resistances INTEGER NOT NULL DEFAULT 0");
   }
+
+  // Add user_id to characters (new user auth system).
+  const charCols = (db.pragma("table_info(characters)") as { name: string }[]).map((c) => c.name);
+  if (!charCols.includes("user_id")) {
+    db.exec("ALTER TABLE characters ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_characters_user ON characters(user_id)");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -351,9 +381,21 @@ export function parseJson<T>(s: unknown, fallback: T): T {
   try { return JSON.parse(s) as T; } catch { return fallback; }
 }
 
+export function rowToUser(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    username: row.username as string,
+    name: row.name as string,
+    isAdmin: Boolean(row.is_admin),
+    createdAt: row.created_at as number,
+    updatedAt: row.updated_at as number,
+  };
+}
+
 export function rowToCharacter(row: Record<string, unknown>): StoredCharacter {
   return {
     id: row.id as string,
+    userId: (row.user_id as string | null) ?? null,
     campaignId: row.campaign_id as string,
     name: row.name as string,
     className: (row.class_name as string) ?? "",

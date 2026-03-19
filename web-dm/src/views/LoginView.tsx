@@ -1,0 +1,123 @@
+// web-dm/src/views/LoginView.tsx
+
+import React, { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { theme } from "@/theme/theme";
+import { Button } from "@/ui/Button";
+import { Input } from "@/ui/Input";
+
+export function LoginView() {
+  const { login } = useAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await login(username, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: theme.colors.bg,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "system-ui, Segoe UI, Arial",
+        color: theme.colors.text,
+      }}
+    >
+      <div
+        style={{
+          background: theme.colors.panelBg,
+          border: `1px solid ${theme.colors.panelBorder}`,
+          borderRadius: theme.radius.panel,
+          padding: "40px 36px",
+          width: "100%",
+          maxWidth: 380,
+          boxSizing: "border-box",
+        }}
+      >
+        <h1
+          style={{
+            margin: "0 0 6px",
+            fontSize: 26,
+            fontWeight: 800,
+            color: theme.colors.accentPrimary,
+            letterSpacing: "-0.5px",
+          }}
+        >
+          Beholden
+        </h1>
+        <p style={{ margin: "0 0 28px", color: theme.colors.muted, fontSize: 14 }}>
+          Sign in to continue
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+              Username
+            </label>
+            <Input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoFocus
+              autoComplete="username"
+              disabled={loading}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+              Password
+            </label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              disabled={loading}
+            />
+          </div>
+
+          {error && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: "10px 12px",
+                borderRadius: theme.radius.control,
+                background: `${theme.colors.red}22`,
+                border: `1px solid ${theme.colors.red}55`,
+                color: theme.colors.red,
+                fontSize: 13,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={loading || !username || !password}
+            style={{ width: "100%" }}
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}

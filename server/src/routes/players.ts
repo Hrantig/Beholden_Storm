@@ -8,6 +8,7 @@ import { rowToPlayer, PLAYER_COLS } from "../lib/db.js";
 import { ConditionInstanceSchema, OverridesSchema } from "../lib/schemas.js";
 import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP } from "../lib/imageHelpers.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 
 const PlayerCreateBody = z.object({
   playerName: z.string().trim().optional(),
@@ -54,7 +55,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
 
-  app.get("/api/campaigns/:campaignId/players", (req, res) => {
+  app.get("/api/campaigns/:campaignId/players", memberOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const rows = db
@@ -63,7 +64,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToPlayer));
   });
 
-  app.post("/api/campaigns/:campaignId/players", (req, res) => {
+  app.post("/api/campaigns/:campaignId/players", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const p = parseBody(PlayerCreateBody, req);
@@ -104,7 +105,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rowToPlayer(row));
   });
 
-  app.put("/api/players/:playerId", (req, res) => {
+  app.put("/api/players/:playerId", dmOrAdmin(db), (req, res) => {
     const playerId = requireParam(req, res, "playerId");
     if (!playerId) return;
     const existingRow = db
@@ -155,7 +156,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rowToPlayer(updated));
   });
 
-  app.delete("/api/players/:playerId", (req, res) => {
+  app.delete("/api/players/:playerId", dmOrAdmin(db), (req, res) => {
     const playerId = requireParam(req, res, "playerId");
     if (!playerId) return;
     const existingRow = db
@@ -194,7 +195,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
   });
 
   // Upload player character image — resized to a thumbnail (max 400px, WebP).
-  app.post("/api/players/:playerId/image", ctx.upload.single("image"), async (req, res) => {
+  app.post("/api/players/:playerId/image", dmOrAdmin(db), ctx.upload.single("image"), async (req, res) => {
     const playerId = requireParam(req, res, "playerId");
     if (!playerId) return;
     const row = db.prepare("SELECT campaign_id FROM players WHERE id = ?").get(playerId) as { campaign_id: string } | undefined;
@@ -225,7 +226,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
   });
 
   // Remove player character image.
-  app.delete("/api/players/:playerId/image", (req, res) => {
+  app.delete("/api/players/:playerId/image", dmOrAdmin(db), (req, res) => {
     const playerId = requireParam(req, res, "playerId");
     if (!playerId) return;
     const row = db.prepare("SELECT campaign_id FROM players WHERE id = ?").get(playerId) as { campaign_id: string } | undefined;

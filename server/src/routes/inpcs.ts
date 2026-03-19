@@ -4,6 +4,7 @@ import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { rowToINpc, INPC_COLS } from "../lib/db.js";
+import { dmOrAdmin } from "../middleware/campaignAuth.js";
 import { extractLeadingNumber, extractDetails } from "../lib/text.js";
 
 const InpcCreateBody = z.object({
@@ -34,7 +35,7 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
 
-  app.get("/api/campaigns/:campaignId/inpcs", (req, res) => {
+  app.get("/api/campaigns/:campaignId/inpcs", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const rows = db
@@ -43,7 +44,7 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToINpc));
   });
 
-  app.post("/api/campaigns/:campaignId/inpcs", (req, res) => {
+  app.post("/api/campaigns/:campaignId/inpcs", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const b = parseBody(InpcCreateBody, req);
@@ -102,7 +103,7 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
     res.json(created.length === 1 ? created[0] : { ok: true, created });
   });
 
-  app.put("/api/inpcs/:inpcId", (req, res) => {
+  app.put("/api/inpcs/:inpcId", dmOrAdmin(db), (req, res) => {
     const inpcId = requireParam(req, res, "inpcId");
     if (!inpcId) return;
     const existingRow = db
@@ -134,7 +135,7 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
     res.json(rowToINpc(updated));
   });
 
-  app.delete("/api/inpcs/:inpcId", (req, res) => {
+  app.delete("/api/inpcs/:inpcId", dmOrAdmin(db), (req, res) => {
     const inpcId = requireParam(req, res, "inpcId");
     if (!inpcId) return;
     const existingRow = db

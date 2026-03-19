@@ -4,6 +4,7 @@ import type { ServerContext } from "../server/context.js";
 import { parseBody } from "../shared/validate.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { rowToNote, nextSortFor, NOTE_COLS } from "../lib/db.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 
 const NoteCreateBody = z.object({
   title: z.string().trim().optional(),
@@ -19,7 +20,7 @@ export function registerNoteRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
 
-  app.get("/api/campaigns/:campaignId/notes", (req, res) => {
+  app.get("/api/campaigns/:campaignId/notes", memberOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const rows = db
@@ -30,7 +31,7 @@ export function registerNoteRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToNote));
   });
 
-  app.get("/api/adventures/:adventureId/notes", (req, res) => {
+  app.get("/api/adventures/:adventureId/notes", memberOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const rows = db
@@ -41,7 +42,7 @@ export function registerNoteRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToNote));
   });
 
-  app.post("/api/campaigns/:campaignId/notes", (req, res) => {
+  app.post("/api/campaigns/:campaignId/notes", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const body = parseBody(NoteCreateBody, req);
@@ -57,7 +58,7 @@ export function registerNoteRoutes(app: Express, ctx: ServerContext) {
     res.json({ id, campaignId, adventureId: null, title, text, sort, createdAt: t, updatedAt: t });
   });
 
-  app.post("/api/adventures/:adventureId/notes", (req, res) => {
+  app.post("/api/adventures/:adventureId/notes", dmOrAdmin(db), (req, res) => {
     const adventureId = requireParam(req, res, "adventureId");
     if (!adventureId) return;
     const advRow = db
@@ -79,7 +80,7 @@ export function registerNoteRoutes(app: Express, ctx: ServerContext) {
     res.json({ id, campaignId: advRow.campaign_id, adventureId, title, text, sort, createdAt: t, updatedAt: t });
   });
 
-  app.put("/api/notes/:noteId", (req, res) => {
+  app.put("/api/notes/:noteId", dmOrAdmin(db), (req, res) => {
     const noteId = requireParam(req, res, "noteId");
     if (!noteId) return;
     const noteRow = db
@@ -100,7 +101,7 @@ export function registerNoteRoutes(app: Express, ctx: ServerContext) {
     res.json({ ...n, title, text, updatedAt: t });
   });
 
-  app.delete("/api/notes/:noteId", (req, res) => {
+  app.delete("/api/notes/:noteId", dmOrAdmin(db), (req, res) => {
     const noteId = requireParam(req, res, "noteId");
     if (!noteId) return;
     const noteRow = db

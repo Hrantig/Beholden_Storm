@@ -3,6 +3,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
+import { requireAdmin, requireAnyDm } from "../middleware/auth.js";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,7 @@ function buildSpellRecord(id: string, b: SpellBodyType) {
 
 export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
+  const anyDm = requireAnyDm(db);
 
   // --- Monsters ------------------------------------------------------------
   app.get("/api/compendium/monsters/:monsterId", (req, res) => {
@@ -233,7 +235,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     })));
   });
 
-  app.post("/api/compendium/monsters", (req, res) => {
+  app.post("/api/compendium/monsters", anyDm, (req, res) => {
     const b = parseBody(MonsterBody, req);
     const id = `m_${b.name.toLowerCase().replace(/\s+/g, "_")}`;
     const { name, nameKey, cr, crNumeric, typeKey, typeFull, size, environment, data } =
@@ -245,7 +247,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true, id });
   });
 
-  app.put("/api/compendium/monsters/:monsterId", (req, res) => {
+  app.put("/api/compendium/monsters/:monsterId", anyDm, (req, res) => {
     const monsterId = requireParam(req, res, "monsterId");
     if (!monsterId) return;
     if (!db.prepare("SELECT id FROM compendium_monsters WHERE id = ?").get(monsterId))
@@ -260,7 +262,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.delete("/api/compendium/monsters/:monsterId", (req, res) => {
+  app.delete("/api/compendium/monsters/:monsterId", anyDm, (req, res) => {
     const monsterId = requireParam(req, res, "monsterId");
     if (!monsterId) return;
     db.prepare("DELETE FROM compendium_monsters WHERE id = ?").run(monsterId);
@@ -297,7 +299,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     });
   });
 
-  app.post("/api/compendium/items", (req, res) => {
+  app.post("/api/compendium/items", anyDm, (req, res) => {
     const b = parseBody(ItemBody, req);
     const id = `i_${b.name.toLowerCase().replace(/\s+/g, "_")}`;
     const { name, nameKey, rarityVal, typeVal, typeKeyVal, attunement, magic, data } = buildItemRecord(id, b);
@@ -307,7 +309,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true, id });
   });
 
-  app.put("/api/compendium/items/:itemId", (req, res) => {
+  app.put("/api/compendium/items/:itemId", anyDm, (req, res) => {
     const itemId = requireParam(req, res, "itemId");
     if (!itemId) return;
     if (!db.prepare("SELECT id FROM compendium_items WHERE id = ?").get(itemId))
@@ -320,7 +322,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.delete("/api/compendium/items/:itemId", (req, res) => {
+  app.delete("/api/compendium/items/:itemId", anyDm, (req, res) => {
     const itemId = requireParam(req, res, "itemId");
     if (!itemId) return;
     db.prepare("DELETE FROM compendium_items WHERE id = ?").run(itemId);
@@ -403,7 +405,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json(JSON.parse(row.data_json));
   });
 
-  app.post("/api/spells", (req, res) => {
+  app.post("/api/spells", anyDm, (req, res) => {
     const b = parseBody(SpellBody, req);
     const nameKey = b.name.toLowerCase().replace(/\s+/g, " ");
     const id = `s_${nameKey.replace(/\s/g, "_")}`;
@@ -416,7 +418,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true, id });
   });
 
-  app.put("/api/spells/:spellId", (req, res) => {
+  app.put("/api/spells/:spellId", anyDm, (req, res) => {
     const spellId = requireParam(req, res, "spellId");
     if (!spellId) return;
     if (!db.prepare("SELECT id FROM compendium_spells WHERE id = ?").get(spellId))
@@ -431,7 +433,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.delete("/api/spells/:spellId", (req, res) => {
+  app.delete("/api/spells/:spellId", anyDm, (req, res) => {
     const spellId = requireParam(req, res, "spellId");
     if (!spellId) return;
     db.prepare("DELETE FROM compendium_spells WHERE id = ?").run(spellId);
@@ -440,7 +442,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
   });
 
   // --- Admin / import -------------------------------------------------------
-  app.delete("/api/compendium", (_req, res) => {
+  app.delete("/api/compendium", requireAdmin, (_req, res) => {
     db.transaction(() => {
       db.prepare("DELETE FROM compendium_monsters").run();
       db.prepare("DELETE FROM compendium_items").run();
@@ -450,7 +452,7 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
-  app.post("/api/compendium/import/xml", ctx.upload.single("file"), (req, res) => {
+  app.post("/api/compendium/import/xml", requireAdmin, ctx.upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, message: "No file uploaded" });
     const xml = req.file.buffer.toString("utf-8");
     const out = ctx.helpers.importCompendiumXml({ xml });

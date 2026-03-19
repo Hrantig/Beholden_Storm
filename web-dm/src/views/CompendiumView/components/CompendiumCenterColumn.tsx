@@ -5,6 +5,7 @@ import { CompendiumAdminPanel } from "@/views/CompendiumView/panels/CompendiumAd
 import { MonsterBrowserPanel } from "@/views/CompendiumView/panels/MonsterBrowserPanel";
 import { ItemsBrowserPanel } from "@/views/CompendiumView/panels/ItemsBrowserPanel";
 import type { CompendiumSection } from "@/views/CompendiumView/CompendiumView";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function CompendiumCenterColumn(props: {
   activeSection: CompendiumSection;
@@ -15,6 +16,9 @@ export function CompendiumCenterColumn(props: {
   selectedItemId: string | null;
   onSelectItem: (id: string) => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = Boolean(user?.isAdmin);
+
   return (
     <div style={{ minWidth: 0, minHeight: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {props.activeSection === "monsters" && (
@@ -40,7 +44,7 @@ export function CompendiumCenterColumn(props: {
         />
       )}
       {props.activeSection === "rules" && <RulesReferencePanel />}
-      {props.activeSection === "compendium" && <CompendiumAdminPanel />}
+      {isAdmin && props.activeSection === "compendium" && <CompendiumAdminPanel />}
     </div>
   );
 }

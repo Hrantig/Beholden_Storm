@@ -36,6 +36,10 @@ import {
   getAllowedOriginHosts,
 } from "./security.js";
 
+import { hashPassword } from "../lib/jwtAuth.js";
+import { requireAuth } from "../middleware/auth.js";
+import { registerAuthRoutes } from "../routes/authRoutes.js";
+import { registerAdminRoutes } from "../routes/adminRoutes.js";
 import { registerHealthRoutes } from "../routes/health.js";
 import { registerMetaRoutes } from "../routes/meta.js";
 import { registerCompendiumRoutes } from "../routes/compendium.js";
@@ -57,6 +61,7 @@ export function createServer() {
 
   // --- database -------------------------------------------------------------
   const db = openDb(paths.dbPath);
+  seedAdminUser(db, hashPassword, uid, now);
 
   // --- broadcast (filled in after WS server starts) -------------------------
   const noopBroadcast: BroadcastFn = (() => { /* noop */ }) as BroadcastFn;
@@ -71,15 +76,12 @@ export function createServer() {
   // CORS — must be before basic auth so preflight and 401s carry the header
   app.use(corsMiddleware(getAllowedOriginHosts()));
 
-  // Basic auth
-  const auth = getBasicAuthConfig();
-  if (auth.enabled) {
-    app.use((req, res, next) => {
-      if (basicAuthCheck(req.headers.authorization, auth.user, auth.pass)) return next();
-      res.setHeader("WWW-Authenticate", 'Basic realm="Beholden"');
-      res.status(401).send("Unauthorized");
-    });
-  }
+  // JWT auth — required for all API routes except health check and login.
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/health") return next();
+    if (req.path === "/auth/login" && req.method === "POST") return next();
+    requireAuth(req, res, next);
+  });
 
   // Rate limiting
   const rateLimit = getRateLimitConfig();
@@ -122,6 +124,8 @@ export function createServer() {
   app.use("/player-images", express.static(playerImagesDir));
 
   // --- routes ---------------------------------------------------------------
+  registerAuthRoutes(app, ctx);
+  registerAdminRoutes(app, ctx);
   registerHealthRoutes(app, ctx);
   registerMetaRoutes(app, ctx);
   registerCompendiumRoutes(app, ctx);
@@ -158,9 +162,6 @@ export function createServer() {
     onConnectionHello: (ws) => {
       sendWsEvent(ws, "hello", { ok: true, time: now() });
     },
-    ...(auth.enabled && {
-      authorize: (req) => basicAuthCheck(req.headers.authorization, auth.user, auth.pass),
-    }),
   });
 
   broadcast = (event, data) => {
@@ -171,4 +172,23 @@ export function createServer() {
   ctx.broadcast = broadcast;
 
   return { app, httpServer, wss };
+}
+
+function seedAdminUser(
+  db: ReturnType<typeof openDb>,
+  hashPw: (pw: string) => string,
+  genUid: () => string,
+  genNow: () => number,
+): void {
+  const count = (db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
+  if (count > 0) return;
+
+  const username = process.env.BEHOLDEN_ADMIN_USER ?? "admin";
+  const password = process.env.BEHOLDEN_ADMIN_PASS ?? "admin";
+  const id = genUid();
+  const t = genNow();
+  db.prepare(
+    "INSERT INTO users (id, username, passhash, name, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)"
+  ).run(id, username, hashPw(password), "Administrator", t, t);
+  console.log(`[beholden] Created default admin: ${username} / ${password}  ← change this password!`);
 }

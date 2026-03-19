@@ -7,6 +7,8 @@ import { requireParam } from "../lib/routeHelpers.js";
 import { rowToCampaign, rowToPlayer } from "../lib/db.js";
 import { DEFAULT_OVERRIDES } from "../lib/defaults.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP, deleteImageFiles } from "../lib/imageHelpers.js";
+import { requireAdmin } from "../middleware/auth.js";
+import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 
 const CampaignUpsertBody = z.object({
   name: z.string().trim().optional(),
@@ -16,15 +18,26 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { now, uid } = ctx.helpers;
 
-  app.get("/api/campaigns", (_req, res) => {
-    const rows = db.prepare(`
-      SELECT c.id, c.name, c.color, c.image_url, c.created_at, c.updated_at,
-             COUNT(p.id) AS player_count
-      FROM campaigns c
-      LEFT JOIN players p ON p.campaign_id = c.id
-      GROUP BY c.id
-      ORDER BY c.updated_at DESC
-    `).all() as Record<string, unknown>[];
+  app.get("/api/campaigns", (req, res) => {
+    const user = req.user!;
+    const rows = user.isAdmin
+      ? db.prepare(`
+          SELECT c.id, c.name, c.color, c.image_url, c.created_at, c.updated_at,
+                 COUNT(p.id) AS player_count
+          FROM campaigns c
+          LEFT JOIN players p ON p.campaign_id = c.id
+          GROUP BY c.id
+          ORDER BY c.updated_at DESC
+        `).all() as Record<string, unknown>[]
+      : db.prepare(`
+          SELECT c.id, c.name, c.color, c.image_url, c.created_at, c.updated_at,
+                 COUNT(p.id) AS player_count
+          FROM campaigns c
+          LEFT JOIN players p ON p.campaign_id = c.id
+          WHERE c.id IN (SELECT campaign_id FROM campaign_membership WHERE user_id = ?)
+          GROUP BY c.id
+          ORDER BY c.updated_at DESC
+        `).all(user.userId) as Record<string, unknown>[];
 
     res.json(rows.map((r) => ({
       ...rowToCampaign(r),
@@ -32,7 +45,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     })));
   });
 
-  app.post("/api/campaigns", (req, res) => {
+  app.post("/api/campaigns", requireAdmin, (req, res) => {
     const body = parseBody(CampaignUpsertBody, req);
     const name = (body.name ?? "").toString().trim() || "New Campaign";
     const id = uid();
@@ -45,7 +58,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     res.json({ id, name, color: null, imageUrl: null, createdAt: t, updatedAt: t });
   });
 
-  app.put("/api/campaigns/:campaignId", (req, res) => {
+  app.put("/api/campaigns/:campaignId", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const row = db.prepare("SELECT id, name, color, image_url, created_at, updated_at FROM campaigns WHERE id = ?").get(campaignId) as Record<string, unknown> | undefined;
@@ -58,7 +71,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     res.json({ ...rowToCampaign(row), name, updatedAt: t });
   });
 
-  app.delete("/api/campaigns/:campaignId", (req, res) => {
+  app.delete("/api/campaigns/:campaignId", requireAdmin, (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const row = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);
@@ -76,7 +89,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
   });
 
   // Full rest: heal all players + clear player combatant conditions/temp HP.
-  app.post("/api/campaigns/:campaignId/fullRest", (req, res) => {
+  app.post("/api/campaigns/:campaignId/fullRest", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const campaignRow = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);
@@ -120,7 +133,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
   });
 
   // Touch — update updatedAt to track last-accessed ordering.
-  app.post("/api/campaigns/:campaignId/touch", (req, res) => {
+  app.post("/api/campaigns/:campaignId/touch", memberOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const row = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);
@@ -131,7 +144,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
   });
 
   // Upload campaign banner image — resized to a thumbnail (max 400px, WebP).
-  app.post("/api/campaigns/:campaignId/image", ctx.upload.single("image"), async (req, res) => {
+  app.post("/api/campaigns/:campaignId/image", dmOrAdmin(db), ctx.upload.single("image"), async (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const row = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId) as { id: string } | undefined;
@@ -165,7 +178,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
   });
 
   // Remove campaign banner image.
-  app.delete("/api/campaigns/:campaignId/image", (req, res) => {
+  app.delete("/api/campaigns/:campaignId/image", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const row = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);

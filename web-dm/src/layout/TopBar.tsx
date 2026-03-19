@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useStore } from "@/store";
 import { useWs, useWsStatus } from "@/services/ws";
 import { theme, withAlpha } from "@/theme/theme";
+import { useAuth } from "@/contexts/AuthContext";
 
 function useSaveStatus(): "idle" | "saving" | "saved" {
   const [status, setStatus] = React.useState<"idle" | "saving" | "saved">("idle");
@@ -48,6 +49,7 @@ function NavLink(props: { to: string; label: string }) {
 
 export function TopBar() {
   const { state } = useStore();
+  const { user, logout } = useAuth();
   const connected = useWsStatus();
   const saveStatus = useSaveStatus();
   const { campaigns, selectedCampaignId } = state;
@@ -95,6 +97,7 @@ export function TopBar() {
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, color: theme.colors.muted, fontSize: "var(--fs-medium)" }}>
         {selectedCampaignId ? <NavLink to={`/campaign/${selectedCampaignId}`} label="Campaign" /> : <NavLink to="/" label="Campaign" />}
         <NavLink to="/compendium" label="Compendium" />
+        {user?.isAdmin && <NavLink to="/admin" label="Admin" />}
         {saveStatus !== "idle" && (
           <span style={{
             fontSize: "var(--fs-medium)",
@@ -103,6 +106,25 @@ export function TopBar() {
           }}>
             {saveStatus === "saving" ? "Saving…" : "Saved ✓"}
           </span>
+        )}
+        {user && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-medium)" }}>
+            <span style={{ color: theme.colors.muted }}>{user.name}</span>
+            <button
+              onClick={logout}
+              style={{
+                background: "transparent",
+                border: `1px solid ${theme.colors.panelBorder}`,
+                borderRadius: theme.radius.control,
+                color: theme.colors.muted,
+                cursor: "pointer",
+                padding: "4px 8px",
+                fontSize: "inherit",
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         )}
         <div
           title={connected ? "Server connected" : "Server disconnected"}

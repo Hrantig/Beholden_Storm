@@ -20,6 +20,9 @@ import { DrawerHost } from "@/drawers/DrawerHost";
 import { ConfirmProvider, useConfirm } from "@/confirm/ConfirmContext";
 import { useCampaignActions } from "@/app/useCampaignActions";
 import type { State } from "@/store/state";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { LoginView } from "@/views/LoginView";
+import { AdminView } from "@/views/AdminView/AdminView";
 
 function AppInner() {
   const { state, dispatch } = useStore();
@@ -239,14 +242,57 @@ function AppInner() {
   );
 }
 
+function AuthGate() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0d1525",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "rgba(160,180,220,0.75)",
+          fontFamily: "system-ui, Segoe UI, Arial",
+        }}
+      >
+        Loading…
+      </div>
+    );
+  }
+
+  if (!user) return <LoginView />;
+
+  return (
+    <Routes>
+      {/* Admin panel — admins only */}
+      <Route
+        path="/admin/*"
+        element={user.isAdmin ? <AdminView /> : <Navigate to="/" replace />}
+      />
+      {/* Main DM app */}
+      <Route
+        path="/*"
+        element={
+          <StoreProvider>
+            <ConfirmProvider>
+              <AppInner />
+            </ConfirmProvider>
+          </StoreProvider>
+        }
+      />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
-    <StoreProvider>
-      <ConfirmProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <AppInner />
-        </BrowserRouter>
-      </ConfirmProvider>
-    </StoreProvider>
+    <AuthProvider>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AuthGate />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
