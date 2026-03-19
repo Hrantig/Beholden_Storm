@@ -42,6 +42,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const selected = options.find((o) => o.value === currentValue) ?? null;
 
   const [open, setOpen] = React.useState(false);
+  const [hoveredValue, setHoveredValue] = React.useState<string | null>(null);
 
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
@@ -123,12 +124,12 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const triggerStyle: React.CSSProperties = {
     width,
     minWidth,
-    padding: "8px 10px",
+    padding: "6px 10px",
     borderRadius: theme.radius.control,
-    border: `2px solid ${theme.colors.accentPrimary}`,
+    border: `1px solid ${theme.colors.panelBorder}`,
     background: theme.colors.inputBg,
     color: theme.colors.text,
-    fontWeight: 800,
+    fontWeight: 600,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.55 : 1,
     display: "flex",
@@ -146,7 +147,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
     left: menuPos.left,
     width: menuPos.width,
     background: theme.colors.bg, // opaque background (avoid see-through)
-    border: `2px solid ${theme.colors.accentPrimary}`,
+    border: `1px solid ${theme.colors.panelBorder}`,
     borderRadius: theme.radius.control,
     overflow: "hidden",
     boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
@@ -160,6 +161,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
         {options.map((o) => {
           const isSel = o.value === currentValue;
           const isDis = Boolean(o.disabled);
+          const isHov = hoveredValue === o.value && !isSel;
           return (
             <button
               key={o.value}
@@ -168,9 +170,10 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
               aria-selected={isSel}
               disabled={isDis}
               onMouseDown={(e) => {
-                // Prevent focus from moving / outside-close firing before click.
                 e.preventDefault();
               }}
+              onMouseEnter={() => setHoveredValue(o.value)}
+              onMouseLeave={() => setHoveredValue(null)}
               onClick={() => {
                 if (isDis) return;
                 commitValue(o.value);
@@ -181,7 +184,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
                 textAlign: "left",
                 padding: "10px 12px",
                 border: "none",
-                background: isSel ? theme.colors.accentHighlight : theme.colors.bg,
+                background: isSel ? theme.colors.accentHighlight : isHov ? withAlpha(theme.colors.accentHighlight, 0.12) : theme.colors.bg,
                 color: isSel ? theme.colors.textDark : theme.colors.text,
                 fontWeight: isSel ? 900 : 700,
                 cursor: isDis ? "not-allowed" : "pointer",

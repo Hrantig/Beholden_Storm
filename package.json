@@ -2,6 +2,7 @@
   "name": "beholden",
   "private": true,
   "workspaces": [
+    "shared",
     "server",
     "web-dm",
     "web-player"

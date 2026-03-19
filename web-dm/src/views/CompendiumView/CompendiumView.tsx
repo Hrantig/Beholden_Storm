@@ -18,13 +18,15 @@ export function CompendiumView() {
     setSelectedItemId(null);
   }, []);
 
+  const hasRightColumn = activeSection !== "rules" && activeSection !== "compendium";
+
   return (
     <div style={{ height: "100%", padding: 12, boxSizing: "border-box", overflow: "hidden" }}>
       <div
         style={{
           height: "100%",
           display: "grid",
-          gridTemplateColumns: "200px 1fr 420px",
+          gridTemplateColumns: hasRightColumn ? "200px 1fr 420px" : "200px 1fr",
           gridTemplateRows: "1fr",
           gap: 14,
           alignItems: "stretch",
@@ -45,12 +47,14 @@ export function CompendiumView() {
           selectedItemId={selectedItemId}
           onSelectItem={setSelectedItemId}
         />
-        <CompendiumRightColumn
-          activeSection={activeSection}
-          selectedSpellId={selectedSpellId}
-          selectedMonsterId={selectedMonsterId}
-          selectedItemId={selectedItemId}
-        />
+        {hasRightColumn && (
+          <CompendiumRightColumn
+            activeSection={activeSection}
+            selectedSpellId={selectedSpellId}
+            selectedMonsterId={selectedMonsterId}
+            selectedItemId={selectedItemId}
+          />
+        )}
       </div>
     </div>
   );

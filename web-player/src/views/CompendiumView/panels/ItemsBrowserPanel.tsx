@@ -5,6 +5,7 @@ import { C, withAlpha } from "@/lib/theme";
 import { titleCase } from "@/lib/format/titleCase";
 import { useItemSearch, type ItemSearchRow } from "@/views/CompendiumView/hooks/useItemSearch";
 import { useVirtualList } from "@/lib/monsterPicker/useVirtualList";
+import { IconChest } from "@/ui/Icons";
 
 const ROW_HEIGHT = 52;
 
@@ -24,9 +25,9 @@ function togglePill(active: boolean): React.CSSProperties {
   return {
     padding: "4px 10px", borderRadius: 999,
     border: `1px solid ${active ? C.accentHl : C.panelBorder}`,
-    background: active ? withAlpha(C.accentHl, 0.18) : withAlpha(C.panelBorder, 0.3),
+    background: active ? withAlpha(C.accentHl, 0.18) : withAlpha(C.accentHl, 0.08),
     color: active ? C.accentHl : C.muted,
-    cursor: "pointer", fontSize: 11, fontWeight: 700,
+    cursor: "pointer", fontSize: "var(--fs-pill)", fontWeight: 700,
   };
 }
 
@@ -54,7 +55,7 @@ export function ItemsBrowserPanel(props: {
 
   return (
     <Panel
-      title="Items"
+      title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--fs-large)" }}><IconChest size={28} /><span>Items</span></span>}
       actions={<div style={{ color: C.muted, fontSize: 12 }}>{busy ? "Loading…" : rows.length}</div>}
       style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}
       bodyStyle={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}
@@ -62,9 +63,9 @@ export function ItemsBrowserPanel(props: {
       <input
         value={q} placeholder="Search items…" onChange={(e) => setQ(e.target.value)}
         style={{
-          background: C.bg, color: C.text, border: `1px solid ${C.panelBorder}`,
-          borderRadius: 8, padding: "7px 8px", fontSize: 13, fontFamily: "inherit",
-          outline: "none", boxSizing: "border-box",
+          background: C.panelBg, color: C.text, border: `1px solid ${C.panelBorder}`,
+          borderRadius: 10, padding: "8px 10px",
+          outline: "none",
         }}
       />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>

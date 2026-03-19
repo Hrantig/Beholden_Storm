@@ -1,14 +1,14 @@
-// Matches web-player/src/styles/index.css CSS variables
+// Mirrors web-dm's theme.ts so both UIs look identical
 export const C = {
   bg:          "#0d1525",
-  panelBg:     "#111c30",
-  panelBorder: "#1e2d45",
-  text:        "#c8d8f0",
-  muted:       "#607090",
-  accent:      "#e8a020",
-  accentHl:    "#4ab3f4",
-  red:         "#e05050",
-  green:       "#4caf78",
+  panelBg:     "rgba(255,255,255,0.055)",
+  panelBorder: "rgba(255,255,255,0.13)",
+  text:        "#e8edf5",
+  muted:       "rgba(160,180,220,0.75)",
+  accent:      "#f0a500",
+  accentHl:    "#38b6ff",
+  red:         "#ff5d5d",
+  green:       "#5ecb6b",
   textDark:    "#0d1525",
 };
 

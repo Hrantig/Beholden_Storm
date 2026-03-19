@@ -34,12 +34,11 @@ function NavLink(props: { to: string; label: string }) {
       to={props.to}
       style={{
         textDecoration: "none",
-        color: active ? theme.colors.textDark : theme.colors.text,
-        background: active ? theme.colors.accentPrimary : withAlpha(theme.colors.panelBorder, 0.18),
-        border: `1px solid ${theme.colors.panelBorder}`,
-        padding: "8px 10px",
+        color: active ? theme.colors.accentHighlight : theme.colors.muted,
+        background: active ? withAlpha(theme.colors.accentHighlight, 0.12) : "transparent",
+        padding: "5px 12px",
         borderRadius: theme.radius.control,
-        fontWeight: 900
+        fontWeight: active ? 700 : 500,
       }}
     >
       {props.label}
@@ -76,12 +75,13 @@ export function TopBar() {
           <div
             style={{
               marginLeft: 8,
-              padding: "6px 10px",
+              padding: "5px 14px",
               borderRadius: theme.radius.control,
-              border: `1px solid ${withAlpha(theme.colors.panelBorder, 0.6)}`,
-              background: withAlpha(theme.colors.panelBg, 0.25),
-              color: theme.colors.muted,
-              fontWeight: 800,
+              border: `1px solid ${withAlpha(theme.colors.accentHighlight, 0.35)}`,
+              background: withAlpha(theme.colors.accentHighlight, 0.10),
+              color: theme.colors.accentHighlight,
+              fontWeight: 700,
+              fontSize: "var(--fs-medium)",
               maxWidth: 360,
               overflow: "hidden",
               textOverflow: "ellipsis",

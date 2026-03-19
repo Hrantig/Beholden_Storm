@@ -8,30 +8,33 @@ import { ItemsBrowserPanel } from "./panels/ItemsBrowserPanel";
 import { ItemDetailPanel } from "./panels/ItemDetailPanel";
 import { RulesReferencePanel } from "./panels/RulesReferencePanel";
 import { Panel } from "@/ui/Panel";
+import { IconMonster, IconSpells, IconChest, IconNotes } from "@/ui/Icons";
 
 type Section = "monsters" | "spells" | "items" | "rules";
 
-const NAV: { id: Section; label: string }[] = [
-  { id: "monsters", label: "Monsters" },
-  { id: "spells",   label: "Spells" },
-  { id: "items",    label: "Items" },
-  { id: "rules",    label: "Rules Reference" },
+const NAV: { id: Section; label: string; Icon: React.FC<{ size?: number }> }[] = [
+  { id: "monsters", label: "Monsters",       Icon: IconMonster },
+  { id: "spells",   label: "Spells",         Icon: IconSpells },
+  { id: "items",    label: "Items",          Icon: IconChest },
+  { id: "rules",    label: "Rules Reference",Icon: IconNotes },
 ];
 
-function NavButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function NavButton({ label, Icon, active, onClick }: { label: string; Icon: React.FC<{ size?: number }>; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button" onClick={onClick}
       style={{
-        display: "flex", alignItems: "center", width: "100%",
+        display: "flex", alignItems: "center", gap: 10, width: "100%",
         padding: "10px 14px", border: "none", borderRadius: 10,
         cursor: "pointer", textAlign: "left",
         fontWeight: active ? 800 : 500, fontSize: 14,
         color: active ? C.accentHl : C.text,
         background: active ? withAlpha(C.accentHl, 0.12) : "transparent",
         fontFamily: "inherit",
+        transition: "background 0.12s, color 0.12s",
       }}
     >
+      <Icon size={20} />
       {label}
     </button>
   );
@@ -69,8 +72,8 @@ export function CompendiumView() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, minHeight: 0 }}>
           <Panel title="Reference" style={{ display: "flex", flexDirection: "column" }}>
             <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {NAV.map(({ id, label }) => (
-                <NavButton key={id} label={label} active={activeSection === id} onClick={() => handleSetSection(id)} />
+              {NAV.map(({ id, label, Icon }) => (
+                <NavButton key={id} label={label} Icon={Icon} active={activeSection === id} onClick={() => handleSetSection(id)} />
               ))}
             </nav>
           </Panel>
