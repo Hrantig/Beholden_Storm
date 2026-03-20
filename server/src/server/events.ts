@@ -31,7 +31,16 @@ export type TreasureChangedPayload = { campaignId: Id };
 
 export type CompendiumChangedPayload =
   | { cleared: true }
-  | { imported: number; total: number };
+  | { imported: number; total: number }
+  | { monsterCreated: string }
+  | { monsterUpdated: string }
+  | { monsterDeleted: string }
+  | { itemCreated: string }
+  | { itemUpdated: string }
+  | { itemDeleted: string }
+  | { spellCreated: string }
+  | { spellUpdated: string }
+  | { spellDeleted: string };
 
 export type EncounterCombatantsChangedPayload = { encounterId: Id };
 

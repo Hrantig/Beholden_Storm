@@ -87,7 +87,8 @@ export function registerExportImportRoutes(app: Express, ctx: ServerContext) {
 
     const combats: Record<string, unknown> = {};
     for (const encId of Object.keys(encounters)) {
-      const enc = encounters[encId];
+      const enc = encounters[encId] as any;
+      if (!enc) continue;
       combats[encId] = {
         encounterId: encId,
         round: enc.combat?.round ?? 1,

@@ -48,7 +48,7 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
     const b = parseBody(InpcCreateBody, req);
-    const { monsterId, qty } = b;
+    const { monsterId, qty = 1 } = b;
 
     const monRow = db
       .prepare("SELECT data_json FROM compendium_monsters WHERE id = ?")

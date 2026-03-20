@@ -66,7 +66,8 @@ function parseCrToNumeric(cr: string | null): number | null {
   if (!cr) return null;
   const s = cr.trim();
   if (s.includes("/")) {
-    const [n, d] = s.split("/").map(Number);
+    const parts = s.split("/").map(Number);
+    const [n, d] = [parts[0] ?? 0, parts[1] ?? 0];
     return d ? n / d : null;
   }
   const n = Number(s);
@@ -87,7 +88,7 @@ function buildMonsterRecord(id: string, b: MonsterBodyType) {
   const nameKey = name.toLowerCase().replace(/\s+/g, " ");
   const cr = b.cr?.trim() || null;
   const typeFull = b.typeFull?.trim() || null;
-  const typeKey = typeFull ? typeFull.trim().split(/\s+/)[0].toLowerCase() : null;
+  const typeKey = typeFull ? (typeFull.trim().split(/\s+/)[0] ?? "").toLowerCase() : null;
   const size = b.size?.trim() || null;
   const environment = b.environment?.trim() || null;
   const numField = (v: number | null | undefined) => (v != null && Number.isFinite(v) ? v : null);

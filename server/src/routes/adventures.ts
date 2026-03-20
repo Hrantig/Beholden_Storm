@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
-import type { StoredCombatant } from "../server/userData.js";
+import type { StoredCombatant, StoredConditionInstance } from "../server/userData.js";
 import { parseBody } from "../shared/validate.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
@@ -22,7 +22,7 @@ import {
   AttackOverrideSchema,
   OverridesSchema,
 } from "../lib/schemas.js";
-import { DEFAULT_OVERRIDES } from "../lib/defaults.js";
+import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
 
 const AdventureCreateBody = z.object({
   name: z.string().trim().optional(),
@@ -251,7 +251,7 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
             ac: c.ac,
             acDetails: c.acDetails,
             attackOverrides: c.attackOverrides ?? null,
-            conditions: c.conditions ?? [],
+            conditions: (c.conditions ?? []) as StoredConditionInstance[],
             overrides: c.overrides,
             sort: c.sort ?? ci + 1,
             deathSaves: { ...DEFAULT_DEATH_SAVES },

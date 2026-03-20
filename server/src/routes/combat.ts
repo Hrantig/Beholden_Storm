@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
-import type { StoredCombatant, StoredCombatState } from "../server/userData.js";
+import type { StoredCombatant, StoredCombatState, StoredConditionInstance } from "../server/userData.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
@@ -238,7 +238,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
       return res.status(404).json({ ok: false, message: "Encounter not found" });
 
     const body = parseBody(AddMonsterBody, req);
-    const { monsterId, qty, friendly } = body;
+    const { monsterId, qty = 1, friendly = false } = body;
     const labelBase = body.labelBase?.trim() ?? "";
     const acOverride = body.ac != null && Number.isFinite(body.ac) ? body.ac : null;
     const acDetails = body.acDetails ?? null;
@@ -411,7 +411,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
         acDetails: body.acDetails !== undefined ? body.acDetails : existing.acDetails,
         attackOverrides: body.attackOverrides !== undefined ? (body.attackOverrides as unknown | null) : existing.attackOverrides,
         overrides: body.overrides ?? existing.overrides,
-        conditions: body.conditions ?? existing.conditions ?? [],
+        conditions: (body.conditions ?? existing.conditions ?? []) as StoredConditionInstance[],
         ...(deathSaves !== undefined ? { deathSaves } : {}),
         usedReaction: body.usedReaction ?? existing.usedReaction ?? false,
         usedLegendaryActions: body.usedLegendaryActions ?? existing.usedLegendaryActions ?? 0,
