@@ -1,5 +1,8 @@
 {
   "name": "@beholden/shared",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "exports": {
+    "./styles/*": "./styles/*"
+  }
 }

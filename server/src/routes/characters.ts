@@ -43,6 +43,73 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
 
+  type Assignment = { id: string; campaign_id: string; player_id: string | null; campaign_name: string };
+
+  // Overlay ALL editable live fields from the players row so the player always
+  // sees exactly what the DM has set, not the stale user_characters snapshot.
+  function mergeLiveStats(
+    char: ReturnType<typeof rowToUserCharacter>,
+    assignments: Assignment[]
+  ) {
+    const playerIds = assignments.map((a) => a.player_id).filter(Boolean) as string[];
+    if (playerIds.length === 0) return char;
+    const liveRow = db
+      .prepare(
+        `SELECT player_name, character_name, class, species, level,
+                hp_current, hp_max, ac, speed,
+                str, dex, con, int, wis, cha,
+                conditions_json, overrides_json
+         FROM players
+         WHERE id IN (${playerIds.map(() => "?").join(",")})
+         ORDER BY updated_at DESC LIMIT 1`
+      )
+      .get(...playerIds) as {
+        player_name: string; character_name: string; class: string; species: string; level: number;
+        hp_current: number; hp_max: number; ac: number; speed: number | null;
+        str: number | null; dex: number | null; con: number | null;
+        int: number | null; wis: number | null; cha: number | null;
+        conditions_json: string; overrides_json: string;
+      } | undefined;
+    if (!liveRow) return char;
+    return {
+      ...char,
+      playerName:  liveRow.player_name,
+      name:        liveRow.character_name,
+      className:   liveRow.class,
+      species:     liveRow.species,
+      level:       liveRow.level,
+      hpCurrent:   liveRow.hp_current,
+      hpMax:       liveRow.hp_max,
+      ac:          liveRow.ac,
+      speed:       liveRow.speed ?? char.speed,
+      strScore:    liveRow.str ?? char.strScore,
+      dexScore:    liveRow.dex ?? char.dexScore,
+      conScore:    liveRow.con ?? char.conScore,
+      intScore:    liveRow.int ?? char.intScore,
+      wisScore:    liveRow.wis ?? char.wisScore,
+      chaScore:    liveRow.cha ?? char.chaScore,
+      conditions:  JSON.parse(liveRow.conditions_json || "[]") as { key: string }[],
+      overrides:   JSON.parse(liveRow.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxOverride":null}') as {
+        tempHp: number; acBonus: number; hpMaxOverride: number | null;
+      },
+    };
+  }
+
+  function getAssignments(charId: string): Assignment[] {
+    return db
+      .prepare(`
+        SELECT cc.id, cc.campaign_id, cc.player_id, ca.name AS campaign_name
+        FROM character_campaigns cc
+        JOIN campaigns ca ON ca.id = cc.campaign_id
+        WHERE cc.character_id = ?
+      `)
+      .all(charId) as Assignment[];
+  }
+
+  function assignmentsToJson(assignments: Assignment[]) {
+    return assignments.map((a) => ({ id: a.id, campaignId: a.campaign_id, campaignName: a.campaign_name, playerId: a.player_id }));
+  }
+
   // List all user-owned characters with campaign assignment info
   app.get("/api/me/characters", requireAuth, (req, res) => {
     const userId = (req as any).user.userId;
@@ -52,15 +119,8 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
     const result = chars.map((c) => {
       const char = rowToUserCharacter(c);
-      const assignments = db
-        .prepare(`
-          SELECT cc.id, cc.campaign_id, cc.player_id, ca.name AS campaign_name
-          FROM character_campaigns cc
-          JOIN campaigns ca ON ca.id = cc.campaign_id
-          WHERE cc.character_id = ?
-        `)
-        .all(char.id) as { id: string; campaign_id: string; player_id: string | null; campaign_name: string }[];
-      return { ...char, campaigns: assignments.map((a) => ({ id: a.id, campaignId: a.campaign_id, campaignName: a.campaign_name, playerId: a.player_id })) };
+      const assignments = getAssignments(char.id);
+      return { ...mergeLiveStats(char, assignments), campaigns: assignmentsToJson(assignments) };
     });
 
     res.json(result);
@@ -77,16 +137,8 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
 
     const char = rowToUserCharacter(row);
-    const assignments = db
-      .prepare(`
-        SELECT cc.id, cc.campaign_id, cc.player_id, ca.name AS campaign_name
-        FROM character_campaigns cc
-        JOIN campaigns ca ON ca.id = cc.campaign_id
-        WHERE cc.character_id = ?
-      `)
-      .all(char.id) as { id: string; campaign_id: string; player_id: string | null; campaign_name: string }[];
-
-    res.json({ ...char, campaigns: assignments.map((a) => ({ id: a.id, campaignId: a.campaign_id, campaignName: a.campaign_name, playerId: a.player_id })) });
+    const assignments = getAssignments(char.id);
+    res.json({ ...mergeLiveStats(char, assignments), campaigns: assignmentsToJson(assignments) });
   });
 
   // Create a new user-owned character (no campaign required)

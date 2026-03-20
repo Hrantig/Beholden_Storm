@@ -5,6 +5,7 @@ import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { WsProvider } from "@/services/ws";
 import "@beholden/shared/styles/tokens.css";
 import "@beholden/shared/styles/base.css";
+
 import "./styles/index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

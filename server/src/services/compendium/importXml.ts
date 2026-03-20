@@ -395,7 +395,32 @@ function xmlItemToJson(it: any): any | null {
   const { type, typeKey } = mapItemType(typeCode);
   const { rarity, attunement } = parseItemDetail(it?.detail);
   const magic = it?.magic != null ? Number(String(it.magic).trim()) === 1 : false;
-  const text = String(it?.text ?? "").trim();
+
+  // Multiple <text> tags → collect as array of non-empty lines
+  const text = asArray(it?.text)
+    .map((t: any) => (t == null ? "" : String(t)).trim())
+    .filter((t: string) => t.length > 0);
+
+  // Weapon stats
+  const dmg1 = it?.dmg1 != null ? String(it.dmg1).trim() : null;
+  const dmg2 = it?.dmg2 != null ? String(it.dmg2).trim() : null;
+  const dmgType = it?.dmgType != null ? String(it.dmgType).trim() : null;
+  const weight = it?.weight != null ? Number(it.weight) : null;
+
+  // Properties: single tag with comma-separated codes e.g. "F,L" or "2H"
+  const propertyRaw = it?.property != null ? String(it.property).trim() : "";
+  const properties = propertyRaw
+    ? propertyRaw.split(",").map((p: string) => p.trim()).filter(Boolean)
+    : [];
+
+  // Modifiers: already forced to array by XMLParser isArray config
+  const modifiers = asArray(it?.modifier)
+    .map((m: any) =>
+      typeof m === "string"
+        ? { category: "", text: m }
+        : { category: m?.["@_category"] ?? "", text: m?.["#text"] ?? asText(m) ?? "" }
+    )
+    .filter((m: any) => m.text.length > 0);
 
   return {
     id,
@@ -408,6 +433,12 @@ function xmlItemToJson(it: any): any | null {
     typeKey,
     attunement,
     magic,
+    weight: Number.isFinite(weight) ? weight : null,
+    dmg1: dmg1 || null,
+    dmg2: dmg2 || null,
+    dmgType: dmgType || null,
+    properties,
+    modifiers,
     text,
   };
 }

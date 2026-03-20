@@ -44,6 +44,12 @@ const ItemBody = z.object({
   type: z.string().trim().nullable().optional(),
   attunement: z.boolean().optional(),
   magic: z.boolean().optional(),
+  weight: z.number().nullable().optional(),
+  dmg1: z.string().trim().nullable().optional(),
+  dmg2: z.string().trim().nullable().optional(),
+  dmgType: z.string().trim().nullable().optional(),
+  properties: z.array(z.string()).optional(),
+  modifiers: z.array(z.object({ category: z.string(), text: z.string() })).optional(),
   text: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
@@ -132,7 +138,18 @@ function buildItemRecord(id: string, b: ItemBodyType) {
   const textArr = Array.isArray(b.text)
     ? b.text
     : typeof b.text === "string" ? [b.text] : [];
-  const data = { id, name, nameKey, name_key: nameKey, rarity: rarityVal, type: typeVal, typeKey: typeKeyVal, type_key: typeKeyVal, attunement, magic, text: textArr };
+  const data = {
+    id, name, nameKey, name_key: nameKey,
+    rarity: rarityVal, type: typeVal, typeKey: typeKeyVal, type_key: typeKeyVal,
+    attunement, magic,
+    weight: b.weight ?? null,
+    dmg1: b.dmg1?.trim() || null,
+    dmg2: b.dmg2?.trim() || null,
+    dmgType: b.dmgType?.trim() || null,
+    properties: b.properties ?? [],
+    modifiers: b.modifiers ?? [],
+    text: textArr,
+  };
   return { name, nameKey, rarityVal, typeVal, typeKeyVal, attunement, magic, data };
 }
 
@@ -296,7 +313,13 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
       id: row.id, name: row.name, nameKey: row.name_key ?? null,
       rarity: row.rarity ?? null, type: row.type ?? null, typeKey: row.type_key ?? null,
       attunement: Boolean(row.attunement), magic: Boolean(row.magic),
-      text: it.text ?? "",
+      weight: it.weight ?? null,
+      dmg1: it.dmg1 ?? null,
+      dmg2: it.dmg2 ?? null,
+      dmgType: it.dmgType ?? null,
+      properties: it.properties ?? [],
+      modifiers: it.modifiers ?? [],
+      text: Array.isArray(it.text) ? it.text : (it.text ? [it.text] : []),
     });
   });
 

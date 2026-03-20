@@ -75,7 +75,7 @@ export const IconSkull = make("dead");
 export const IconHeart = make("heart");
 export const IconDroplet = make("blood");
 export const IconAttack = make("attack");
-export const IconConditions = make("conditions")
+export const IconConditions = make("conditions");
 export const IconPlayer = make("person");
 
 // Condition icons

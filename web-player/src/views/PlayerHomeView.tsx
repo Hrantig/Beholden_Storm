@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/services/api";
 import { C } from "@/lib/theme";
+import { IconPlayer } from "@/icons";
 
 interface Campaign {
   id: string;
@@ -117,6 +118,8 @@ function CharacterRow({ ch, navigate, onRefresh }: {
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -132,12 +135,22 @@ function CharacterRow({ ch, navigate, onRefresh }: {
     finally { setUploading(false); }
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await api(`/api/me/characters/${ch.id}`, { method: "DELETE" });
+      await onRefresh();
+    } catch (err) { console.error(err); }
+    finally { setDeleting(false); setConfirmDelete(false); }
+  }
+
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 12,
       background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.09)",
+      border: `1px solid ${confirmDelete ? "rgba(248,113,113,0.35)" : "rgba(255,255,255,0.09)"}`,
       borderRadius: 10, padding: "10px 14px",
+      transition: "border-color 0.15s",
     }}>
       <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelected} style={{ display: "none" }} />
 
@@ -154,7 +167,7 @@ function CharacterRow({ ch, navigate, onRefresh }: {
         }}>
         {ch.imageUrl
           ? <img src={ch.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <span style={{ fontSize: 16, opacity: 0.6 }}>🧙</span>
+          : <IconPlayer size={22} style={{ opacity: 0.4 }} />
         }
         {uploading && (
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>…</div>
@@ -176,9 +189,36 @@ function CharacterRow({ ch, navigate, onRefresh }: {
         )}
       </div>
 
-      <button style={ghostBtn} onClick={() => navigate(`/characters/${ch.id}/edit`)}>
-        Edit
-      </button>
+      {confirmDelete ? (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: C.red, whiteSpace: "nowrap" }}>Delete?</span>
+          <button
+            disabled={deleting}
+            onClick={handleDelete}
+            style={{ ...ghostBtn, color: C.red, borderColor: "rgba(248,113,113,0.45)", fontSize: 12 }}
+          >
+            {deleting ? "…" : "Yes"}
+          </button>
+          <button
+            onClick={() => setConfirmDelete(false)}
+            style={ghostBtn}
+          >
+            No
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button style={ghostBtn} onClick={() => navigate(`/characters/${ch.id}/edit`)}>
+            Edit
+          </button>
+          <button
+            style={{ ...ghostBtn, color: "rgba(248,113,113,0.7)", borderColor: "rgba(248,113,113,0.25)" }}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

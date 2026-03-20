@@ -9,8 +9,6 @@ export type SvgIconProps = {
 };
 
 function injectSizeAndA11y(svg: string, size: number, title?: string) {
-  // Add width/height; keep existing viewBox.
-  // Also avoid double-injecting if already present.
   const hasWidth = /\swidth=/.test(svg);
   const hasHeight = /\sheight=/.test(svg);
 
@@ -23,7 +21,6 @@ function injectSizeAndA11y(svg: string, size: number, title?: string) {
   }
 
   if (title) {
-    // If consumer provides a title, set role/img and aria-label.
     if (!/\srole=/.test(out)) out = out.replace("<svg", `<svg role="img"`);
     if (!/\saria-label=/.test(out)) out = out.replace("<svg", `<svg aria-label="${escapeAttr(title)}"`);
   }

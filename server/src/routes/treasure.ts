@@ -166,7 +166,7 @@ export function registerTreasureRoutes(app: Express, ctx: ServerContext) {
       typeKey = it.typeKey ?? it.type_key ?? null;
       attunement = Boolean(it.attunement);
       magic = Boolean(it.magic);
-      text = it.text ?? "";
+      text = Array.isArray(it.text) ? it.text.join("\n\n") : (it.text ?? "");
     } else {
       const c = (custom as Record<string, unknown>) ?? {};
       name = String(c.name ?? "New Item").trim() || "New Item";

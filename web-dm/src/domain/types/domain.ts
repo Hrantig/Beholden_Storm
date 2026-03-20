@@ -161,6 +161,8 @@ export interface TreasureEntry {
   attunement?: boolean;
   magic?: boolean;
   text?: string;
+  /** Set when the entry was sourced from the compendium — used to fetch full weapon stats on demand. */
+  itemId?: string | null;
 }
 
 export type AttackOverride = {

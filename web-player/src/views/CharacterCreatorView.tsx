@@ -4,6 +4,7 @@ import { C, withAlpha } from "@/lib/theme";
 import { api, jsonInit } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Select } from "@/ui/Select";
+import { IconPlayer } from "@/icons";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -319,15 +320,25 @@ function buildProficiencyMap(
   if (classDetail) {
     splitComma(classDetail.armor).forEach(n => armor.push({ name: n, source: className }));
     splitComma(classDetail.weapons).forEach(n => weapons.push({ name: n, source: className }));
-    // Saving throws — parse from feature text "Saving Throw Proficiencies: X and Y"
-    outer: for (const al of classDetail.autolevels) {
-      for (const f of al.features) {
-        if (f.optional) continue;
-        const m = f.text.match(/Saving Throw Proficiencies?:\s*([^\n.]+)/i);
-        if (m) {
-          m[1].split(/,|\s+and\s+/i).map(s => s.trim()).filter(Boolean)
-            .forEach(n => saves.push({ name: n, source: className }));
-          break outer;
+
+    // Saving throws — primary source: ability score names in <proficiency> field
+    // e.g. "Wisdom, Charisma, History, Insight" → Wisdom + Charisma are saves
+    const ABILITY_NAMES = new Set(["Strength","Dexterity","Constitution","Intelligence","Wisdom","Charisma"]);
+    splitComma(classDetail.proficiency)
+      .filter(n => ABILITY_NAMES.has(n))
+      .forEach(n => saves.push({ name: n, source: className }));
+
+    // Fallback: some older XMLs encode saves in feature text "Saving Throw Proficiencies: X and Y"
+    if (saves.length === 0) {
+      outer: for (const al of classDetail.autolevels) {
+        for (const f of al.features) {
+          if (f.optional) continue;
+          const m = f.text.match(/Saving Throw Proficiencies?:\s*([^\n.]+)/i);
+          if (m) {
+            m[1].split(/,|\s+and\s+/i).map(s => s.trim()).filter(Boolean)
+              .forEach(n => saves.push({ name: n, source: className }));
+            break outer;
+          }
         }
       }
     }
@@ -645,6 +656,9 @@ export function CharacterCreatorView() {
   const [classSpells, setClassSpells] = React.useState<SpellSummary[]>([]);
   const [classInvocations, setClassInvocations] = React.useState<SpellSummary[]>([]);
 
+  // Track initially-assigned campaigns so we can diff on save in edit mode
+  const initialCampaignIdsRef = React.useRef<string[]>([]);
+
   // Portrait selection (not part of form schema — uploaded separately after save)
   const [portraitFile, setPortraitFile] = React.useState<File | null>(null);
   const [portraitPreview, setPortraitPreview] = React.useState<string | null>(null);
@@ -694,6 +708,8 @@ export function CharacterCreatorView() {
           color: ch.color ?? "#38b6ff",
           campaignIds: (ch.campaigns ?? []).map((c: any) => c.campaignId),
         }));
+        // Capture so handleSubmit can diff removals
+        initialCampaignIdsRef.current = (ch.campaigns ?? []).map((c: any) => c.campaignId);
       })
       .catch(() => {})
       .finally(() => setEditLoading(false));
@@ -782,6 +798,7 @@ export function CharacterCreatorView() {
         characterData: {
           classId: form.classId, raceId: form.raceId, bgId: form.bgId,
           subclass: form.subclass || null, abilityMethod: form.abilityMethod,
+          hd: classDetail?.hd ?? null,
           chosenOptionals: form.chosenOptionals,
           chosenSkills: form.chosenSkills,
           chosenCantrips: form.chosenCantrips,
@@ -803,6 +820,17 @@ export function CharacterCreatorView() {
         charId = created.id;
       }
 
+      // In edit mode: unassign any campaigns the user removed
+      if (isEditing) {
+        const removed = initialCampaignIdsRef.current.filter(
+          (id) => !form.campaignIds.includes(id)
+        );
+        for (const campaignId of removed) {
+          await api(`/api/me/characters/${charId}/unassign`, jsonInit("POST", { campaignId }));
+        }
+      }
+
+      // Assign / sync all currently selected campaigns
       if (form.campaignIds.length > 0) {
         await api(`/api/me/characters/${charId}/assign`, jsonInit("POST", { campaignIds: form.campaignIds }));
       }
@@ -1862,7 +1890,7 @@ export function CharacterCreatorView() {
             >
               {portraitPreview
                 ? <img src={portraitPreview} alt="Portrait" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <span style={{ fontSize: 36, opacity: 0.35 }}>🧙</span>
+                : <IconPlayer size={48} style={{ opacity: 0.3 }} />
               }
               <div style={{
                 position: "absolute", inset: 0,

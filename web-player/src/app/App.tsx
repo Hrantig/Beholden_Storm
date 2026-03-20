@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { WsProvider } from "@/services/ws";
 import { LoginView } from "@/views/LoginView";
 import { PlayerHomeView } from "@/views/PlayerHomeView";
 import { CompendiumView } from "@/views/CompendiumView/CompendiumView";
@@ -48,12 +49,14 @@ function AuthGate() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter
-        basename="/player"
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <AuthGate />
-      </BrowserRouter>
+      <WsProvider>
+        <BrowserRouter
+          basename="/player"
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+          <AuthGate />
+        </BrowserRouter>
+      </WsProvider>
     </AuthProvider>
   );
 }
