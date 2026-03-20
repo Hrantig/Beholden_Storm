@@ -170,6 +170,7 @@ export interface StoredUserCharacter extends Timestamps {
   wisScore: number | null;
   chaScore: number | null;
   color: string | null;
+  imageUrl: string | null;
   characterData: Record<string, unknown> | null;
 }
 

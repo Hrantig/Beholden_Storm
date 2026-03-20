@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import { asArray, asText, normalizeKey, parseCrValue } from "../../lib/text.js";
 import { parseAttackFromText } from "../../lib/attacks.js";
 import { normalizeHp } from "./normalizeHp.js";
+import { parseBackgroundProficiencies } from "../../lib/proficiencyConstants.js";
 
 export function importCompendiumXml(args: {
   xml: string;
@@ -277,10 +278,24 @@ export function importCompendiumXml(args: {
         ) : [],
       }));
 
+      // Parse vision traits (Darkvision, Blindsight, Truesight, Tremorsense)
+      const VISION_TYPES = ["Darkvision", "Blindsight", "Truesight", "Tremorsense"];
+      const vision: { type: string; range: number }[] = [];
+      for (const t of traits) {
+        const vType = VISION_TYPES.find(v => v.toLowerCase() === t.name.toLowerCase().trim());
+        if (vType) {
+          // Extract range: "range of 120 feet" or "60 ft" or just a number
+          const rangeMatch = t.text.match(/(\d+)\s*(?:feet?|ft\.?)/i);
+          const range = rangeMatch?.[1] ? parseInt(rangeMatch[1], 10) : 60;
+          vision.push({ type: vType, range });
+        }
+      }
+
       const data = {
         id, name, nameKey, name_key: nameKey,
         size, speed,
         resist: asText(r?.resist) || null,
+        vision,
         traits,
       };
 
@@ -298,10 +313,38 @@ export function importCompendiumXml(args: {
         text: asText(t?.text) || "",
       }));
 
+      const proficiencies = parseBackgroundProficiencies({
+        proficiency: asText(bg?.proficiency) || "",
+        trait: asArray(bg?.trait),
+      });
+
+      // Starting equipment — prefer trait named "Starting Equipment", fallback to <equipment> tag
+      let equipment = "";
+      const equipTrait = traits.find((t) => /starting equipment/i.test(t.name));
+      if (equipTrait) {
+        equipment = equipTrait.text.replace(/Source:.*$/gim, "").trim();
+      } else if (bg?.equipment) {
+        // Structured <equipment> tag: may be a string or { item: [...] }
+        const eq = bg.equipment;
+        if (typeof eq === "string") {
+          equipment = eq.trim();
+        } else {
+          const items = asArray(eq?.item).map((it: any) => {
+            const count = it?.["@_count"];
+            const itemName = asText(it) || "";
+            return count ? `${count}× ${itemName}` : itemName;
+          }).filter(Boolean);
+          if (items.length > 0) equipment = items.join(", ");
+          else equipment = asText(eq) || "";
+        }
+      }
+
       const data = {
         id, name, nameKey, name_key: nameKey,
         proficiency: asText(bg?.proficiency) || "",
+        proficiencies,
         traits,
+        equipment,
       };
 
       bgStmt.run(id, name, nameKey, JSON.stringify(data));

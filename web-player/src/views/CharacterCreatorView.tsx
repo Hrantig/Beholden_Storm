@@ -29,13 +29,47 @@ interface RaceSummary { id: string; name: string; size: string | null; speed: nu
 interface RaceDetail {
   id: string; name: string; size: string | null; speed: number | null;
   resist: string | null;
+  vision: { type: string; range: number }[];
   traits: { name: string; text: string; category: string | null; modifier: string[] }[];
 }
 interface BgSummary { id: string; name: string }
+interface ProficiencyChoice {
+  fixed: string[];
+  choose: number;
+  from: string[] | null;  // null = "any"
+}
+interface StructuredBgProficiencies {
+  skills: ProficiencyChoice;
+  tools: ProficiencyChoice;
+  languages: ProficiencyChoice;
+  feats: string[];
+  abilityScores: string[];
+}
 interface BgDetail {
   id: string; name: string; proficiency: string;
+  proficiencies?: StructuredBgProficiencies;
   traits: { name: string; text: string }[];
+  equipment?: string;
 }
+
+// Canonical pick lists mirrored from server/src/lib/proficiencyConstants.ts
+const ALL_TOOLS = [
+  "Alchemist's Supplies","Brewer's Supplies","Calligrapher's Supplies",
+  "Carpenter's Tools","Cartographer's Tools","Cobbler's Tools","Cook's Utensils",
+  "Glassblower's Tools","Jeweler's Tools","Leatherworker's Tools","Mason's Tools",
+  "Painter's Supplies","Potter's Tools","Smith's Tools","Tinker's Tools",
+  "Weaver's Tools","Woodcarver's Tools",
+  "Disguise Kit","Forgery Kit","Herbalism Kit","Navigator's Tools",
+  "Poisoner's Kit","Thieves' Tools",
+  "Dice Set","Dragonchess Set","Playing Card Set","Three-Dragon Ante Set",
+  "Bagpipes","Drum","Dulcimer","Flute","Lute","Lyre","Horn","Pan Flute","Shawm","Viol",
+  "Land Vehicles","Water Vehicles","Sea Vehicles",
+];
+const ALL_LANGUAGES = [
+  "Common","Dwarvish","Elvish","Giant","Gnomish","Goblin","Halfling","Orcish",
+  "Abyssal","Celestial","Draconic","Deep Speech","Infernal","Primordial","Sylvan","Undercommon",
+  "Sign Language","Thieves' Cant",
+];
 interface Campaign { id: string; name: string }
 
 // ---------------------------------------------------------------------------
@@ -49,6 +83,14 @@ const POINT_BUY_COSTS: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 
 const POINT_BUY_BUDGET = 27;
 
 function abilityMod(score: number) { return Math.floor((score - 10) / 2); }
+
+const ABILITY_NAME_TO_KEY: Record<string, string> = {
+  strength: "str", dexterity: "dex", constitution: "con",
+  intelligence: "int", wisdom: "wis", charisma: "cha",
+};
+function abilityNamesToKeys(names: string[]): string[] {
+  return names.map(n => ABILITY_NAME_TO_KEY[n.toLowerCase()] ?? "").filter(Boolean);
+}
 
 function calcHpMax(hd: number, level: number, conMod: number): number {
   if (level <= 0) return hd + conMod;
@@ -314,14 +356,22 @@ function buildProficiencyMap(
 
   // ── Background ─────────────────────────────────────────────────────────────
   if (bgDetail) {
-    // proficiency field = skills
-    splitComma(bgDetail.proficiency).forEach(n => skills.push({ name: n, source: bgName }));
-    // Traits: find tool / language / equipment traits by name
-    for (const t of bgDetail.traits) {
-      if (/tool/i.test(t.name)) {
-        splitComma(t.text).forEach(n => tools.push({ name: n, source: bgName }));
-      } else if (/language/i.test(t.name)) {
-        splitComma(t.text).forEach(n => languages.push({ name: n, source: bgName }));
+    const prof = bgDetail.proficiencies;
+    // Skills — always fixed from <proficiency> field
+    const bgSkills = prof ? prof.skills.fixed : splitComma(bgDetail.proficiency);
+    bgSkills.forEach(n => skills.push({ name: n, source: bgName }));
+    // Tools — fixed grants + chosen picks
+    if (prof) {
+      prof.tools.fixed.forEach(n => tools.push({ name: n, source: bgName }));
+      form.chosenBgTools.forEach(n => tools.push({ name: n, source: bgName }));
+      // Languages — fixed grants + chosen picks
+      prof.languages.fixed.forEach(n => languages.push({ name: n, source: bgName }));
+      form.chosenBgLanguages.forEach(n => languages.push({ name: n, source: bgName }));
+    } else {
+      // Fallback: old-style trait text parsing
+      for (const t of bgDetail.traits) {
+        if (/tool/i.test(t.name)) splitComma(t.text).forEach(n => tools.push({ name: n, source: bgName }));
+        else if (/language/i.test(t.name)) splitComma(t.text).forEach(n => languages.push({ name: n, source: bgName }));
       }
     }
   }
@@ -401,6 +451,11 @@ interface FormState {
   level: number;
   subclass: string;
   chosenOptionals: string[];
+  // Background tool / language / ability choices (Step 3)
+  chosenBgTools: string[];
+  chosenBgLanguages: string[];
+  bgAbilityMode: "split" | "even";
+  bgAbilityBonuses: Record<string, number>; // e.g. { str: 2, dex: 1 } or { str:1, dex:1, con:1 }
   // Skill proficiency selections (up to numSkills)
   chosenSkills: string[];
   // Spellcasting selections
@@ -427,6 +482,7 @@ function initForm(user: { name?: string } | null, params: URLSearchParams): Form
   return {
     classId: "", raceId: "", bgId: "",
     level: 1, subclass: "", chosenOptionals: [],
+    chosenBgTools: [], chosenBgLanguages: [], bgAbilityMode: "split", bgAbilityBonuses: {},
     chosenSkills: [], chosenCantrips: [], chosenSpells: [], chosenInvocations: [],
     abilityMethod: "standard",
     standardAssign: { str: -1, dex: -1, con: -1, int: -1, wis: -1, cha: -1 },
@@ -440,22 +496,41 @@ function initForm(user: { name?: string } | null, params: URLSearchParams): Form
 }
 
 function resolvedScores(form: FormState): Record<string, number> {
-  if (form.abilityMethod === "manual") return { ...form.manualScores };
-  if (form.abilityMethod === "pointbuy") return { ...form.pbScores };
-  // standard array
-  const out: Record<string, number> = {};
-  for (const k of ABILITY_KEYS) {
-    const idx = form.standardAssign[k];
-    out[k] = idx >= 0 ? STANDARD_ARRAY[idx] : 8;
+  let base: Record<string, number>;
+  if (form.abilityMethod === "manual") base = { ...form.manualScores };
+  else if (form.abilityMethod === "pointbuy") base = { ...form.pbScores };
+  else {
+    base = {};
+    for (const k of ABILITY_KEYS) {
+      const idx = form.standardAssign[k];
+      base[k] = idx >= 0 ? STANDARD_ARRAY[idx] : 8;
+    }
   }
-  return out;
+  // Apply background ability bonuses
+  for (const [k, v] of Object.entries(form.bgAbilityBonuses)) {
+    if (k in base) base[k] = (base[k] ?? 0) + v;
+  }
+  return base;
+}
+
+/** Parse primary ability keys from class detail features. */
+function getPrimaryAbilityKeys(classDetail: ClassDetail | null): string[] {
+  if (!classDetail) return [];
+  for (const al of classDetail.autolevels) {
+    if (al.level !== 1) continue;
+    for (const f of al.features) {
+      const m = f.text.match(/Primary Ability:\s*([^\n]+)/i);
+      if (m) return abilityNamesToKeys(m[1].split(/,|\s+and\s+/i).map((s) => s.trim()).filter(Boolean));
+    }
+  }
+  return [];
 }
 
 // ---------------------------------------------------------------------------
 // Shared sub-components
 // ---------------------------------------------------------------------------
 
-function StepHeader({ step, current }: { step: number; current: Step }) {
+function StepHeader({ current, onStepClick }: { current: Step; onStepClick: (s: Step) => void }) {
   const STEPS = ["Class", "Species", "Background", "Level", "Spells", "Ability Scores", "Stats", "Identity", "Assign"];
   return (
     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 28 }}>
@@ -464,16 +539,20 @@ function StepHeader({ step, current }: { step: number; current: Step }) {
         const active = n === current;
         const done = n < current;
         return (
-          <div key={n} style={{
-            padding: "5px 13px", borderRadius: 20,
-            background: active ? C.accentHl : done ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.06)",
-            color: active ? C.textDark : done ? C.accentHl : "rgba(160,180,220,0.50)",
-            fontWeight: active ? 700 : done ? 600 : 500,
-            fontSize: 12,
-            border: `1px solid ${active ? C.accentHl : done ? "rgba(56,182,255,0.35)" : "rgba(255,255,255,0.10)"}`,
-          }}>
+          <button key={n} type="button"
+            onClick={() => onStepClick(n)}
+            style={{
+              padding: "5px 13px", borderRadius: 20,
+              background: active ? C.accentHl : done ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.06)",
+              color: active ? C.textDark : done ? C.accentHl : "rgba(160,180,220,0.50)",
+              fontWeight: active ? 700 : done ? 600 : 500,
+              fontSize: 12,
+              border: `1px solid ${active ? C.accentHl : done ? "rgba(56,182,255,0.35)" : "rgba(255,255,255,0.10)"}`,
+              cursor: active ? "default" : "pointer",
+              transition: "opacity 0.12s, background 0.12s",
+            }}>
             {done ? "✓ " : `${n}. `}{label}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -565,6 +644,11 @@ export function CharacterCreatorView() {
   const [classCantrips, setClassCantrips] = React.useState<SpellSummary[]>([]);
   const [classSpells, setClassSpells] = React.useState<SpellSummary[]>([]);
   const [classInvocations, setClassInvocations] = React.useState<SpellSummary[]>([]);
+
+  // Portrait selection (not part of form schema — uploaded separately after save)
+  const [portraitFile, setPortraitFile] = React.useState<File | null>(null);
+  const [portraitPreview, setPortraitPreview] = React.useState<string | null>(null);
+  const portraitInputRef = React.useRef<HTMLInputElement>(null);
 
   // Search states for long lists (hoisted to avoid Rules-of-Hooks violations in inner fns)
   const [classSearch, setClassSearch] = React.useState("");
@@ -659,6 +743,7 @@ export function CharacterCreatorView() {
   // Load bg detail when selected
   React.useEffect(() => {
     if (!form.bgId) { setBgDetail(null); return; }
+    setForm(f => ({ ...f, chosenBgTools: [], chosenBgLanguages: [], bgAbilityMode: "split", bgAbilityBonuses: {} }));
     api<BgDetail>(`/api/compendium/backgrounds/${form.bgId}`).then(setBgDetail).catch(() => {});
   }, [form.bgId]);
 
@@ -720,6 +805,13 @@ export function CharacterCreatorView() {
 
       if (form.campaignIds.length > 0) {
         await api(`/api/me/characters/${charId}/assign`, jsonInit("POST", { campaignIds: form.campaignIds }));
+      }
+
+      // Upload portrait if one was selected
+      if (portraitFile) {
+        const fd = new FormData();
+        fd.append("image", portraitFile);
+        await api(`/api/me/characters/${charId}/image`, { method: "POST", body: fd });
       }
 
       navigate("/");
@@ -923,12 +1015,39 @@ export function CharacterCreatorView() {
         {raceDetail && (
           <div style={detailBoxStyle}>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: C.accentHl }}>{raceDetail.name}</div>
-            {raceDetail.traits.filter((t) => t.category !== "description").slice(0, 4).map((t) => (
-              <div key={t.name} style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
-                <span style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{t.text.slice(0, 120)}{t.text.length > 120 ? "…" : ""}</span>
-              </div>
-            ))}
+
+            {/* Stats row: size / speed / vision */}
+            <div style={{ display: "flex", gap: 20, marginBottom: 10, flexWrap: "wrap" }}>
+              {raceDetail.size && (
+                <div>
+                  <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Size</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{raceDetail.size}</div>
+                </div>
+              )}
+              {raceDetail.speed && (
+                <div>
+                  <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Speed</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{raceDetail.speed} ft</div>
+                </div>
+              )}
+              {(raceDetail.vision ?? []).map((v) => (
+                <div key={v.type}>
+                  <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{v.type}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{v.range} ft</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Traits — skip vision (already shown above) and description */}
+            {raceDetail.traits
+              .filter((t) => t.category !== "description" && !["darkvision","blindsight","truesight","tremorsense"].includes(t.name.toLowerCase().trim()))
+              .slice(0, 5)
+              .map((t) => (
+                <div key={t.name} style={{ marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{t.text.replace(/Source:.*$/m, "").trim().slice(0, 140)}{t.text.length > 140 ? "…" : ""}</span>
+                </div>
+              ))}
           </div>
         )}
 
@@ -994,46 +1113,225 @@ export function CharacterCreatorView() {
 
         {/* Detail panel for selected background */}
         {bgDetail && (() => {
-          const bgSkills = bgDetail.proficiency.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
-          const toolTraits = bgDetail.traits.filter((t) => /tool/i.test(t.name));
-          const langTraits = bgDetail.traits.filter((t) => /language/i.test(t.name));
-          const flavorTraits = bgDetail.traits.filter((t) => !/tool|language/i.test(t.name)).slice(0, 1);
+          const prof = bgDetail.proficiencies;
+          const skills  = prof?.skills  ?? { fixed: bgDetail.proficiency.split(/[,;]/).map(s=>s.trim()).filter(Boolean), choose: 0, from: null };
+          const tools    = prof?.tools    ?? { fixed: [], choose: 0, from: null };
+          const langs    = prof?.languages ?? { fixed: [], choose: 0, from: null };
+          const flavorTraits = bgDetail.traits.filter((t) => !/tool|language|starting equipment/i.test(t.name)).slice(0, 1);
+
+          // Toggle helper for bg tool/language pickers
+          function toggleBgChoice(item: string, key: "chosenBgTools" | "chosenBgLanguages", max: number) {
+            setForm(f => {
+              const cur = f[key];
+              const next = cur.includes(item) ? cur.filter(x => x !== item)
+                : cur.length < max ? [...cur, item] : cur;
+              return { ...f, [key]: next };
+            });
+          }
+
+          function ProfPicker({ label, choice, formKey, canonical }: {
+            label: string;
+            choice: ProficiencyChoice;
+            formKey: "chosenBgTools" | "chosenBgLanguages";
+            canonical: string[];
+          }) {
+            const chosen: string[] = form[formKey];
+            const options = choice.from ?? canonical;
+            return (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ marginBottom: 5 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>{label} </span>
+                  <span style={sourceTagStyle}>{bgDetail!.name}</span>
+                </div>
+                {choice.fixed.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                    {choice.fixed.map(n => <span key={n} style={profChipStyle}>{n}</span>)}
+                  </div>
+                )}
+                {choice.choose > 0 && (
+                  <>
+                    <div style={{ color: C.muted, fontSize: 11, marginBottom: 5 }}>
+                      Choose {choice.choose} ({chosen.length}/{choice.choose})
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {options.map(n => {
+                        const sel = chosen.includes(n);
+                        return (
+                          <button key={n} type="button"
+                            onClick={() => toggleBgChoice(n, formKey, choice.choose)}
+                            style={{
+                              fontSize: 11, padding: "3px 9px", borderRadius: 20, cursor: "pointer",
+                              border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.15)"}`,
+                              background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
+                              color: sel ? C.accentHl : C.muted,
+                              fontWeight: sel ? 700 : 400,
+                            }}>
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          }
+
           return (
             <div style={detailBoxStyle}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.accentHl }}>
                 {bgDetail.name}
               </div>
-              {bgSkills.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
+
+              {/* Skills — always fixed from <proficiency> field */}
+              {skills.fixed.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
                   <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Skills </span>
                   <span style={sourceTagStyle}>{bgDetail.name}</span>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
-                    {bgSkills.map((s) => <span key={s} style={profChipStyle}>{s}</span>)}
+                    {skills.fixed.map(s => <span key={s} style={profChipStyle}>{s}</span>)}
                   </div>
                 </div>
               )}
-              {toolTraits.map((t) => (
-                <div key={t.name} style={{ marginBottom: 8 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Tools </span>
+
+              {/* Tools */}
+              {(tools.fixed.length > 0 || tools.choose > 0) && ProfPicker({
+                label: "Tools", choice: tools, formKey: "chosenBgTools", canonical: ALL_TOOLS,
+              })}
+
+              {/* Languages */}
+              {(langs.fixed.length > 0 || langs.choose > 0) && ProfPicker({
+                label: "Languages", choice: langs, formKey: "chosenBgLanguages", canonical: ALL_LANGUAGES,
+              })}
+
+              {/* Granted feat */}
+              {prof?.feats && prof.feats.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Feat </span>
                   <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3 }}>
-                    {t.text.slice(0, 160)}{t.text.length > 160 ? "…" : ""}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                    {prof.feats.map(f => (
+                      <span key={f} style={{ ...profChipStyle, background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.4)", color: "#fb923c" }}>{f}</span>
+                    ))}
                   </div>
                 </div>
-              ))}
-              {langTraits.map((t) => (
-                <div key={t.name} style={{ marginBottom: 8 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Languages </span>
+              )}
+
+              {/* Ability score bonus picker */}
+              {prof?.abilityScores && prof.abilityScores.length > 0 && (() => {
+                const abilityKeys = abilityNamesToKeys(prof.abilityScores);
+                const bonuses = form.bgAbilityBonuses;
+                const mode = form.bgAbilityMode;
+
+                function setMode(m: "split" | "even") {
+                  setForm(f => ({ ...f, bgAbilityMode: m, bgAbilityBonuses: {} }));
+                }
+
+                function handleSplitClick(key: string) {
+                  setForm(f => {
+                    const cur = { ...f.bgAbilityBonuses };
+                    if (cur[key]) {
+                      // Toggle off
+                      delete cur[key];
+                      return { ...f, bgAbilityBonuses: cur };
+                    }
+                    const hasTwoAlready = Object.keys(cur).length >= 2;
+                    if (hasTwoAlready) return f; // already have 2 picks
+                    const hasPlus2 = Object.values(cur).includes(2);
+                    cur[key] = hasPlus2 ? 1 : 2;
+                    return { ...f, bgAbilityBonuses: cur };
+                  });
+                }
+
+                function handleEvenClick(key: string) {
+                  setForm(f => {
+                    const cur = { ...f.bgAbilityBonuses };
+                    if (cur[key]) {
+                      delete cur[key];
+                    } else if (Object.keys(cur).length < abilityKeys.length) {
+                      cur[key] = 1;
+                    }
+                    return { ...f, bgAbilityBonuses: cur };
+                  });
+                }
+
+                const splitDone = Object.keys(bonuses).length === 2;
+                const evenDone  = Object.keys(bonuses).length === abilityKeys.length;
+
+                return (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Ability Scores </span>
+                      <span style={sourceTagStyle}>{bgDetail!.name}</span>
+                    </div>
+
+                    {/* Mode toggle */}
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {(["split", "even"] as const).map(m => (
+                        <button key={m} type="button" onClick={() => setMode(m)} style={{
+                          padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
+                          border: `1px solid ${mode === m ? "#a78bfa" : "rgba(255,255,255,0.15)"}`,
+                          background: mode === m ? "rgba(167,139,250,0.18)" : "rgba(255,255,255,0.04)",
+                          color: mode === m ? "#a78bfa" : C.muted,
+                        }}>
+                          {m === "split" ? "+2 / +1" : "+1 each"}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>
+                      {mode === "split"
+                        ? splitDone ? "✓ All bonuses assigned" : !Object.values(bonuses).includes(2) ? "Click to assign +2" : "Click another for +1"
+                        : evenDone  ? "✓ All bonuses assigned" : `Click abilities to assign +1 (${Object.keys(bonuses).length}/${abilityKeys.length})`
+                      }
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {prof.abilityScores.map((aName) => {
+                        const key = ABILITY_NAME_TO_KEY[aName.toLowerCase()] ?? "";
+                        const bonus = key ? bonuses[key] : undefined;
+                        const isSelected = bonus != null;
+                        const canSelect = mode === "split"
+                          ? !isSelected && Object.keys(bonuses).length < 2
+                          : !isSelected && Object.keys(bonuses).length < abilityKeys.length;
+
+                        return (
+                          <button key={aName} type="button"
+                            onClick={() => key && (mode === "split" ? handleSplitClick(key) : handleEvenClick(key))}
+                            style={{
+                              padding: "5px 13px", borderRadius: 20, cursor: canSelect || isSelected ? "pointer" : "default",
+                              border: `1px solid ${isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.12)"}`,
+                              background: isSelected ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.04)",
+                              color: isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.7)" : C.muted,
+                              fontSize: 12, fontWeight: isSelected ? 700 : 500,
+                              opacity: !canSelect && !isSelected ? 0.45 : 1,
+                            }}>
+                            {aName}
+                            {isSelected && <span style={{ marginLeft: 5, fontWeight: 800 }}>{bonus! > 0 ? `+${bonus}` : bonus}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Starting Equipment */}
+              {bgDetail.equipment && (
+                <div style={{ marginBottom: 10 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Starting Equipment </span>
                   <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3 }}>
-                    {t.text.slice(0, 160)}{t.text.length > 160 ? "…" : ""}
+                  <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 5, lineHeight: 1.6 }}>
+                    {bgDetail.equipment}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Flavor */}
               {flavorTraits.map((t) => (
                 <div key={t.name} style={{ marginBottom: 4, fontSize: "var(--fs-small)" }}>
                   <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
-                  <span style={{ color: C.muted }}>{t.text.slice(0, 140)}{t.text.length > 140 ? "…" : ""}</span>
+                  <span style={{ color: C.muted }}>{t.text.replace(/Source:.*$/m, "").trim()}</span>
                 </div>
               ))}
             </div>
@@ -1285,10 +1583,48 @@ export function CharacterCreatorView() {
     const usedIndices = Object.values(form.standardAssign).filter((v) => v >= 0);
     const spent = pointBuySpent(form.pbScores);
     const remaining = POINT_BUY_BUDGET - spent;
+    const primaryKeys = getPrimaryAbilityKeys(classDetail);
+    const bgBonuses = form.bgAbilityBonuses;
+    const hasBgBonuses = Object.keys(bgBonuses).length > 0;
+
+    /** Label for each ability showing the base score + bg bonus annotation */
+    function AbilityLabel({ k }: { k: string }) {
+      const bonus = bgBonuses[k];
+      const isPrimary = primaryKeys.includes(k);
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
+          <span style={{
+            color: isPrimary ? "#fbbf24" : C.muted,
+            fontSize: "var(--fs-small)", fontWeight: isPrimary ? 800 : 600,
+          }}>
+            {ABILITY_LABELS[k]}
+          </span>
+          {isPrimary && <span style={{ fontSize: 10, color: "#fbbf24", opacity: 0.75 }}>★ Primary</span>}
+          {bonus != null && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10,
+              background: "rgba(167,139,250,0.18)", border: "1px solid rgba(167,139,250,0.4)",
+              color: "#a78bfa",
+            }}>
+              +{bonus} {bgDetail?.name ?? "bg"}
+            </span>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div>
         <h2 style={headingStyle}>Ability Scores</h2>
+
+        {hasBgBonuses && (
+          <div style={{ ...detailBoxStyle, marginBottom: 16, padding: "10px 14px" }}>
+            <span style={{ fontSize: 12, color: "#a78bfa" }}>
+              Background bonuses applied:{" "}
+              {Object.entries(bgBonuses).map(([k, v]) => `${ABILITY_LABELS[k]} +${v}`).join(", ")}
+            </span>
+          </div>
+        )}
 
         {/* Method tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
@@ -1313,14 +1649,15 @@ export function CharacterCreatorView() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
               {ABILITY_KEYS.map((k) => {
                 const assigned = form.standardAssign[k];
-                const availableValues = STANDARD_ARRAY.filter((_, i) =>
-                  i === assigned || !usedIndices.includes(i)
-                );
+                const baseVal = assigned >= 0 ? STANDARD_ARRAY[assigned] : undefined;
+                const totalVal = baseVal != null ? baseVal + (bgBonuses[k] ?? 0) : undefined;
                 return (
-                  <div key={k}>
-                    <label style={{ color: C.muted, fontSize: "var(--fs-small)", display: "block", marginBottom: 4 }}>
-                      {ABILITY_LABELS[k]}
-                    </label>
+                  <div key={k} style={{
+                    padding: "8px", borderRadius: 8,
+                    border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`,
+                    background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent",
+                  }}>
+                    <AbilityLabel k={k} />
                     <Select value={assigned >= 0 ? String(assigned) : ""} onChange={(e) => {
                       const idx = e.target.value === "" ? -1 : Number(e.target.value);
                       setForm((f) => ({ ...f, standardAssign: { ...f.standardAssign, [k]: idx } }));
@@ -1333,7 +1670,13 @@ export function CharacterCreatorView() {
                       ))}
                     </Select>
                     <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2, textAlign: "center" }}>
-                      {assigned >= 0 ? `mod ${abilityMod(STANDARD_ARRAY[assigned]) >= 0 ? "+" : ""}${abilityMod(STANDARD_ARRAY[assigned])}` : ""}
+                      {totalVal != null
+                        ? <>
+                            {baseVal !== totalVal && <span style={{ color: "#a78bfa", marginRight: 4 }}>{totalVal}</span>}
+                            {`mod ${abilityMod(totalVal) >= 0 ? "+" : ""}${abilityMod(totalVal)}`}
+                          </>
+                        : null
+                      }
                     </div>
                   </div>
                 );
@@ -1351,19 +1694,27 @@ export function CharacterCreatorView() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
               {ABILITY_KEYS.map((k) => {
                 const score = form.pbScores[k] ?? 8;
+                const total = score + (bgBonuses[k] ?? 0);
                 return (
-                  <div key={k} style={{ textAlign: "center" }}>
-                    <label style={{ color: C.muted, fontSize: "var(--fs-small)", display: "block", marginBottom: 4 }}>{ABILITY_LABELS[k]}</label>
+                  <div key={k} style={{
+                    textAlign: "center", padding: "8px", borderRadius: 8,
+                    border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`,
+                    background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent",
+                  }}>
+                    <AbilityLabel k={k} />
                     <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
                       <button type="button" disabled={score <= 8} onClick={() => setForm((f) => ({ ...f, pbScores: { ...f.pbScores, [k]: score - 1 } }))}
                         style={{ ...smallBtnStyle, opacity: score <= 8 ? 0.4 : 1 }}>−</button>
-                      <span style={{ fontWeight: 700, minWidth: 24 }}>{score}</span>
+                      <span style={{ fontWeight: 700, minWidth: 24 }}>
+                        {score}
+                        {bgBonuses[k] ? <span style={{ color: "#a78bfa", fontSize: 11 }}> ({total})</span> : null}
+                      </span>
                       <button type="button" disabled={score >= 15 || remaining < (POINT_BUY_COSTS[score + 1] ?? 99) - (POINT_BUY_COSTS[score] ?? 0)}
                         onClick={() => setForm((f) => ({ ...f, pbScores: { ...f.pbScores, [k]: score + 1 } }))}
                         style={{ ...smallBtnStyle, opacity: (score >= 15 || remaining < (POINT_BUY_COSTS[score + 1] ?? 99) - (POINT_BUY_COSTS[score] ?? 0)) ? 0.4 : 1 }}>+</button>
                     </div>
                     <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
-                      mod {abilityMod(score) >= 0 ? "+" : ""}{abilityMod(score)}
+                      mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}
                     </div>
                   </div>
                 );
@@ -1376,14 +1727,20 @@ export function CharacterCreatorView() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {ABILITY_KEYS.map((k) => {
               const score = form.manualScores[k] ?? 10;
+              const total = score + (bgBonuses[k] ?? 0);
               return (
-                <div key={k}>
-                  <label style={{ color: C.muted, fontSize: "var(--fs-small)", display: "block", marginBottom: 4 }}>{ABILITY_LABELS[k]}</label>
+                <div key={k} style={{
+                  padding: "8px", borderRadius: 8,
+                  border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`,
+                  background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent",
+                }}>
+                  <AbilityLabel k={k} />
                   <input type="number" value={score}
                     onChange={(e) => setForm((f) => ({ ...f, manualScores: { ...f.manualScores, [k]: Number(e.target.value) || 10 } }))}
                     style={{ ...inputStyle, width: "100%" }} />
                   <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
-                    mod {abilityMod(score) >= 0 ? "+" : ""}{abilityMod(score)}
+                    {bgBonuses[k] ? <span style={{ color: "#a78bfa" }}>{total} · </span> : null}
+                    mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}
                   </div>
                 </div>
               );
@@ -1474,30 +1831,90 @@ export function CharacterCreatorView() {
   // Step 7: Identity
   function StepIdentity() {
     const COLORS = ["#38b6ff", "#5ecb6b", "#f0a500", "#ff5d5d", "#a78bfa", "#fb923c", "#e879f9", "#94a3b8"];
+
+    function handlePortraitChange(e: React.ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setPortraitFile(file);
+      const url = URL.createObjectURL(file);
+      setPortraitPreview(url);
+    }
+
     return (
       <div>
         <h2 style={headingStyle}>Character Identity</h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 400 }}>
-          <div>
-            <label style={labelStyle}>Character Name *</label>
-            <input
-              value={form.characterName}
-              onChange={(e) => set("characterName", e.target.value)}
-              placeholder="Thraxil the Destroyer"
-              style={{ ...inputStyle, width: "100%" }}
-            />
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+
+          {/* Portrait picker */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <input ref={portraitInputRef} type="file" accept="image/*" onChange={handlePortraitChange} style={{ display: "none" }} />
+            <div
+              onClick={() => portraitInputRef.current?.click()}
+              style={{
+                width: 110, height: 110, borderRadius: 12, cursor: "pointer",
+                border: `2px dashed ${portraitPreview ? C.accentHl : "rgba(255,255,255,0.25)"}`,
+                background: portraitPreview ? "#000" : "rgba(255,255,255,0.04)",
+                overflow: "hidden", position: "relative",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+              title="Click to set portrait"
+            >
+              {portraitPreview
+                ? <img src={portraitPreview} alt="Portrait" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <span style={{ fontSize: 36, opacity: 0.35 }}>🧙</span>
+              }
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "rgba(0,0,0,0)",
+                display: "flex", alignItems: "flex-end", justifyContent: "center",
+                paddingBottom: 6,
+              }}>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", background: "rgba(0,0,0,0.55)", padding: "2px 6px", borderRadius: 4 }}>
+                  {portraitPreview ? "Change" : "Add photo"}
+                </span>
+              </div>
+            </div>
+            {portraitPreview && (
+              <button type="button" onClick={() => { setPortraitFile(null); setPortraitPreview(null); }}
+                style={{ fontSize: 11, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>
+                Remove
+              </button>
+            )}
           </div>
-          <div>
-            <label style={labelStyle}>Color</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => set("color", c)} style={{
-                  width: 30, height: 30, borderRadius: "50%", background: c,
-                  border: `3px solid ${form.color === c ? C.text : "transparent"}`,
-                  cursor: "pointer", padding: 0,
-                  boxShadow: form.color === c ? `0 0 0 1px ${c}` : "none",
-                }} />
-              ))}
+
+          {/* Name + color */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 220 }}>
+            <div>
+              <label style={labelStyle}>Character Name *</label>
+              <input
+                value={form.characterName}
+                onChange={(e) => set("characterName", e.target.value)}
+                placeholder="Thraxil the Destroyer"
+                style={{ ...inputStyle, width: "100%" }}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Player Name</label>
+              <input
+                value={form.playerName}
+                onChange={(e) => set("playerName", e.target.value)}
+                placeholder="Your name"
+                style={{ ...inputStyle, width: "100%" }}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Color</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {COLORS.map((c) => (
+                  <button key={c} type="button" onClick={() => set("color", c)} style={{
+                    width: 30, height: 30, borderRadius: "50%", background: c,
+                    border: `3px solid ${form.color === c ? C.text : "transparent"}`,
+                    cursor: "pointer", padding: 0,
+                    boxShadow: form.color === c ? `0 0 0 1px ${c}` : "none",
+                  }} />
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1570,7 +1987,7 @@ export function CharacterCreatorView() {
         <p style={{ margin: "0 0 24px", color: "rgba(160,180,220,0.55)", fontSize: 13 }}>
           {isEditing ? "Update your character details below." : "Build your character step by step."}
         </p>
-        <StepHeader step={step} current={step} />
+        <StepHeader current={step} onStepClick={(s) => setStep(s)} />
         {renderStep()}
       </div>
     </div>

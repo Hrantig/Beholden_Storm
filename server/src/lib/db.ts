@@ -40,7 +40,7 @@ export const PLAYER_COLS =
 export const USER_CHARACTER_COLS =
   "id, user_id, name, player_name, class_name, species, level, " +
   "hp_max, hp_current, ac, speed, str_score, dex_score, con_score, " +
-  "int_score, wis_score, cha_score, color, character_data_json, created_at, updated_at";
+  "int_score, wis_score, cha_score, color, image_url, character_data_json, created_at, updated_at";
 
 export const INPC_COLS =
   "id, campaign_id, monster_id, name, label, friendly, " +
@@ -321,6 +321,7 @@ CREATE TABLE IF NOT EXISTS user_characters (
   wis_score INTEGER,
   cha_score INTEGER,
   color TEXT,
+  image_url TEXT,
   character_data_json TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -471,6 +472,12 @@ function runMigrations(db: Db): void {
   if (!playerCols2.includes("speed")) {
     db.exec("ALTER TABLE players ADD COLUMN speed INTEGER");
   }
+
+  // Add image_url to user_characters (portrait upload).
+  const ucharCols = (db.pragma("table_info(user_characters)") as { name: string }[]).map((c) => c.name);
+  if (!ucharCols.includes("image_url")) {
+    db.exec("ALTER TABLE user_characters ADD COLUMN image_url TEXT");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -610,6 +617,7 @@ export function rowToUserCharacter(row: Record<string, unknown>): StoredUserChar
     wisScore: (row.wis_score as number | null) ?? null,
     chaScore: (row.cha_score as number | null) ?? null,
     color: (row.color as string | null) ?? null,
+    imageUrl: (row.image_url as string | null) ?? null,
     characterData: parseJson(row.character_data_json, null),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,

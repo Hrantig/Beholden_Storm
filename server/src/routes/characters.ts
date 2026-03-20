@@ -9,6 +9,7 @@ import { parseBody } from "../shared/validate.js";
 import { rowToUserCharacter, USER_CHARACTER_COLS, rowToPlayer, PLAYER_COLS } from "../lib/db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import { ACCEPTED_IMAGE_TYPES, resizeToWebP } from "../lib/imageHelpers.js";
 
 const CharacterBody = z.object({
   name: z.string().trim().min(1),
@@ -346,6 +347,48 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       db.prepare("DELETE FROM character_campaigns WHERE id = ?").run(link.id);
     }
 
+    res.json({ ok: true });
+  });
+
+  // Upload character portrait image.
+  app.post("/api/me/characters/:id/image", requireAuth, ctx.upload.single("image"), async (req, res) => {
+    const charId = requireParam(req, res, "id");
+    if (!charId) return;
+    const userId = (req as any).user.userId;
+    const existing = db
+      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
+      .get(charId, userId) as { id: string } | undefined;
+    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!req.file) return res.status(400).json({ ok: false, message: "No file" });
+    if (!ACCEPTED_IMAGE_TYPES.includes(req.file.mimetype)) {
+      return res.status(400).json({ ok: false, message: "Unsupported image type" });
+    }
+    let thumbnail: Buffer;
+    try { thumbnail = await resizeToWebP(req.file.buffer); }
+    catch { return res.status(400).json({ ok: false, message: "Could not process image" }); }
+
+    const imagesDir = ctx.path.join(ctx.paths.dataDir, "character-images");
+    ctx.fs.mkdirSync(imagesDir, { recursive: true });
+    const filename = `${charId}.webp`;
+    ctx.fs.writeFileSync(ctx.path.join(imagesDir, filename), thumbnail);
+    const imageUrl = `/character-images/${filename}`;
+    db.prepare("UPDATE user_characters SET image_url = ?, updated_at = ? WHERE id = ?").run(imageUrl, now(), charId);
+    res.json({ ok: true, imageUrl });
+  });
+
+  // Remove character portrait image.
+  app.delete("/api/me/characters/:id/image", requireAuth, (req, res) => {
+    const charId = requireParam(req, res, "id");
+    if (!charId) return;
+    const userId = (req as any).user.userId;
+    const existing = db
+      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
+      .get(charId, userId) as { id: string } | undefined;
+    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    const imagesDir = ctx.path.join(ctx.paths.dataDir, "character-images");
+    const imgPath = ctx.path.join(imagesDir, `${charId}.webp`);
+    try { if (ctx.fs.existsSync(imgPath)) ctx.fs.unlinkSync(imgPath); } catch { /* best-effort */ }
+    db.prepare("UPDATE user_characters SET image_url = NULL, updated_at = ? WHERE id = ?").run(now(), charId);
     res.json({ ok: true });
   });
 }

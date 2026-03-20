@@ -124,6 +124,11 @@ export function createServer() {
   fs.mkdirSync(playerImagesDir, { recursive: true });
   app.use("/player-images", express.static(playerImagesDir));
 
+  // --- character portrait images (static) -----------------------------------
+  const characterImagesDir = path.join(paths.dataDir, "character-images");
+  fs.mkdirSync(characterImagesDir, { recursive: true });
+  app.use("/character-images", express.static(characterImagesDir));
+
   // --- routes ---------------------------------------------------------------
   registerAuthRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
