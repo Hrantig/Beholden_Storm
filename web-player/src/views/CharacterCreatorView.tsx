@@ -12,14 +12,19 @@ import { Select } from "@/ui/Select";
 interface ClassSummary { id: string; name: string; hd: number | null }
 interface ClassDetail {
   id: string; name: string; hd: number | null;
-  proficiency: string; armor: string; weapons: string;
+  numSkills: number;        // how many skill proficiencies to pick
+  proficiency: string;      // comma-separated skill options
+  slotsReset: string;       // "L" = long rest, "S" = short rest (Warlock)
+  armor: string; weapons: string;
   description: string;
   autolevels: {
     level: number; scoreImprovement: boolean;
+    slots: number[] | null; // [cantrips, L1_slots, L2_slots, ...] or null
     features: { name: string; text: string; optional: boolean }[];
     counters: { name: string; value: number; reset: string }[];
   }[];
 }
+interface SpellSummary { id: string; name: string; level: number | null; school: string | null; classes: string | null; text: string | null }
 interface RaceSummary { id: string; name: string; size: string | null; speed: number | null }
 interface RaceDetail {
   id: string; name: string; size: string | null; speed: number | null;
@@ -79,6 +84,302 @@ function getSubclassList(cls: ClassDetail): string[] {
   return names;
 }
 
+/**
+ * Parse an embedded "Level | Count" table from feature text.
+ * e.g. "Invocations Known:\nLevel | Invocations\n1 | 1\n2 | 3\n..."
+ * Returns sorted [level, count] pairs.
+ */
+function parseLevelTable(text: string): [number, number][] {
+  const pairs: [number, number][] = [];
+  let inTable = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!inTable) {
+      // The header row has "Level" and "|" (but not all-numeric values)
+      if (/\blevel\b/i.test(line) && /\|/.test(line) && !/^\d/.test(line)) { inTable = true; }
+      continue;
+    }
+    const m = line.match(/^(\d+)\s*\|?\s*(\d+)/);
+    if (m) { pairs.push([parseInt(m[1]), parseInt(m[2])]); }
+    else if (line.length > 0 && !/^\d/.test(line)) { break; } // end of table
+  }
+  return pairs.sort((a, b) => a[0] - b[0]);
+}
+
+/** Get value from a parsed level table at a given character level (highest entry ≤ level). */
+function tableValueAtLevel(table: [number, number][], level: number): number {
+  let result = 0;
+  for (const [lvl, val] of table) { if (lvl <= level) result = val; }
+  return result;
+}
+
+/** Get the active slots array at a given character level (last autolevel ≤ level that has slots). */
+function getSlotsAtLevel(cls: ClassDetail, level: number): number[] | null {
+  let best: number[] | null = null;
+  for (const al of cls.autolevels) {
+    if (al.level != null && al.level <= level && al.slots != null) best = al.slots;
+  }
+  return best;
+}
+
+/** Number of cantrips at this level (first element of slots array). */
+function getCantripCount(cls: ClassDetail, level: number): number {
+  return getSlotsAtLevel(cls, level)?.[0] ?? 0;
+}
+
+/** Highest spell slot level available at this character level. */
+function getMaxSlotLevel(cls: ClassDetail, level: number): number {
+  const slots = getSlotsAtLevel(cls, level);
+  if (!slots) return 0;
+  for (let i = slots.length - 1; i >= 1; i--) { if (slots[i] > 0) return i; }
+  return 0;
+}
+
+/** True if class has any spell slots at any level. */
+function isSpellcaster(cls: ClassDetail): boolean {
+  return cls.autolevels.some((al) => al.slots != null && al.slots.slice(1).some((s) => s > 0));
+}
+
+/**
+ * For a non-optional class feature whose name contains a keyword (e.g. "Invocation", "Pact Magic"),
+ * find the first such feature text up to the given level and parse its level table.
+ */
+function getClassFeatureTable(cls: ClassDetail, keyword: string, level: number): [number, number][] {
+  for (const al of cls.autolevels) {
+    if (al.level == null || al.level > level) continue;
+    for (const f of al.features) {
+      if (!f.optional && new RegExp(keyword, "i").test(f.name)) {
+        const t = parseLevelTable(f.text);
+        if (t.length > 0) return t;
+      }
+    }
+  }
+  return [];
+}
+
+/** Parse proficiency string into a skill list. */
+function parseSkillList(proficiency: string): string[] {
+  return proficiency.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+}
+
+/**
+ * Extract the minimum character level from an invocation prerequisite string.
+ * e.g. "Prerequisite: Level 7+ Warlock" → 7
+ * Returns 1 if no level prerequisite is found (always available).
+ */
+function parseInvocationPrereqLevel(text: string): number {
+  const m = text.match(/Prerequisite[^:]*:.*?Level\s+(\d+)\+/i);
+  return m ? parseInt(m[1], 10) : 1;
+}
+
+// ---------------------------------------------------------------------------
+// Provenance tracking
+// ---------------------------------------------------------------------------
+
+export interface TaggedItem { name: string; source: string }
+export interface ProficiencyMap {
+  skills: TaggedItem[];
+  saves: TaggedItem[];
+  armor: TaggedItem[];
+  weapons: TaggedItem[];
+  tools: TaggedItem[];
+  languages: TaggedItem[];
+  spells: TaggedItem[];        // cantrips + prepared spells
+  invocations: TaggedItem[];
+}
+
+/** Compile the full proficiency map with source tags from all wizard selections. */
+// ---------------------------------------------------------------------------
+// Feature grant parsing
+// ---------------------------------------------------------------------------
+
+interface FeatureGrants {
+  armor: string[];
+  weapons: string[];
+  tools: string[];
+  skills: string[];
+  languages: string[];
+}
+
+function toTitleCase(s: string): string {
+  return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+/** Parse proficiency grants out of an optional feature's text blob. */
+function parseFeatureGrants(text: string): FeatureGrants {
+  const result: FeatureGrants = { armor: [], weapons: [], tools: [], skills: [], languages: [] };
+  // Strip source lines and flatten newlines
+  const t = text.replace(/Source:.*$/gim, "").replace(/\n/g, " ");
+
+  // Armor — "training with X armor" or "proficiency with X armor"
+  const armorRe = /(?:training with|proficiency with)\s+([\w\s,]+?)\s+armor\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = armorRe.exec(t)) !== null) {
+    m[1].split(/\s+and\s+|,/).map(s => s.trim()).filter(Boolean)
+      .forEach(s => { if (!/^all$/i.test(s)) result.armor.push(toTitleCase(s) + " Armor"); else result.armor.push("All Armor"); });
+  }
+
+  // Weapons — "proficiency with X weapons" (won't overlap with armor)
+  const weapRe = /proficiency with\s+([\w\s,]+?)\s+weapons\b/gi;
+  while ((m = weapRe.exec(t)) !== null) {
+    m[1].split(/\s+and\s+|,/).map(s => s.trim()).filter(Boolean)
+      .forEach(s => result.weapons.push(toTitleCase(s) + " Weapons"));
+  }
+
+  // Tools — "proficiency with X Tools/Kit/Instruments/Supplies"
+  const toolRe = /proficiency with\s+([\w\s']+?(?:tools?|kit|instruments?|supplies))\b/gi;
+  while ((m = toolRe.exec(t)) !== null) {
+    result.tools.push(toTitleCase(m[1].trim()));
+  }
+
+  // Skills — "proficiency in X" (single known skill name)
+  const skillRe = /proficiency in\s+([\w\s]+?)(?:\.|,|\band\b|$)/gi;
+  while ((m = skillRe.exec(t)) !== null) {
+    result.skills.push(toTitleCase(m[1].trim()));
+  }
+
+  // Languages — "learn/speak/know X language"
+  const langRe = /(?:learn|speak|know|understand)\s+(?:the\s+)?([\w]+)\s+language/gi;
+  while ((m = langRe.exec(t)) !== null) {
+    result.languages.push(toTitleCase(m[1]));
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+
+function buildProficiencyMap(
+  form: FormState,
+  classDetail: ClassDetail | null,
+  raceDetail: RaceDetail | null,
+  bgDetail: BgDetail | null,
+  classCantrips: SpellSummary[],
+  classSpells: SpellSummary[],
+  classInvocations: SpellSummary[],
+): ProficiencyMap {
+  const className = classDetail?.name ?? "";
+  const raceName  = raceDetail?.name  ?? "";
+  const bgName    = bgDetail?.name    ?? "";
+
+  const splitComma = (s: string) => s.split(/[,;]/).map(x => x.trim()).filter(Boolean);
+
+  const skills:      TaggedItem[] = [];
+  const saves:       TaggedItem[] = [];
+  const armor:       TaggedItem[] = [];
+  const weapons:     TaggedItem[] = [];
+  const tools:       TaggedItem[] = [];
+  const languages:   TaggedItem[] = [];
+  const spells:      TaggedItem[] = [];
+  const invocations: TaggedItem[] = [];
+
+  // ── Class ──────────────────────────────────────────────────────────────────
+  if (classDetail) {
+    splitComma(classDetail.armor).forEach(n => armor.push({ name: n, source: className }));
+    splitComma(classDetail.weapons).forEach(n => weapons.push({ name: n, source: className }));
+    // Saving throws — parse from feature text "Saving Throw Proficiencies: X and Y"
+    outer: for (const al of classDetail.autolevels) {
+      for (const f of al.features) {
+        if (f.optional) continue;
+        const m = f.text.match(/Saving Throw Proficiencies?:\s*([^\n.]+)/i);
+        if (m) {
+          m[1].split(/,|\s+and\s+/i).map(s => s.trim()).filter(Boolean)
+            .forEach(n => saves.push({ name: n, source: className }));
+          break outer;
+        }
+      }
+    }
+    // Skill choices made in Step 5
+    form.chosenSkills.forEach(n => skills.push({ name: n, source: className }));
+
+    // ── Chosen optional features (Step 4 picks) ──────────────────────────────
+    // Build a flat map of feature name → text so we can parse grants
+    const optFeatureMap: Record<string, string> = {};
+    for (const al of classDetail.autolevels) {
+      for (const f of al.features) {
+        if (f.optional) optFeatureMap[f.name] = f.text;
+      }
+    }
+    for (const fname of form.chosenOptionals) {
+      const ftext = optFeatureMap[fname];
+      if (!ftext) continue;
+      const grants = parseFeatureGrants(ftext);
+      grants.armor.forEach(n    => armor.push({ name: n, source: fname }));
+      grants.weapons.forEach(n  => weapons.push({ name: n, source: fname }));
+      grants.tools.forEach(n    => tools.push({ name: n, source: fname }));
+      grants.skills.forEach(n   => skills.push({ name: n, source: fname }));
+      grants.languages.forEach(n => languages.push({ name: n, source: fname }));
+    }
+  }
+
+  // ── Background ─────────────────────────────────────────────────────────────
+  if (bgDetail) {
+    // proficiency field = skills
+    splitComma(bgDetail.proficiency).forEach(n => skills.push({ name: n, source: bgName }));
+    // Traits: find tool / language / equipment traits by name
+    for (const t of bgDetail.traits) {
+      if (/tool/i.test(t.name)) {
+        splitComma(t.text).forEach(n => tools.push({ name: n, source: bgName }));
+      } else if (/language/i.test(t.name)) {
+        splitComma(t.text).forEach(n => languages.push({ name: n, source: bgName }));
+      }
+    }
+  }
+
+  // ── Species ────────────────────────────────────────────────────────────────
+  if (raceDetail) {
+    for (const t of raceDetail.traits) {
+      // Modifiers like "language:Common" or "tool:Thieves' Tools"
+      for (const mod of t.modifier) {
+        const m = mod.match(/^(language|tool|skill)[:\s]+(.+)/i);
+        if (m) {
+          const val = m[2].trim();
+          if (/language/i.test(m[1])) languages.push({ name: val, source: raceName });
+          else if (/tool/i.test(m[1]))   tools.push({ name: val, source: raceName });
+          else if (/skill/i.test(m[1]))  skills.push({ name: val, source: raceName });
+        }
+      }
+      // Trait named "Languages" — fall back to parsing text
+      if (/^languages?$/i.test(t.name) && t.modifier.length === 0) {
+        splitComma(t.text).forEach(n => {
+          if (n && !/choose/i.test(n)) languages.push({ name: n, source: raceName });
+        });
+      }
+    }
+  }
+
+  // ── Spells ─────────────────────────────────────────────────────────────────
+  const cantripById = Object.fromEntries(classCantrips.map(s => [s.id, s]));
+  const spellById   = Object.fromEntries(classSpells.map(s => [s.id, s]));
+  const invocById   = Object.fromEntries(classInvocations.map(s => [s.id, s]));
+
+  form.chosenCantrips.forEach(id => {
+    const sp = cantripById[id];
+    if (sp) spells.push({ name: sp.name, source: className });
+  });
+  form.chosenSpells.forEach(id => {
+    const sp = spellById[id];
+    if (sp) spells.push({ name: sp.name, source: className });
+  });
+  form.chosenInvocations.forEach(id => {
+    const sp = invocById[id];
+    if (sp) invocations.push({ name: sp.name, source: className });
+  });
+
+  return { skills, saves, armor, weapons, tools, languages, spells, invocations };
+}
+
+/** Group optional non-subclass features by level, up to `level`. */
+function getOptionalGroups(cls: ClassDetail, level: number): { level: number; features: { name: string; text: string }[] }[] {
+  const groups: { level: number; features: { name: string; text: string }[] }[] = [];
+  for (const al of cls.autolevels) {
+    if (al.level == null || al.level > level) continue;
+    const opts = al.features.filter((f) => f.optional && !/subclass/i.test(f.name) && !/^Becoming\b/i.test(f.name));
+    if (opts.length > 0) groups.push({ level: al.level, features: opts });
+  }
+  return groups;
+}
+
 function pointBuySpent(scores: Record<string, number>): number {
   return ABILITY_KEYS.reduce((sum, k) => {
     const s = Math.min(15, Math.max(8, scores[k] ?? 8));
@@ -91,7 +392,7 @@ function pointBuySpent(scores: Record<string, number>): number {
 // ---------------------------------------------------------------------------
 
 type AbilityMethod = "standard" | "pointbuy" | "manual";
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 interface FormState {
   classId: string;
@@ -99,22 +400,23 @@ interface FormState {
   bgId: string;
   level: number;
   subclass: string;
+  chosenOptionals: string[];
+  // Skill proficiency selections (up to numSkills)
+  chosenSkills: string[];
+  // Spellcasting selections
+  chosenCantrips: string[];    // spell IDs
+  chosenSpells: string[];      // spell IDs (prepared)
+  chosenInvocations: string[]; // spell IDs (Eldritch Invocations etc.)
   abilityMethod: AbilityMethod;
-  // Standard array: which stat gets which array value (by index)
-  standardAssign: Record<string, number>; // stat -> index into STANDARD_ARRAY
-  // Point buy scores
+  standardAssign: Record<string, number>;
   pbScores: Record<string, number>;
-  // Manual scores
   manualScores: Record<string, number>;
-  // Derived (editable)
   hpMax: string;
   ac: string;
   speed: string;
-  // Identity
   characterName: string;
   playerName: string;
   color: string;
-  // Campaign assignment
   campaignIds: string[];
 }
 
@@ -124,7 +426,8 @@ function initForm(user: { name?: string } | null, params: URLSearchParams): Form
   const preselectedCampaign = params.get("campaign");
   return {
     classId: "", raceId: "", bgId: "",
-    level: 1, subclass: "",
+    level: 1, subclass: "", chosenOptionals: [],
+    chosenSkills: [], chosenCantrips: [], chosenSpells: [], chosenInvocations: [],
     abilityMethod: "standard",
     standardAssign: { str: -1, dex: -1, con: -1, int: -1, wis: -1, cha: -1 },
     pbScores: { ...DEFAULT_SCORES },
@@ -153,7 +456,7 @@ function resolvedScores(form: FormState): Record<string, number> {
 // ---------------------------------------------------------------------------
 
 function StepHeader({ step, current }: { step: number; current: Step }) {
-  const STEPS = ["Class", "Species", "Background", "Level", "Ability Scores", "Stats", "Identity", "Assign"];
+  const STEPS = ["Class", "Species", "Background", "Level", "Spells", "Ability Scores", "Stats", "Identity", "Assign"];
   return (
     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 28 }}>
       {STEPS.map((label, i) => {
@@ -258,6 +561,15 @@ export function CharacterCreatorView() {
   const [bgs, setBgs] = React.useState<BgSummary[]>([]);
   const [bgDetail, setBgDetail] = React.useState<BgDetail | null>(null);
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
+  // Spell lists (loaded when class is selected)
+  const [classCantrips, setClassCantrips] = React.useState<SpellSummary[]>([]);
+  const [classSpells, setClassSpells] = React.useState<SpellSummary[]>([]);
+  const [classInvocations, setClassInvocations] = React.useState<SpellSummary[]>([]);
+
+  // Search states for long lists (hoisted to avoid Rules-of-Hooks violations in inner fns)
+  const [classSearch, setClassSearch] = React.useState("");
+  const [raceSearch, setRaceSearch] = React.useState("");
+  const [bgSearch, setBgSearch] = React.useState("");
 
   // Load compendium lists on mount
   React.useEffect(() => {
@@ -280,6 +592,11 @@ export function CharacterCreatorView() {
           bgId: cd.bgId ?? "",
           level: ch.level ?? 1,
           subclass: cd.subclass ?? "",
+          chosenOptionals: cd.chosenOptionals ?? [],
+          chosenSkills: cd.chosenSkills ?? [],
+          chosenCantrips: cd.chosenCantrips ?? [],
+          chosenSpells: cd.chosenSpells ?? [],
+          chosenInvocations: cd.chosenInvocations ?? [],
           abilityMethod: "manual",
           manualScores: {
             str: ch.strScore ?? 10, dex: ch.dexScore ?? 10, con: ch.conScore ?? 10,
@@ -303,6 +620,35 @@ export function CharacterCreatorView() {
     if (!form.classId) { setClassDetail(null); return; }
     api<ClassDetail>(`/api/compendium/classes/${form.classId}`).then(setClassDetail).catch(() => {});
   }, [form.classId]);
+
+  // Load spell lists once classDetail is known
+  React.useEffect(() => {
+    if (!classDetail) { setClassCantrips([]); setClassSpells([]); setClassInvocations([]); return; }
+    const name = encodeURIComponent(classDetail.name);
+    api<SpellSummary[]>(`/api/spells/search?classes=${name}&level=0&limit=200`).then(setClassCantrips).catch(() => {});
+    api<SpellSummary[]>(`/api/spells/search?classes=${name}&minLevel=1&maxLevel=9&limit=300`).then(setClassSpells).catch(() => {});
+    // Eldritch Invocations live in their own spell list
+    if (/warlock/i.test(classDetail.name)) {
+      api<SpellSummary[]>("/api/spells/search?classes=Eldritch+Invocations&limit=200").then(setClassInvocations).catch(() => {});
+    } else {
+      setClassInvocations([]);
+    }
+  }, [classDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Drop any chosen invocations whose level prerequisite is no longer met
+  React.useEffect(() => {
+    if (classInvocations.length === 0) return;
+    setForm((f) => {
+      const valid = new Set(
+        classInvocations
+          .filter((inv) => parseInvocationPrereqLevel(inv.text ?? "") <= f.level)
+          .map((inv) => inv.id)
+      );
+      const next = f.chosenInvocations.filter((id) => valid.has(id));
+      if (next.length === f.chosenInvocations.length) return f;
+      return { ...f, chosenInvocations: next };
+    });
+  }, [form.level, classInvocations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load race detail when selected
   React.useEffect(() => {
@@ -351,6 +697,15 @@ export function CharacterCreatorView() {
         characterData: {
           classId: form.classId, raceId: form.raceId, bgId: form.bgId,
           subclass: form.subclass || null, abilityMethod: form.abilityMethod,
+          chosenOptionals: form.chosenOptionals,
+          chosenSkills: form.chosenSkills,
+          chosenCantrips: form.chosenCantrips,
+          chosenSpells: form.chosenSpells,
+          chosenInvocations: form.chosenInvocations,
+          proficiencies: buildProficiencyMap(
+            form, classDetail, raceDetail, bgDetail,
+            classCantrips, classSpells, classInvocations
+          ),
         },
       };
 
@@ -379,44 +734,136 @@ export function CharacterCreatorView() {
 
   function renderStep() {
     switch (step) {
-      case 1: return <StepClass />;
-      case 2: return <StepSpecies />;
-      case 3: return <StepBackground />;
-      case 4: return <StepLevel />;
-      case 5: return <StepAbilityScores />;
-      case 6: return <StepDerivedStats />;
-      case 7: return <StepIdentity />;
-      case 8: return <StepCampaigns />;
+      case 1: return StepClass();
+      case 2: return StepSpecies();
+      case 3: return StepBackground();
+      case 4: return StepLevel();
+      case 5: return StepSpells();
+      case 6: return StepAbilityScores();
+      case 7: return StepDerivedStats();
+      case 8: return StepIdentity();
+      case 9: return StepCampaigns();
     }
   }
 
   // Step 1: Class
   function StepClass() {
+    const filtered = classSearch
+      ? classes.filter((c) => c.name.toLowerCase().includes(classSearch.toLowerCase()))
+      : classes;
+
     return (
       <div>
         <h2 style={headingStyle}>Choose a Class</h2>
-        {classes.length === 0 && <p style={{ color: C.muted }}>No classes found. Ask your DM to upload a class compendium XML.</p>}
-        <CardGrid>
-          {classes.map((c) => (
-            <SelectableCard key={c.id} selected={form.classId === c.id}
-              onClick={() => set("classId", c.id)}
-              title={c.name} subtitle={c.hd ? `d${c.hd} hit die` : undefined} />
-          ))}
-        </CardGrid>
 
-        {classDetail && (
-          <div style={detailBoxStyle}>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>Proficiencies</div>
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 8 }}>{classDetail.proficiency}</div>
-            {classDetail.armor && <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Armor: {classDetail.armor}</div>}
-            {classDetail.weapons && <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Weapons: {classDetail.weapons}</div>}
-            {classDetail.description && (
-              <div style={{ marginTop: 8, color: C.text, fontSize: "var(--fs-small)", lineHeight: 1.5, maxHeight: 120, overflowY: "auto" }}>
-                {classDetail.description.slice(0, 400)}{classDetail.description.length > 400 ? "…" : ""}
+        {classes.length === 0
+          ? <p style={{ color: C.muted }}>No classes found. Ask your DM to upload a class compendium XML.</p>
+          : (
+            <>
+              <input
+                value={classSearch}
+                onChange={(e) => setClassSearch(e.target.value)}
+                placeholder="Search classes…"
+                style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
+              />
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr",
+                gap: 6, maxHeight: 340, overflowY: "auto", paddingRight: 4, marginBottom: 4,
+              }}>
+                {filtered.length === 0 && (
+                  <p style={{ color: C.muted, gridColumn: "1 / -1" }}>No matches.</p>
+                )}
+                {filtered.map((c) => {
+                  const sel = form.classId === c.id;
+                  return (
+                    <button type="button" key={c.id} onClick={() => set("classId", c.id)} style={{
+                      padding: "10px 13px", borderRadius: 8, textAlign: "left",
+                      border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                      background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
+                      color: sel ? C.accentHl : C.text, cursor: "pointer",
+                      fontWeight: sel ? 700 : 500, fontSize: 13,
+                      transition: "border-color 0.12s, background 0.12s",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {c.name}
+                      {c.hd && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: 11, marginLeft: 6 }}>d{c.hd}</span>}
+                    </button>
+                  );
+                })}
               </div>
-            )}
-          </div>
-        )}
+            </>
+          )
+        }
+
+        {classDetail && (() => {
+          // Scan ALL level-1 features (including optional) for core traits block
+          let primaryAbility = "";
+          let savesText = "";
+          const allL1Features = classDetail.autolevels
+            .filter((al) => al.level === 1)
+            .flatMap((al) => al.features);
+          for (const f of allL1Features) {
+            const fullText = f.text;
+            if (!primaryAbility) {
+              const m = fullText.match(/Primary Ability:\s*([^\n]+)/i);
+              if (m) primaryAbility = m[1].trim();
+            }
+            if (!savesText) {
+              const m = fullText.match(/Saving Throw Proficiencies?:\s*([^\n.]+)/i);
+              if (m) savesText = m[1].trim();
+            }
+            if (primaryAbility && savesText) break;
+          }
+          return (
+            <div style={detailBoxStyle}>
+              {/* Name */}
+              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: C.accentHl }}>
+                {classDetail.name}
+              </div>
+
+              {/* Description */}
+              {classDetail.description && (
+                <div style={{ color: C.muted, fontSize: "var(--fs-small)", lineHeight: 1.65, marginBottom: 14 }}>
+                  {classDetail.description.slice(0, 320)}{classDetail.description.length > 320 ? "…" : ""}
+                </div>
+              )}
+
+              {/* Key stats row */}
+              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                {primaryAbility && (
+                  <div>
+                    <div style={statLabelStyle}>Primary Ability</div>
+                    <div style={statValueStyle}>{primaryAbility}</div>
+                  </div>
+                )}
+                {classDetail.hd && (
+                  <div>
+                    <div style={statLabelStyle}>Hit Die</div>
+                    <div style={statValueStyle}>D{classDetail.hd}</div>
+                  </div>
+                )}
+                {savesText && (
+                  <div>
+                    <div style={statLabelStyle}>Saves</div>
+                    <div style={statValueStyle}>{savesText}</div>
+                  </div>
+                )}
+                {classDetail.armor && (
+                  <div>
+                    <div style={statLabelStyle}>Armor</div>
+                    <div style={{ ...statValueStyle, fontSize: 12 }}>{classDetail.armor}</div>
+                  </div>
+                )}
+                {classDetail.weapons && (
+                  <div>
+                    <div style={statLabelStyle}>Weapons</div>
+                    <div style={{ ...statValueStyle, fontSize: 12 }}>{classDetail.weapons}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         <NavButtons step={step} onBack={() => {}} onNext={() => setStep(2)}
           nextDisabled={!form.classId} />
@@ -426,20 +873,56 @@ export function CharacterCreatorView() {
 
   // Step 2: Species
   function StepSpecies() {
+    const filtered = raceSearch
+      ? races.filter((r) => r.name.toLowerCase().includes(raceSearch.toLowerCase()))
+      : races;
+
     return (
       <div>
         <h2 style={headingStyle}>Choose a Species</h2>
-        {races.length === 0 && <p style={{ color: C.muted }}>No species found in compendium.</p>}
-        <CardGrid>
-          {races.map((r) => (
-            <SelectableCard key={r.id} selected={form.raceId === r.id}
-              onClick={() => set("raceId", r.id)}
-              title={r.name} subtitle={r.speed ? `Speed ${r.speed} ft` : undefined} />
-          ))}
-        </CardGrid>
+
+        {races.length === 0
+          ? <p style={{ color: C.muted }}>No species found in compendium.</p>
+          : (
+            <>
+              <input
+                value={raceSearch}
+                onChange={(e) => setRaceSearch(e.target.value)}
+                placeholder="Search species…"
+                style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
+              />
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr",
+                gap: 6, maxHeight: 340, overflowY: "auto", paddingRight: 4, marginBottom: 4,
+              }}>
+                {filtered.length === 0 && (
+                  <p style={{ color: C.muted, gridColumn: "1 / -1" }}>No matches.</p>
+                )}
+                {filtered.map((r) => {
+                  const sel = form.raceId === r.id;
+                  return (
+                    <button type="button" key={r.id} onClick={() => set("raceId", r.id)} style={{
+                      padding: "10px 13px", borderRadius: 8, textAlign: "left",
+                      border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                      background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
+                      color: sel ? C.accentHl : C.text, cursor: "pointer",
+                      fontWeight: sel ? 700 : 500, fontSize: 13,
+                      transition: "border-color 0.12s, background 0.12s",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {r.name}
+                      {r.speed && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: 11, marginLeft: 6 }}>{r.speed}ft</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )
+        }
 
         {raceDetail && (
           <div style={detailBoxStyle}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: C.accentHl }}>{raceDetail.name}</div>
             {raceDetail.traits.filter((t) => t.category !== "description").slice(0, 4).map((t) => (
               <div key={t.name} style={{ marginBottom: 6 }}>
                 <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
@@ -457,36 +940,105 @@ export function CharacterCreatorView() {
 
   // Step 3: Background
   function StepBackground() {
+    const filtered = bgSearch
+      ? bgs.filter((b) => b.name.toLowerCase().includes(bgSearch.toLowerCase()))
+      : bgs;
+
     return (
       <div>
         <h2 style={headingStyle}>Choose a Background</h2>
-        {bgs.length === 0 && <p style={{ color: C.muted }}>No backgrounds found in compendium.</p>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {bgs.map((b) => (
-            <button type="button" key={b.id} onClick={() => set("bgId", b.id)} style={{
-              padding: "11px 15px", borderRadius: 8, textAlign: "left",
-              border: `2px solid ${form.bgId === b.id ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-              background: form.bgId === b.id ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
-              color: form.bgId === b.id ? C.accentHl : C.text, cursor: "pointer",
-              fontWeight: form.bgId === b.id ? 700 : 500, fontSize: 14,
-              transition: "border-color 0.12s, background 0.12s",
-            }}>{b.name}</button>
-          ))}
-        </div>
 
-        {bgDetail && (
-          <div style={detailBoxStyle}>
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 4 }}>
-              Skills: {bgDetail.proficiency}
-            </div>
-            {bgDetail.traits.slice(0, 2).map((t) => (
-              <div key={t.name} style={{ marginBottom: 4, fontSize: "var(--fs-small)" }}>
-                <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
-                <span style={{ color: C.muted }}>{t.text.slice(0, 100)}{t.text.length > 100 ? "…" : ""}</span>
+        {bgs.length === 0
+          ? <p style={{ color: C.muted }}>No backgrounds found in compendium.</p>
+          : (
+            <>
+              {/* Search */}
+              <input
+                value={bgSearch}
+                onChange={(e) => setBgSearch(e.target.value)}
+                placeholder="Search backgrounds…"
+                style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
+              />
+
+              {/* 2-column grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 6,
+                maxHeight: 340,
+                overflowY: "auto",
+                paddingRight: 4,
+                marginBottom: 4,
+              }}>
+                {filtered.length === 0 && (
+                  <p style={{ color: C.muted, gridColumn: "1 / -1" }}>No matches.</p>
+                )}
+                {filtered.map((b) => {
+                  const sel = form.bgId === b.id;
+                  return (
+                    <button type="button" key={b.id} onClick={() => set("bgId", b.id)} style={{
+                      padding: "10px 13px", borderRadius: 8, textAlign: "left",
+                      border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                      background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
+                      color: sel ? C.accentHl : C.text, cursor: "pointer",
+                      fontWeight: sel ? 700 : 500, fontSize: 13,
+                      transition: "border-color 0.12s, background 0.12s",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>{b.name}</button>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        )}
+            </>
+          )
+        }
+
+        {/* Detail panel for selected background */}
+        {bgDetail && (() => {
+          const bgSkills = bgDetail.proficiency.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+          const toolTraits = bgDetail.traits.filter((t) => /tool/i.test(t.name));
+          const langTraits = bgDetail.traits.filter((t) => /language/i.test(t.name));
+          const flavorTraits = bgDetail.traits.filter((t) => !/tool|language/i.test(t.name)).slice(0, 1);
+          return (
+            <div style={detailBoxStyle}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.accentHl }}>
+                {bgDetail.name}
+              </div>
+              {bgSkills.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Skills </span>
+                  <span style={sourceTagStyle}>{bgDetail.name}</span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                    {bgSkills.map((s) => <span key={s} style={profChipStyle}>{s}</span>)}
+                  </div>
+                </div>
+              )}
+              {toolTraits.map((t) => (
+                <div key={t.name} style={{ marginBottom: 8 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Tools </span>
+                  <span style={sourceTagStyle}>{bgDetail.name}</span>
+                  <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3 }}>
+                    {t.text.slice(0, 160)}{t.text.length > 160 ? "…" : ""}
+                  </div>
+                </div>
+              ))}
+              {langTraits.map((t) => (
+                <div key={t.name} style={{ marginBottom: 8 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Languages </span>
+                  <span style={sourceTagStyle}>{bgDetail.name}</span>
+                  <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3 }}>
+                    {t.text.slice(0, 160)}{t.text.length > 160 ? "…" : ""}
+                  </div>
+                </div>
+              ))}
+              {flavorTraits.map((t) => (
+                <div key={t.name} style={{ marginBottom: 4, fontSize: "var(--fs-small)" }}>
+                  <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
+                  <span style={{ color: C.muted }}>{t.text.slice(0, 140)}{t.text.length > 140 ? "…" : ""}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         <NavButtons step={step} onBack={() => setStep(2)} onNext={() => setStep(4)}
           nextDisabled={!form.bgId} />
@@ -496,38 +1048,114 @@ export function CharacterCreatorView() {
 
   // Step 4: Level
   function StepLevel() {
-    const subclassLevel = getSubclassList(classDetail!);
+    const subclassList = classDetail ? getSubclassList(classDetail) : [];
     const scNeeded = classDetail ? (getSubclassLevel(classDetail) ?? 99) : 99;
-    const showSubclass = classDetail && form.level >= scNeeded && subclassLevel.length > 0;
+    const showSubclass = classDetail && form.level >= scNeeded && subclassList.length > 0;
     const features = classDetail ? featuresUpToLevel(classDetail, form.level) : [];
+    const optGroups = classDetail ? getOptionalGroups(classDetail, form.level) : [];
+
+    function toggleOptional(name: string, exclusive: boolean, groupFeatures: string[]) {
+      setForm((f) => {
+        let next = [...f.chosenOptionals];
+        if (exclusive) {
+          // Remove all others in this group first, then toggle this one
+          next = next.filter((n) => !groupFeatures.includes(n));
+          if (!f.chosenOptionals.includes(name)) next.push(name);
+        } else {
+          if (next.includes(name)) next = next.filter((n) => n !== name);
+          else next.push(name);
+        }
+        return { ...f, chosenOptionals: next };
+      });
+    }
 
     return (
       <div>
         <h2 style={headingStyle}>Choose Level</h2>
-        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
-          <label style={{ color: C.muted }}>Level</label>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
+          <label style={{ color: C.muted, fontWeight: 600 }}>Level</label>
           <input type="number" min={1} max={20} value={form.level}
             onChange={(e) => set("level", Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
-            style={inputStyle} />
+            style={{ ...inputStyle, width: 80 }} />
         </div>
 
         {showSubclass && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ color: C.muted, display: "block", marginBottom: 6 }}>Subclass</label>
-            <Select value={form.subclass} onChange={(e) => set("subclass", e.target.value)} style={{ width: 260 }}>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ ...labelStyle }}>Subclass</label>
+            <Select value={form.subclass} onChange={(e) => set("subclass", e.target.value)} style={{ width: 280 }}>
               <option value="">— Choose subclass —</option>
-              {subclassLevel.map((s) => <option key={s} value={s}>{s}</option>)}
+              {subclassList.map((s) => <option key={s} value={s}>{s}</option>)}
             </Select>
           </div>
         )}
 
-        <div style={{ ...detailBoxStyle, maxHeight: 280, overflowY: "auto" }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Features at Level {form.level}</div>
-          {features.length === 0 && <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>No features yet.</div>}
+        {/* Optional feature choices */}
+        {optGroups.map((grp) => {
+          const names = grp.features.map((f) => f.name);
+          const isPickOne = grp.features.length <= 4;
+          return (
+            <div key={grp.level} style={{ marginBottom: 20 }}>
+              <div style={{ ...labelStyle, marginBottom: 8 }}>
+                Level {grp.level} — {isPickOne ? "Choose one" : "Choose any"}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {grp.features.map((f) => {
+                  const chosen = form.chosenOptionals.includes(f.name);
+                  const grants = parseFeatureGrants(f.text);
+                  const grantBadges: { label: string; color: string }[] = [
+                    ...grants.armor.map(n    => ({ label: n,              color: "#a78bfa" })), // purple
+                    ...grants.weapons.map(n  => ({ label: n,              color: "#f87171" })), // red
+                    ...grants.tools.map(n    => ({ label: n,              color: "#fb923c" })), // orange
+                    ...grants.skills.map(n   => ({ label: n,              color: "#34d399" })), // green
+                    ...grants.languages.map(n => ({ label: n + " (lang)", color: "#60a5fa" })), // blue
+                  ];
+                  return (
+                    <button key={f.name} type="button"
+                      onClick={() => toggleOptional(f.name, isPickOne, names)}
+                      style={{
+                        textAlign: "left", padding: "11px 14px", borderRadius: 8, cursor: "pointer",
+                        border: `2px solid ${chosen ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                        background: chosen ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
+                        transition: "border-color 0.12s, background 0.12s",
+                      }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: chosen ? C.accentHl : C.text }}>
+                        {f.name}
+                      </div>
+                      {f.text && (
+                        <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>
+                          {f.text.replace(/Source:.*$/m, "").trim().slice(0, 140)}
+                          {f.text.length > 140 ? "…" : ""}
+                        </div>
+                      )}
+                      {grantBadges.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 7 }}>
+                          {grantBadges.map((b, i) => (
+                            <span key={i} style={{
+                              fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
+                              background: b.color + "22", border: `1px solid ${b.color}66`,
+                              color: b.color, letterSpacing: "0.02em",
+                            }}>
+                              {b.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Feature list */}
+        <div style={{ ...detailBoxStyle, maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>Class Features — Level {form.level}</div>
+          {features.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>No features yet.</div>}
           {features.map((f, i) => (
             <div key={i} style={{ marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: "var(--fs-small)", color: C.accentHl }}>Lv{f.level} {f.name}</div>
-              <div style={{ color: C.muted, fontSize: "var(--fs-small)", lineHeight: 1.4 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>Lv{f.level} · {f.name}</div>
+              <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.4 }}>
                 {f.text.slice(0, 200)}{f.text.length > 200 ? "…" : ""}
               </div>
             </div>
@@ -539,7 +1167,120 @@ export function CharacterCreatorView() {
     );
   }
 
-  // Step 5: Ability Scores
+  // Step 5: Spells & Invocations
+  function StepSpells() {
+    const cantripCount = classDetail ? getCantripCount(classDetail, form.level) : 0;
+    const maxSlotLvl   = classDetail ? getMaxSlotLevel(classDetail, form.level) : 0;
+    const isCaster = classDetail ? isSpellcaster(classDetail) : false;
+
+    // Invocations: parse known count from the Eldritch Invocations feature text
+    const invocTable = classDetail ? getClassFeatureTable(classDetail, "Invocation", 1) : [];
+    const invocCount = invocTable.length > 0 ? tableValueAtLevel(invocTable, form.level) : 0;
+
+    // Prepared spells: parse count from Pact Magic / Spellcasting feature text
+    const prepTable = classDetail ? getClassFeatureTable(classDetail, "Pact Magic|Spellcasting", 1) : [];
+    const prepCount = prepTable.length > 0 ? tableValueAtLevel(prepTable, form.level) : 0;
+
+    const skillList = classDetail ? parseSkillList(classDetail.proficiency) : [];
+    const numSkills = classDetail?.numSkills ?? 0;
+
+    function toggleSpell(id: string, listKey: "chosenCantrips" | "chosenSpells" | "chosenInvocations", max: number) {
+      setForm((f) => {
+        const current = f[listKey];
+        const next = current.includes(id)
+          ? current.filter((x) => x !== id)
+          : current.length < max ? [...current, id] : current;
+        return { ...f, [listKey]: next };
+      });
+    }
+
+    const hasAnything = isCaster || numSkills > 0 || invocCount > 0;
+
+    return (
+      <div>
+        <h2 style={headingStyle}>Spells &amp; Skills</h2>
+
+        {/* Skill proficiencies */}
+        {numSkills > 0 && skillList.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+              <div style={{ ...labelStyle, margin: 0 }}>
+                Skill Proficiencies{" "}
+                {classDetail && <span style={sourceTagStyle}>from {classDetail.name}</span>}
+              </div>
+              <span style={{ fontSize: 12, color: form.chosenSkills.length >= numSkills ? C.accentHl : C.muted }}>
+                {form.chosenSkills.length} / {numSkills}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {skillList.map((skill) => {
+                const sel = form.chosenSkills.includes(skill);
+                const locked = !sel && form.chosenSkills.length >= numSkills;
+                return (
+                  <button key={skill} type="button" disabled={locked}
+                    onClick={() => setForm((f) => ({
+                      ...f,
+                      chosenSkills: sel
+                        ? f.chosenSkills.filter(s => s !== skill)
+                        : f.chosenSkills.length < numSkills ? [...f.chosenSkills, skill] : f.chosenSkills,
+                    }))}
+                    style={{
+                      padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
+                      border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                      background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                      color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                      fontWeight: sel ? 700 : 400,
+                    }}>
+                    {skill}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Cantrips */}
+        {isCaster && cantripCount > 0 && (
+          <SpellPicker
+            title="Cantrips" spells={classCantrips} chosen={form.chosenCantrips}
+            max={cantripCount} emptyMsg="No cantrips found in compendium for this class."
+            onToggle={(id) => toggleSpell(id, "chosenCantrips", cantripCount)}
+          />
+        )}
+
+        {/* Eldritch Invocations — filtered to those whose level prerequisite is met */}
+        {invocCount > 0 && classInvocations.length > 0 && (
+          <SpellPicker
+            title="Eldritch Invocations" chosen={form.chosenInvocations}
+            spells={classInvocations.filter(
+              (inv) => parseInvocationPrereqLevel(inv.text ?? "") <= form.level
+            )}
+            max={invocCount} emptyMsg="No invocations available at this level."
+            onToggle={(id) => toggleSpell(id, "chosenInvocations", invocCount)}
+          />
+        )}
+
+        {/* Prepared Spells */}
+        {isCaster && prepCount > 0 && maxSlotLvl > 0 && (
+          <SpellPicker
+            title={`Prepared Spells (up to level ${maxSlotLvl})`}
+            spells={classSpells.filter((s) => s.level != null && s.level <= maxSlotLvl)}
+            chosen={form.chosenSpells} max={prepCount}
+            emptyMsg="No spells found in compendium for this class."
+            onToggle={(id) => toggleSpell(id, "chosenSpells", prepCount)}
+          />
+        )}
+
+        {!hasAnything && (
+          <p style={{ color: C.muted, fontSize: 14 }}>This class has no spellcasting or skill choices at this level.</p>
+        )}
+
+        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} />
+      </div>
+    );
+  }
+
+  // Step 6: Ability Scores
   function StepAbilityScores() {
     const usedIndices = Object.values(form.standardAssign).filter((v) => v >= 0);
     const spent = pointBuySpent(form.pbScores);
@@ -650,7 +1391,7 @@ export function CharacterCreatorView() {
           </div>
         )}
 
-        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} />
+        <NavButtons step={step} onBack={() => setStep(5)} onNext={() => setStep(7)} />
       </div>
     );
   }
@@ -688,7 +1429,44 @@ export function CharacterCreatorView() {
             <input type="number" value={form.speed} onChange={(e) => set("speed", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
           </div>
         </div>
-        <NavButtons step={step} onBack={() => setStep(5)} onNext={() => setStep(7)} />
+        {/* Proficiency summary */}
+        {(() => {
+          const prof = buildProficiencyMap(
+            form, classDetail, raceDetail, bgDetail,
+            classCantrips, classSpells, classInvocations,
+          );
+          const sections = [
+            { label: "Skills",      items: prof.skills },
+            { label: "Saves",       items: prof.saves },
+            { label: "Armor",       items: prof.armor },
+            { label: "Weapons",     items: prof.weapons },
+            { label: "Tools",       items: prof.tools },
+            { label: "Languages",   items: prof.languages },
+            { label: "Spells",      items: prof.spells },
+            { label: "Invocations", items: prof.invocations },
+          ].filter((s) => s.items.length > 0);
+          if (sections.length === 0) return null;
+          return (
+            <div style={{ ...detailBoxStyle, marginTop: 24 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 13 }}>Your Proficiencies</div>
+              {sections.map((s) => (
+                <div key={s.label} style={{ marginBottom: 10 }}>
+                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>{s.label}</span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                    {s.items.map((item, i) => (
+                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <span style={profChipStyle}>{item.name}</span>
+                        <span style={sourceTagStyle}>{item.source}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        <NavButtons step={step} onBack={() => setStep(6)} onNext={() => setStep(8)} />
       </div>
     );
   }
@@ -702,27 +1480,28 @@ export function CharacterCreatorView() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 400 }}>
           <div>
             <label style={labelStyle}>Character Name *</label>
-            <input value={form.characterName} onChange={(e) => set("characterName", e.target.value)}
-              placeholder="Thraxil the Destroyer" style={{ ...inputStyle, width: "100%" }} />
-          </div>
-          <div>
-            <label style={labelStyle}>Player Name</label>
-            <input value={form.playerName} onChange={(e) => set("playerName", e.target.value)}
-              placeholder="Your name" style={{ ...inputStyle, width: "100%" }} />
+            <input
+              value={form.characterName}
+              onChange={(e) => set("characterName", e.target.value)}
+              placeholder="Thraxil the Destroyer"
+              style={{ ...inputStyle, width: "100%" }}
+            />
           </div>
           <div>
             <label style={labelStyle}>Color</label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {COLORS.map((c) => (
                 <button key={c} type="button" onClick={() => set("color", c)} style={{
-                  width: 28, height: 28, borderRadius: "50%", background: c, border: `2px solid ${form.color === c ? C.text : "transparent"}`,
+                  width: 30, height: 30, borderRadius: "50%", background: c,
+                  border: `3px solid ${form.color === c ? C.text : "transparent"}`,
                   cursor: "pointer", padding: 0,
+                  boxShadow: form.color === c ? `0 0 0 1px ${c}` : "none",
                 }} />
               ))}
             </div>
           </div>
         </div>
-        <NavButtons step={step} onBack={() => setStep(6)} onNext={() => setStep(8)}
+        <NavButtons step={step} onBack={() => setStep(7)} onNext={() => setStep(9)}
           nextDisabled={!form.characterName.trim()} />
       </div>
     );
@@ -763,7 +1542,7 @@ export function CharacterCreatorView() {
         {error && <div style={{ color: C.red, marginBottom: 10 }}>{error}</div>}
 
         <div style={{ display: "flex", gap: 10, justifyContent: "space-between" }}>
-          <button type="button" onClick={() => setStep(7)} style={btnStyle(false, false)}>← Back</button>
+          <button type="button" onClick={() => setStep(8)} style={btnStyle(false, false)}>← Back</button>
           <button type="button" onClick={handleSubmit} disabled={busy} style={btnStyle(true, busy)}>
             {busy ? "Saving…" : isEditing ? "Save Changes ✓" : "Create Character ✓"}
           </button>
@@ -799,6 +1578,66 @@ export function CharacterCreatorView() {
 }
 
 // ---------------------------------------------------------------------------
+// SpellPicker — module-level so its identity is stable across renders.
+// Must NOT be defined inside CharacterCreatorView: it has useState, so calling
+// it conditionally as a plain function would violate Rules of Hooks.
+// ---------------------------------------------------------------------------
+
+function SpellPicker({ title, spells, chosen, max, emptyMsg, onToggle }: {
+  title: string;
+  spells: SpellSummary[];
+  chosen: string[];
+  max: number;
+  emptyMsg: string;
+  onToggle: (id: string) => void;
+}) {
+  const [q, setQ] = React.useState("");
+  const filtered = q ? spells.filter((s) => s.name.toLowerCase().includes(q.toLowerCase())) : spells;
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+        <div style={{ ...labelStyle, margin: 0 }}>{title}</div>
+        <span style={{ fontSize: 12, color: chosen.length >= max ? C.accentHl : C.muted }}>
+          {chosen.length} / {max}
+        </span>
+      </div>
+      {spells.length === 0
+        ? <p style={{ color: C.muted, fontSize: 12 }}>{emptyMsg}</p>
+        : <>
+          <input
+            value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 200, overflowY: "auto", padding: "2px 0" }}>
+            {filtered.map((sp) => {
+              const sel = chosen.includes(sp.id);
+              const locked = !sel && chosen.length >= max;
+              return (
+                <button key={sp.id} type="button" disabled={locked}
+                  onClick={() => onToggle(sp.id)}
+                  style={{
+                    padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: locked ? "default" : "pointer",
+                    border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                    background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                    color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                    fontWeight: sel ? 700 : 400,
+                  }}>
+                  {sp.name}
+                  {sp.level != null && sp.level > 0
+                    ? <span style={{ color: "rgba(160,180,220,0.5)", marginLeft: 4 }}>(L{sp.level})</span>
+                    : null}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      }
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Shared styles
 // ---------------------------------------------------------------------------
 
@@ -826,4 +1665,36 @@ const smallBtnStyle: React.CSSProperties = {
   width: 28, height: 28, borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(255,255,255,0.08)", color: C.text, cursor: "pointer",
   display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
+};
+
+/** Uppercase label above a key stat value (Hit Die, Saves, etc.). */
+const statLabelStyle: React.CSSProperties = {
+  color: "rgba(160,180,220,0.5)",
+  fontSize: 10, fontWeight: 700,
+  textTransform: "uppercase", letterSpacing: 0.6,
+  marginBottom: 3,
+};
+
+/** Value beneath a stat label. */
+const statValueStyle: React.CSSProperties = {
+  color: C.text,
+  fontSize: 14, fontWeight: 700,
+};
+
+/** A chip showing a proficiency name. */
+const profChipStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600,
+  background: "rgba(255,255,255,0.07)",
+  border: "1px solid rgba(255,255,255,0.16)",
+  borderRadius: 4, padding: "2px 8px",
+  color: C.text,
+};
+
+/** A tiny source-attribution badge shown after a proficiency chip. */
+const sourceTagStyle: React.CSSProperties = {
+  fontSize: 10,
+  background: "rgba(56,182,255,0.12)",
+  border: "1px solid rgba(56,182,255,0.25)",
+  borderRadius: 4, padding: "2px 6px",
+  color: C.accentHl, fontWeight: 500,
 };

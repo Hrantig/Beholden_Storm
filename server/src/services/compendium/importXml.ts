@@ -239,7 +239,10 @@ export function importCompendiumXml(args: {
           reset: asText(ct?.reset) || "L",
           subclass: ct?.subclass ? asText(ct.subclass) : null,
         }));
-        return { level, scoreImprovement, features, counters };
+        // <slots>2,1</slots> → [cantrips, L1_slots, L2_slots, ...]
+        const slotsRaw = al?.slots != null ? String(al.slots).trim() : null;
+        const slots = slotsRaw ? slotsRaw.split(",").map((n) => parseInt(n.trim(), 10) || 0) : null;
+        return { level, scoreImprovement, features, counters, slots };
       });
 
       const data = {

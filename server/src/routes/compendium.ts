@@ -367,6 +367,11 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "50"), 10) || 50, 1), 500);
     const levelRaw = String(req.query.level ?? "").trim();
     const level = levelRaw === "" ? null : Number(levelRaw);
+    // maxLevel: for Warlock-style "up to slot level N" queries
+    const maxLevelRaw = String(req.query.maxLevel ?? "").trim();
+    const maxLevel = maxLevelRaw === "" ? null : Number(maxLevelRaw);
+    // classes: comma-separated list of class names to filter by (OR logic)
+    const classesFilter = String(req.query.classes ?? "").trim();
 
     const parts: string[] = [
       "SELECT id, name, level, school, ritual, concentration, components, classes, data_json FROM compendium_spells WHERE 1=1",
@@ -375,7 +380,18 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
 
     if (q) { parts.push("AND (name LIKE ? OR name_key LIKE ?)"); const like = `%${q}%`; params.push(like, like); }
     if (level != null && Number.isFinite(level)) { parts.push("AND level = ?"); params.push(level); }
-    parts.push("ORDER BY name COLLATE NOCASE");
+    const minLevelRaw = String(req.query.minLevel ?? "").trim();
+    const minLevel = minLevelRaw === "" ? null : Number(minLevelRaw);
+    if (minLevel != null && Number.isFinite(minLevel)) { parts.push("AND level >= ?"); params.push(minLevel); }
+    if (maxLevel != null && Number.isFinite(maxLevel)) { parts.push("AND level <= ?"); params.push(maxLevel); }
+    if (classesFilter) {
+      // Support comma-separated OR: "Warlock,Warlock [2024]"
+      const cls = classesFilter.split(",").map(s => s.trim()).filter(Boolean);
+      const orParts = cls.map(() => "classes LIKE ?");
+      parts.push(`AND (${orParts.join(" OR ")})`);
+      params.push(...cls.map(c => `%${c}%`));
+    }
+    parts.push("ORDER BY level NULLS LAST, name COLLATE NOCASE");
     parts.push(`LIMIT ${limit}`);
 
     const rows = db.prepare(parts.join(" ")).all(...params) as {
@@ -384,12 +400,14 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     }[];
     res.json(rows.map((row) => {
       const s = JSON.parse(row.data_json);
+      const textArr: string[] = Array.isArray(s.text) ? s.text : (s.text ? [s.text] : []);
       return {
         id: row.id, name: row.name, level: row.level, school: row.school,
         time: s.time ?? null,
         ritual: row.ritual === 1, concentration: row.concentration === 1,
         components: row.components ?? s.components ?? null,
         classes: row.classes ?? s.classes ?? null,
+        text: textArr.join("\n") || null,
       };
     }));
   });

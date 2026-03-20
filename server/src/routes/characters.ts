@@ -44,7 +44,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
   // List all user-owned characters with campaign assignment info
   app.get("/api/me/characters", requireAuth, (req, res) => {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
     const chars = db
       .prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE user_id = ? ORDER BY updated_at DESC`)
       .all(userId) as Record<string, unknown>[];
@@ -69,7 +69,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.get("/api/me/characters/:id", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
     const row = db
       .prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE id = ? AND user_id = ?`)
       .get(charId, userId) as Record<string, unknown> | undefined;
@@ -90,7 +90,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
   // Create a new user-owned character (no campaign required)
   app.post("/api/me/characters", requireAuth, (req, res) => {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
     const p = parseBody(CharacterBody, req);
     const id = uid();
     const t = now();
@@ -128,7 +128,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.put("/api/me/characters/:id", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
     const existing = db
       .prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE id = ? AND user_id = ?`)
       .get(charId, userId) as Record<string, unknown> | undefined;
@@ -208,7 +208,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.delete("/api/me/characters/:id", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
     const existing = db
       .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
       .get(charId, userId) as { id: string } | undefined;
@@ -233,7 +233,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.post("/api/me/characters/:id/assign", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
 
     const existing = db
       .prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE id = ? AND user_id = ?`)
@@ -324,7 +324,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.post("/api/me/characters/:id/unassign", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
 
     const existing = db
       .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
