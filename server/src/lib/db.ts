@@ -442,6 +442,19 @@ function runMigrations(db: Db): void {
     db.exec("ALTER TABLE combatants ADD COLUMN used_legendary_resistances INTEGER NOT NULL DEFAULT 0");
   }
 
+  // Add username to users if missing (older databases used a different schema).
+  const userCols = (db.pragma("table_info(users)") as { name: string }[]).map((c) => c.name);
+  if (!userCols.includes("username")) {
+    db.exec("ALTER TABLE users ADD COLUMN username TEXT");
+    // Backfill: use existing name column if present, otherwise fall back to id
+    if (userCols.includes("name")) {
+      db.exec("UPDATE users SET username = name WHERE username IS NULL");
+    } else {
+      db.exec("UPDATE users SET username = id WHERE username IS NULL");
+    }
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)");
+  }
+
   // Add user_id to characters (new user auth system).
   const charCols = (db.pragma("table_info(characters)") as { name: string }[]).map((c) => c.name);
   if (!charCols.includes("user_id")) {
