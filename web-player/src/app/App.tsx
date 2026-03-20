@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LoginView } from "@/views/LoginView";
 import { PlayerHomeView } from "@/views/PlayerHomeView";
 import { CompendiumView } from "@/views/CompendiumView/CompendiumView";
+import { CharacterCreatorView } from "@/views/CharacterCreatorView";
 import { AppShell } from "./AppShell";
 
 function AuthGate() {
@@ -34,6 +35,8 @@ function AuthGate() {
       <Routes>
         <Route path="/" element={<PlayerHomeView />} />
         <Route path="/compendium" element={<CompendiumView />} />
+        <Route path="/characters/new" element={<CharacterCreatorView />} />
+        <Route path="/characters/:id/edit" element={<CharacterCreatorView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

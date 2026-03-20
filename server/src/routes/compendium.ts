@@ -3,7 +3,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
-import { requireAdmin, requireAnyDm } from "../middleware/auth.js";
+import { requireAdmin, requireAnyDm, requireAuth } from "../middleware/auth.js";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -441,12 +441,64 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true });
   });
 
+  // --- Classes ---------------------------------------------------------------
+  app.get("/api/compendium/classes", requireAuth, (_req, res) => {
+    const rows = db.prepare("SELECT id, name, hd FROM compendium_classes ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; hd: number | null }[];
+    res.json(rows);
+  });
+
+  app.get("/api/compendium/classes/:id", requireAuth, (req, res) => {
+    const id = requireParam(req, res, "id");
+    if (!id) return;
+    const row = db.prepare("SELECT data_json FROM compendium_classes WHERE id = ?").get(id) as { data_json: string } | undefined;
+    if (!row) return res.status(404).json({ ok: false, message: "Not found" });
+    res.json(JSON.parse(row.data_json));
+  });
+
+  // --- Races -----------------------------------------------------------------
+  app.get("/api/compendium/races", requireAuth, (_req, res) => {
+    const rows = db.prepare("SELECT id, name, size, speed FROM compendium_races ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; size: string | null; speed: number | null }[];
+    res.json(rows);
+  });
+
+  app.get("/api/compendium/races/:id", requireAuth, (req, res) => {
+    const id = requireParam(req, res, "id");
+    if (!id) return;
+    const row = db.prepare("SELECT data_json FROM compendium_races WHERE id = ?").get(id) as { data_json: string } | undefined;
+    if (!row) return res.status(404).json({ ok: false, message: "Not found" });
+    res.json(JSON.parse(row.data_json));
+  });
+
+  // --- Backgrounds -----------------------------------------------------------
+  app.get("/api/compendium/backgrounds", requireAuth, (_req, res) => {
+    const rows = db.prepare("SELECT id, name FROM compendium_backgrounds ORDER BY name COLLATE NOCASE").all() as { id: string; name: string }[];
+    res.json(rows);
+  });
+
+  app.get("/api/compendium/backgrounds/:id", requireAuth, (req, res) => {
+    const id = requireParam(req, res, "id");
+    if (!id) return;
+    const row = db.prepare("SELECT data_json FROM compendium_backgrounds WHERE id = ?").get(id) as { data_json: string } | undefined;
+    if (!row) return res.status(404).json({ ok: false, message: "Not found" });
+    res.json(JSON.parse(row.data_json));
+  });
+
+  // --- Feats -----------------------------------------------------------------
+  app.get("/api/compendium/feats", requireAuth, (_req, res) => {
+    const rows = db.prepare("SELECT id, name FROM compendium_feats ORDER BY name COLLATE NOCASE").all() as { id: string; name: string }[];
+    res.json(rows);
+  });
+
   // --- Admin / import -------------------------------------------------------
   app.delete("/api/compendium", requireAdmin, (_req, res) => {
     db.transaction(() => {
       db.prepare("DELETE FROM compendium_monsters").run();
       db.prepare("DELETE FROM compendium_items").run();
       db.prepare("DELETE FROM compendium_spells").run();
+      db.prepare("DELETE FROM compendium_classes").run();
+      db.prepare("DELETE FROM compendium_races").run();
+      db.prepare("DELETE FROM compendium_backgrounds").run();
+      db.prepare("DELETE FROM compendium_feats").run();
     })();
     ctx.broadcast("compendium:changed", { cleared: true });
     res.json({ ok: true });
@@ -457,6 +509,14 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     const xml = req.file.buffer.toString("utf-8");
     const out = ctx.helpers.importCompendiumXml({ xml });
     ctx.broadcast("compendium:changed", { imported: out.imported, total: out.total });
-    res.json({ ok: true, imported: out.imported, total: out.total });
+    res.json({
+      ok: true,
+      imported: out.imported,
+      total: out.total,
+      classes: out.classes ?? 0,
+      races: out.races ?? 0,
+      backgrounds: out.backgrounds ?? 0,
+      feats: out.feats ?? 0,
+    });
   });
 }

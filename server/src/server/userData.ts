@@ -127,6 +127,7 @@ export interface StoredTreasure extends Timestamps {
 export interface StoredPlayer extends Timestamps {
   id: Id;
   campaignId: Id;
+  userId?: string | null;
   playerName: string;
   characterName: string;
   class: string;
@@ -135,6 +136,7 @@ export interface StoredPlayer extends Timestamps {
   hpMax: number;
   hpCurrent: number;
   ac: number;
+  speed?: number;
   overrides?: StoredOverrides;
   conditions?: StoredConditionInstance[];
   deathSaves?: StoredDeathSaves;
@@ -147,6 +149,35 @@ export interface StoredPlayer extends Timestamps {
   cha?: number;
   color?: string;
   imageUrl?: string | null;
+}
+
+export interface StoredUserCharacter extends Timestamps {
+  id: Id;
+  userId: Id;
+  name: string;
+  playerName: string;
+  className: string;
+  species: string;
+  level: number;
+  hpMax: number;
+  hpCurrent: number;
+  ac: number;
+  speed: number;
+  strScore: number | null;
+  dexScore: number | null;
+  conScore: number | null;
+  intScore: number | null;
+  wisScore: number | null;
+  chaScore: number | null;
+  color: string | null;
+  characterData: Record<string, unknown> | null;
+}
+
+export interface StoredCharacterCampaign {
+  id: Id;
+  characterId: Id;
+  campaignId: Id;
+  playerId: Id | null;
 }
 
 export interface StoredINpc extends Timestamps {

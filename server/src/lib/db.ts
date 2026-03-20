@@ -15,6 +15,7 @@ import type {
   StoredCombatant,
   StoredCombatantBaseType,
   StoredCharacter,
+  StoredUserCharacter,
 } from "../server/userData.js";
 
 export type Db = Database.Database;
@@ -32,9 +33,14 @@ export const ENCOUNTER_COLS =
   "combat_round, combat_active_combatant_id, created_at, updated_at";
 
 export const PLAYER_COLS =
-  "id, campaign_id, player_name, character_name, class, species, level, " +
-  "hp_max, hp_current, ac, str, dex, con, int, wis, cha, color, image_url, " +
+  "id, campaign_id, user_id, player_name, character_name, class, species, level, " +
+  "hp_max, hp_current, ac, speed, str, dex, con, int, wis, cha, color, image_url, " +
   "overrides_json, conditions_json, death_saves_json, created_at, updated_at";
+
+export const USER_CHARACTER_COLS =
+  "id, user_id, name, player_name, class_name, species, level, " +
+  "hp_max, hp_current, ac, speed, str_score, dex_score, con_score, " +
+  "int_score, wis_score, cha_score, color, character_data_json, created_at, updated_at";
 
 export const INPC_COLS =
   "id, campaign_id, monster_id, name, label, friendly, " +
@@ -263,6 +269,71 @@ CREATE TABLE IF NOT EXISTS compendium_spells (
   data_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS compendium_classes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT,
+  hd INTEGER,
+  data_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS compendium_races (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT,
+  size TEXT,
+  speed INTEGER,
+  data_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS compendium_backgrounds (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT,
+  data_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS compendium_feats (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT,
+  data_json TEXT NOT NULL
+);
+
+-- Campaign-agnostic player-owned characters (not bound to a campaign).
+-- Assigned to campaigns via character_campaigns junction table.
+CREATE TABLE IF NOT EXISTS user_characters (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT '',
+  player_name TEXT NOT NULL DEFAULT '',
+  class_name TEXT NOT NULL DEFAULT '',
+  species TEXT NOT NULL DEFAULT '',
+  level INTEGER NOT NULL DEFAULT 1,
+  hp_max INTEGER NOT NULL DEFAULT 0,
+  hp_current INTEGER NOT NULL DEFAULT 0,
+  ac INTEGER NOT NULL DEFAULT 10,
+  speed INTEGER NOT NULL DEFAULT 30,
+  str_score INTEGER,
+  dex_score INTEGER,
+  con_score INTEGER,
+  int_score INTEGER,
+  wis_score INTEGER,
+  cha_score INTEGER,
+  color TEXT,
+  character_data_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS character_campaigns (
+  id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL REFERENCES user_characters(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  player_id TEXT,
+  UNIQUE(character_id, campaign_id)
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE,
@@ -325,6 +396,13 @@ CREATE INDEX IF NOT EXISTS idx_compmon_cr            ON compendium_monsters(cr_n
 CREATE INDEX IF NOT EXISTS idx_compitem_name         ON compendium_items(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_compspell_name        ON compendium_spells(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_compspell_level       ON compendium_spells(level);
+CREATE INDEX IF NOT EXISTS idx_compclass_name        ON compendium_classes(name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_comprace_name         ON compendium_races(name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_compbg_name           ON compendium_backgrounds(name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_compfeat_name         ON compendium_feats(name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_uchars_user           ON user_characters(user_id);
+CREATE INDEX IF NOT EXISTS idx_charcamps_char        ON character_campaigns(character_id);
+CREATE INDEX IF NOT EXISTS idx_charcamps_campaign    ON character_campaigns(campaign_id);
 `;
 
 // ---------------------------------------------------------------------------
@@ -369,6 +447,16 @@ function runMigrations(db: Db): void {
   if (!charCols.includes("user_id")) {
     db.exec("ALTER TABLE characters ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL");
     db.exec("CREATE INDEX IF NOT EXISTS idx_characters_user ON characters(user_id)");
+  }
+
+  // Add user_id and speed to players (character builder integration).
+  const playerCols2 = (db.pragma("table_info(players)") as { name: string }[]).map((c) => c.name);
+  if (!playerCols2.includes("user_id")) {
+    db.exec("ALTER TABLE players ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_players_user ON players(user_id)");
+  }
+  if (!playerCols2.includes("speed")) {
+    db.exec("ALTER TABLE players ADD COLUMN speed INTEGER");
   }
 }
 
@@ -461,6 +549,7 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
   return {
     id: row.id as string,
     campaignId: row.campaign_id as string,
+    userId: (row.user_id as string | null) ?? null,
     playerName: row.player_name as string,
     characterName: row.character_name as string,
     class: row.class as string,
@@ -469,6 +558,7 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
     hpMax: row.hp_max as number,
     hpCurrent: row.hp_current as number,
     ac: row.ac as number,
+    ...(row.speed != null ? { speed: row.speed as number } : {}),
     ...(row.str != null ? { str: row.str as number } : {}),
     ...(row.dex != null ? { dex: row.dex as number } : {}),
     ...(row.con != null ? { con: row.con as number } : {}),
@@ -482,6 +572,32 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
     ...(row.death_saves_json
       ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
       : {}),
+    createdAt: row.created_at as number,
+    updatedAt: row.updated_at as number,
+  };
+}
+
+export function rowToUserCharacter(row: Record<string, unknown>): StoredUserCharacter {
+  return {
+    id: row.id as string,
+    userId: row.user_id as string,
+    name: row.name as string,
+    playerName: (row.player_name as string) ?? "",
+    className: (row.class_name as string) ?? "",
+    species: (row.species as string) ?? "",
+    level: (row.level as number) ?? 1,
+    hpMax: (row.hp_max as number) ?? 0,
+    hpCurrent: (row.hp_current as number) ?? 0,
+    ac: (row.ac as number) ?? 10,
+    speed: (row.speed as number) ?? 30,
+    strScore: (row.str_score as number | null) ?? null,
+    dexScore: (row.dex_score as number | null) ?? null,
+    conScore: (row.con_score as number | null) ?? null,
+    intScore: (row.int_score as number | null) ?? null,
+    wisScore: (row.wis_score as number | null) ?? null,
+    chaScore: (row.cha_score as number | null) ?? null,
+    color: (row.color as string | null) ?? null,
+    characterData: parseJson(row.character_data_json, null),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };

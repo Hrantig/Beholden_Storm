@@ -7,18 +7,23 @@ import { normalizeHp } from "./normalizeHp.js";
 export function importCompendiumXml(args: {
   xml: string;
   db: Database.Database;
-}): { imported: number; total: number } {
+}): { imported: number; total: number; classes?: number; races?: number; backgrounds?: number; feats?: number } {
   const { xml, db } = args;
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
     trimValues: true,
+    isArray: (name) => ["autolevel", "feature", "counter", "modifier", "trait"].includes(name),
   });
   const parsed = parser.parse(xml);
   const comp = parsed?.compendium ?? parsed;
   const monsters = asArray(comp?.monster);
   const spells = asArray(comp?.spell);
   const items = asArray(comp?.item);
+  const classes = asArray(comp?.class);
+  const races = asArray(comp?.race);
+  const backgrounds = asArray(comp?.background);
+  const feats = asArray(comp?.feat);
 
   const monStmt = db.prepare(`
     INSERT OR REPLACE INTO compendium_monsters
@@ -34,6 +39,22 @@ export function importCompendiumXml(args: {
     INSERT OR REPLACE INTO compendium_items
       (id, name, name_key, rarity, type, type_key, attunement, magic, data_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const classStmt = db.prepare(`
+    INSERT OR REPLACE INTO compendium_classes (id, name, name_key, hd, data_json)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const raceStmt = db.prepare(`
+    INSERT OR REPLACE INTO compendium_races (id, name, name_key, size, speed, data_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const bgStmt = db.prepare(`
+    INSERT OR REPLACE INTO compendium_backgrounds (id, name, name_key, data_json)
+    VALUES (?, ?, ?, ?)
+  `);
+  const featStmt = db.prepare(`
+    INSERT OR REPLACE INTO compendium_feats (id, name, name_key, data_json)
+    VALUES (?, ?, ?, ?)
   `);
 
   db.transaction(() => {
@@ -191,13 +212,131 @@ export function importCompendiumXml(args: {
         JSON.stringify(data)
       );
     }
+
+    // ── Classes ──────────────────────────────────────────────────────────────
+    for (const c of classes) {
+      const name = (asText(c?.name) || "Unknown").trim();
+      const nameKey = normalizeKey(name);
+      const id = `c_${nameKey.replace(/\s/g, "_")}`;
+      const hd = c?.hd != null ? Number(c.hd) : null;
+
+      // Parse autolevels: each autolevel is a level entry with features/counters
+      const autolevels = asArray(c?.autolevel).map((al: any) => {
+        const level = al?.["@_level"] != null ? Number(al["@_level"]) : null;
+        const scoreImprovement = al?.["@_scoreImprovement"] === "YES";
+        const features = asArray(al?.feature).map((f: any) => ({
+          name: asText(f?.name) || "",
+          text: asText(f?.text) || "",
+          optional: f?.["@_optional"] === "YES",
+          special: f?.special ? asText(f.special) : null,
+          modifier: f?.modifier ? asArray(f.modifier).map((m: any) =>
+            typeof m === "string" ? m : (m?.["#text"] ?? asText(m) ?? "")
+          ) : [],
+        }));
+        const counters = asArray(al?.counter).map((ct: any) => ({
+          name: asText(ct?.name) || "",
+          value: ct?.value != null ? Number(ct.value) : 0,
+          reset: asText(ct?.reset) || "L",
+          subclass: ct?.subclass ? asText(ct.subclass) : null,
+        }));
+        return { level, scoreImprovement, features, counters };
+      });
+
+      const data = {
+        id, name, nameKey, name_key: nameKey, hd,
+        proficiency: asText(c?.proficiency) || "",
+        numSkills: c?.numSkills != null ? Number(c.numSkills) : 0,
+        armor: asText(c?.armor) || "",
+        weapons: asText(c?.weapons) || "",
+        tools: asText(c?.tools) || "",
+        slotsReset: asText(c?.slotsReset) || "L",
+        description: asText(asArray(c?.trait)?.[0]?.text) || "",
+        autolevels,
+      };
+
+      classStmt.run(id, name, nameKey, hd, JSON.stringify(data));
+    }
+
+    // ── Races ────────────────────────────────────────────────────────────────
+    for (const r of races) {
+      const name = (asText(r?.name) || "Unknown").trim();
+      const nameKey = normalizeKey(name);
+      const id = `r_${nameKey.replace(/\s/g, "_")}`;
+      const speed = r?.speed != null ? Number(r.speed) : null;
+      const size = asText(r?.size) || null;
+
+      const traits = asArray(r?.trait).map((t: any) => ({
+        name: asText(t?.name) || "",
+        text: asText(t?.text) || "",
+        category: t?.["@_category"] ? asText(t["@_category"]) : null,
+        modifier: t?.modifier ? asArray(t.modifier).map((m: any) =>
+          typeof m === "string" ? m : (m?.["#text"] ?? asText(m) ?? "")
+        ) : [],
+      }));
+
+      const data = {
+        id, name, nameKey, name_key: nameKey,
+        size, speed,
+        resist: asText(r?.resist) || null,
+        traits,
+      };
+
+      raceStmt.run(id, name, nameKey, size, speed, JSON.stringify(data));
+    }
+
+    // ── Backgrounds ──────────────────────────────────────────────────────────
+    for (const bg of backgrounds) {
+      const name = (asText(bg?.name) || "Unknown").trim();
+      const nameKey = normalizeKey(name);
+      const id = `bg_${nameKey.replace(/\s/g, "_")}`;
+
+      const traits = asArray(bg?.trait).map((t: any) => ({
+        name: asText(t?.name) || "",
+        text: asText(t?.text) || "",
+      }));
+
+      const data = {
+        id, name, nameKey, name_key: nameKey,
+        proficiency: asText(bg?.proficiency) || "",
+        traits,
+      };
+
+      bgStmt.run(id, name, nameKey, JSON.stringify(data));
+    }
+
+    // ── Feats ────────────────────────────────────────────────────────────────
+    for (const ft of feats) {
+      const name = (asText(ft?.name) || "Unknown").trim();
+      const nameKey = normalizeKey(name);
+      const id = `f_${nameKey.replace(/\s/g, "_")}`;
+
+      const modifiers = asArray(ft?.modifier).map((m: any) =>
+        typeof m === "string" ? m : (m?.["#text"] ?? asText(m) ?? "")
+      );
+
+      const data = {
+        id, name, nameKey, name_key: nameKey,
+        text: asText(ft?.text) || "",
+        prerequisite: asText(ft?.prerequisite) || null,
+        modifiers,
+      };
+
+      featStmt.run(id, name, nameKey, JSON.stringify(data));
+    }
   })();
 
   const totalMonsters = (
     db.prepare("SELECT count(*) AS n FROM compendium_monsters").get() as { n: number }
   ).n;
 
-  return { imported: monsters.length, total: totalMonsters };
+  return {
+    imported: monsters.length,
+    total: totalMonsters,
+    classes: classes.length,
+    races: races.length,
+    backgrounds: backgrounds.length,
+    feats: feats.length,
+  };
 }
 
 function xmlItemToJson(it: any): any | null {
