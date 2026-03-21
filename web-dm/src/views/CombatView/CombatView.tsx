@@ -262,11 +262,11 @@ export function CombatView() {
           <div
             style={{
               gridColumn: "1 / -1",
-              display: "grid",
-              gridTemplateColumns: "max-content max-content max-content",
+              display: "flex",
               justifyContent: "center",
               gap: 18,
-              alignItems: "center"
+              alignItems: "center",
+              minWidth: 0,
             }}
           >
             <HudFighterCard
@@ -279,7 +279,7 @@ export function CombatView() {
               onOpenConditions={onOpenConditions}
             />
 
-            <div style={{ justifySelf: "center" }}>
+            <div style={{ flexShrink: 0 }}>
               <CombatDeltaControls
                 value={delta}
                 targetId={target?.id ?? null}

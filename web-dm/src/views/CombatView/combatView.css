@@ -14,7 +14,8 @@
   border: 1px solid var(--cv-roleAccent);
   background: var(--cv-panelBg);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18), 0 10px 26px rgba(0, 0, 0, 0.30);
-  min-width: 360px;
+  flex: 0 1 400px;
+  min-width: 0;
 }
 
 .cvHudTopRow {
@@ -81,7 +82,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 420px;
+  max-width: 100%;
 }
 
 .cvHudSecondaryName {
@@ -91,7 +92,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 420px;
+  max-width: 100%;
 }
 
 .cvHudHpRow {
@@ -260,4 +261,14 @@
 .cvHudBarDeltaWrap {
   width: 100%;
   max-width: 520px;
+}
+
+@media (max-width: 480px) {
+  .cvHudBar {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .cvHudBarSide {
+    display: none;
+  }
 }

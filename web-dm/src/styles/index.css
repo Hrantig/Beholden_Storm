@@ -17,6 +17,12 @@
   }
 }
 
+@media (max-width: 480px) {
+  .shellLayout {
+    padding: 6px 6px 0;
+  }
+}
+
 .campaignGrid {
   margin-top: var(--gap-10);
   display: grid;
@@ -52,9 +58,55 @@
   gap: var(--gap-6);
 }
 
+@media (max-width: 900px) {
+  .compendiumGrid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
 .compendiumCol {
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--gap-6);
+}
+
+/* ── Footer responsive grid ──────────────────────────────────────── */
+
+.footerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .footerGrid {
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+  /* Push support button and IP block each to their own row */
+  .footerGrid > :nth-child(3) { grid-column: 1 / -1; justify-self: center; }
+  .footerGrid > :nth-child(4) { grid-column: 1 / -1; justify-self: start; }
+}
+
+@media (max-width: 480px) {
+  .footerGrid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .footerGrid > * { grid-column: 1 / -1 !important; justify-self: start !important; }
+}
+
+.footerIps {
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .footerIps {
+    display: none;
+  }
 }

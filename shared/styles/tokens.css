@@ -53,3 +53,18 @@
   --space-page: 14px;
   --space-gap:  14px;
 }
+
+@media (max-width: 768px) {
+  :root {
+    --space-page: 8px;
+    --space-gap:  8px;
+    --fs-hero:    22px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --space-page: 6px;
+    --space-gap:  6px;
+  }
+}

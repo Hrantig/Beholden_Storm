@@ -5,6 +5,7 @@ import { useStore } from "@/store";
 import { useWs, useWsStatus } from "@/services/ws";
 import { theme, withAlpha } from "@/theme/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsNarrow } from "@/views/CombatView/hooks/useIsNarrow";
 
 function useSaveStatus(): "idle" | "saving" | "saved" {
   const [status, setStatus] = React.useState<"idle" | "saving" | "saved">("idle");
@@ -51,38 +52,41 @@ export function TopBar() {
   const { user, logout } = useAuth();
   const connected = useWsStatus();
   const saveStatus = useSaveStatus();
+  const isPhone = useIsNarrow("(max-width: 640px)");
   const { campaigns, selectedCampaignId } = state;
   const selectedName = campaigns.find((c) => c.id === selectedCampaignId)?.name ?? "";
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <img src="/beholden_logo.png" alt="Beholden" style={{ width: 50, height: 50 }} />
-        <Link
-          to="/"
-          style={{
-            fontSize: "var(--fs-hero)",
-            fontWeight: 900,
-            color: theme.colors.text,
-            textDecoration: "none",
-          }}
-          title="Home"
-        >
-          Beholden
-        </Link>
+        <img src="/beholden_logo.png" alt="Beholden" style={{ width: isPhone ? 36 : 50, height: isPhone ? 36 : 50 }} />
+        {!isPhone && (
+          <Link
+            to="/"
+            style={{
+              fontSize: "var(--fs-hero)",
+              fontWeight: 900,
+              color: theme.colors.text,
+              textDecoration: "none",
+            }}
+            title="Home"
+          >
+            Beholden
+          </Link>
+        )}
 
         {selectedCampaignId && selectedName ? (
           <div
             style={{
-              marginLeft: 8,
-              padding: "5px 14px",
+              marginLeft: isPhone ? 0 : 8,
+              padding: isPhone ? "4px 8px" : "5px 14px",
               borderRadius: theme.radius.control,
               border: `1px solid ${withAlpha(theme.colors.accentHighlight, 0.35)}`,
               background: withAlpha(theme.colors.accentHighlight, 0.10),
               color: theme.colors.accentHighlight,
               fontWeight: 700,
               fontSize: "var(--fs-medium)",
-              maxWidth: 360,
+              maxWidth: isPhone ? 120 : 360,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -109,9 +113,10 @@ export function TopBar() {
         )}
         {user && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-medium)" }}>
-            <span style={{ color: theme.colors.muted }}>{user.name}</span>
+            {!isPhone && <span style={{ color: theme.colors.muted }}>{user.name}</span>}
             <button
               onClick={logout}
+              title={isPhone ? `Sign out (${user.name})` : undefined}
               style={{
                 background: "transparent",
                 border: `1px solid ${theme.colors.panelBorder}`,

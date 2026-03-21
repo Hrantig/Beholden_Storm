@@ -4,6 +4,7 @@ import { theme } from "@/theme/theme";
 import { Panel } from "@/ui/Panel";
 import { Button } from "@/ui/Button";
 import { IconNotes, IconSpells } from "@/icons";
+import { useIsNarrow } from "@/views/CombatView/hooks/useIsNarrow";
 
 type Props = {
   backTo: string;
@@ -32,12 +33,13 @@ type Props = {
 export function CombatantHeader(props: Props) {
   const { title, rollLabel } = props;
   const navigate = useNavigate();
+  const isPhone = useIsNarrow("(max-width: 640px)");
 
   return (
     <Panel
       title={
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <Button
+          <Button
             onClick={() => navigate(props.backTo)}
             title={props.backTitle ?? "Back"}
           >
@@ -47,12 +49,12 @@ export function CombatantHeader(props: Props) {
         </div>
       }
       actions={
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: isPhone ? 4 : 8, alignItems: "center" }}>
           <Button variant="primary" onClick={props.onRollOrReset}>
             {rollLabel}
           </Button>
 
-          {props.onResetFight && (
+          {props.onResetFight && !isPhone && (
             <Button variant="ghost" onClick={props.onResetFight} title="Reset monsters HP and conditions to full">
               Reset Fight
             </Button>
@@ -61,14 +63,14 @@ export function CombatantHeader(props: Props) {
           <Button variant="ghost" onClick={props.onOpenSpellBook} title="Spell Book">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <IconSpells size={18} title="Spell Book" />
-              Spell Book
+              {!isPhone && "Spell Book"}
             </span>
           </Button>
 
           <Button variant="ghost" onClick={props.onOpenAdventureNotes} title="Adventure Notes">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <IconNotes size={18} title="Adventure Notes" />
-              Notes
+              {!isPhone && "Notes"}
             </span>
           </Button>
 

@@ -43,16 +43,13 @@ export function ShellLayout(props: { children: React.ReactNode }) {
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>{props.children}</div>
 
       <footer
+        className="footerGrid"
         style={{
           borderTop: `1px solid ${theme.colors.panelBorder}`,
           padding: "10px 16px",
           color: theme.colors.muted,
           fontSize: "var(--fs-medium)",
           background: withAlpha(theme.colors.panelBg, 0.12),
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto auto minmax(0, 1fr)",
-          alignItems: "center",
-          gap: 16,
         }}
       >
         {/* Column 1 — Left */}
@@ -107,7 +104,7 @@ export function ShellLayout(props: { children: React.ReactNode }) {
         </div>
 
         {/* Column 4 — Right */}
-        <div style={{ justifySelf: "end", textAlign: "right", fontSize: 12, opacity: 0.75 }}>
+        <div className="footerIps">
           {primaryIp && (
             <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
               <code>
