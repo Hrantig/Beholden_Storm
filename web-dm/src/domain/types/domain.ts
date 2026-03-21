@@ -71,7 +71,7 @@ export type CombatantBaseType = "player" | "monster" | "inpc";
 export interface CombatantOverrides {
   tempHp: number;
   acBonus: number;
-  hpMaxOverride: number | null;
+  hpMaxBonus: number;
 }
 
 export interface ConditionInstance {

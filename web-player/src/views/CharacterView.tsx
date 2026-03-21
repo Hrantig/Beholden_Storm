@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, jsonInit } from "@/services/api";
 import { C } from "@/lib/theme";
-import { IconPlayer, IconShield, IconSpeed, IconHeart, IconInitiative, IconConditions } from "@/icons";
+import { titleCase } from "@/lib/format/titleCase";
+import { IconPlayer, IconShield, IconSpeed, IconHeart, IconInitiative, IconConditions, IconAttack, IconHeal } from "@/icons";
 import { useWs } from "@/services/ws";
+import { Select } from "@/ui/Select";
+import { useItemSearch } from "@/views/CompendiumView/hooks/useItemSearch";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +37,35 @@ export interface InventoryItem {
   quantity: number;
   equipped: boolean;
   notes?: string;
+  source?: "compendium" | "custom";
+  itemId?: string;
+  rarity?: string | null;
+  type?: string | null;
+  attunement?: boolean;
+  magic?: boolean;
+  description?: string;
+}
+
+interface InventoryPickerPayload {
+  source: "compendium" | "custom";
+  name: string;
+  quantity: number;
+  itemId?: string;
+  rarity?: string | null;
+  type?: string | null;
+  attunement?: boolean;
+  magic?: boolean;
+  description?: string;
+}
+
+interface CompendiumItemDetail {
+  id: string;
+  name: string;
+  rarity: string | null;
+  type: string | null;
+  attunement: boolean;
+  magic: boolean;
+  text: string | string[];
 }
 
 interface CharacterData {
@@ -79,7 +111,7 @@ interface Character {
   characterData: CharacterData | null;
   campaigns: CharacterCampaign[];
   conditions?: ConditionInstance[];
-  overrides?: { tempHp: number; acBonus: number; hpMaxOverride: number | null };
+  overrides?: { tempHp: number; acBonus: number; hpMaxBonus: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +150,24 @@ const ALL_SKILLS: { name: string; abil: AbilKey }[] = [
   { name: "Survival",        abil: "wis" },
 ];
 
+const CONDITIONS = [
+  { key: "blinded",       name: "Blinded" },
+  { key: "charmed",       name: "Charmed" },
+  { key: "deafened",      name: "Deafened" },
+  { key: "frightened",    name: "Frightened" },
+  { key: "grappled",      name: "Grappled" },
+  { key: "incapacitated", name: "Incapacitated" },
+  { key: "invisible",     name: "Invisible" },
+  { key: "paralyzed",     name: "Paralyzed" },
+  { key: "petrified",     name: "Petrified" },
+  { key: "poisoned",      name: "Poisoned" },
+  { key: "prone",         name: "Prone" },
+  { key: "restrained",    name: "Restrained" },
+  { key: "stunned",       name: "Stunned" },
+  { key: "unconscious",   name: "Unconscious" },
+  { key: "concentration", name: "Concentration" },
+];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -148,6 +198,10 @@ export function CharacterView() {
   const [char, setChar] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hpAmount, setHpAmount] = useState("");
+  const [hpSaving, setHpSaving] = useState(false);
+  const [condPickerOpen, setCondPickerOpen] = useState(false);
+  const [condSaving, setCondSaving] = useState(false);
 
   const fetchChar = useCallback(() => {
     if (!id) return;
@@ -186,14 +240,41 @@ export function CharacterView() {
   };
 
   const accentColor = char.color ?? C.accentHl;
-  const overrides = char.overrides ?? { tempHp: 0, acBonus: 0, hpMaxOverride: null };
-  const effectiveHpMax = overrides.hpMaxOverride !== null ? overrides.hpMaxOverride : char.hpMax;
+  const overrides = char.overrides ?? { tempHp: 0, acBonus: 0, hpMaxBonus: 0 };
+  const effectiveHpMax = Math.max(1, char.hpMax + (overrides.hpMaxBonus ?? 0));
   const effectiveAc = char.ac + (overrides.acBonus ?? 0);
   const tempHp = overrides.tempHp ?? 0;
   const hpPct = effectiveHpMax > 0 ? Math.max(0, Math.min(1, char.hpCurrent / effectiveHpMax)) : 0;
   const tempPct = effectiveHpMax > 0 ? Math.min(1 - hpPct, tempHp / effectiveHpMax) : 0;
   const passivePerc = 10 + mod(char.wisScore) + (prof && isProficientIn(prof.skills, "Perception") ? pb : 0);
   const passiveInv  = 10 + mod(char.intScore) + (prof && isProficientIn(prof.skills, "Investigation") ? pb : 0);
+
+  async function applyHp(kind: "damage" | "heal") {
+    const amt = parseInt(hpAmount, 10);
+    if (!amt || amt <= 0 || !char) return;
+    const newHp = kind === "heal"
+      ? Math.min(char.hpCurrent + amt, effectiveHpMax)
+      : Math.max(0, char.hpCurrent - amt);
+    setHpSaving(true);
+    try {
+      await api(`/api/me/characters/${char.id}`, jsonInit("PUT", { hpCurrent: newHp }));
+      setChar((prev) => prev ? { ...prev, hpCurrent: newHp } : prev);
+      setHpAmount("");
+    } finally { setHpSaving(false); }
+  }
+
+  async function toggleCondition(key: string) {
+    if (!char) return;
+    const current = char.conditions ?? [];
+    const has = current.some((c) => c.key === key);
+    const next = has ? current.filter((c) => c.key !== key) : [...current, { key }];
+    setCondSaving(true);
+    try {
+      await api(`/api/me/characters/${char.id}/conditions`, jsonInit("PATCH", { conditions: next }));
+      setChar((prev) => prev ? { ...prev, conditions: next } : prev);
+      if (!has) setCondPickerOpen(false);
+    } finally { setCondSaving(false); }
+  }
 
   async function saveCharacterData(updatedData: CharacterData) {
     const updated = await api<Character>(`/api/me/characters/${char!.id}`, jsonInit("PUT", {
@@ -206,68 +287,182 @@ export function CharacterView() {
 
   return (
     <Wrap>
-      {/* ── Character header ─────────────────────────────────────────── */}
+      {/* ── Character header / HUD ───────────────────────────────────── */}
       <div style={{
-        display: "flex", gap: 16, alignItems: "flex-start",
         background: "rgba(255,255,255,0.03)",
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 14, padding: "18px 20px", marginBottom: 20,
-        flexWrap: "wrap",
       }}>
-        {/* Portrait */}
-        <div style={{
-          width: 80, height: 80, borderRadius: 12, flexShrink: 0,
-          background: `${accentColor}22`,
-          border: `2px solid ${accentColor}66`,
-          overflow: "hidden",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {char.imageUrl
-            ? <img src={char.imageUrl} alt={char.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <IconPlayer size={40} style={{ opacity: 0.35 }} />
-          }
-        </div>
-
-        {/* Name + meta */}
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <h1 style={{ margin: "0 0 2px", fontSize: 24, fontWeight: 900, letterSpacing: -0.5, color: C.text }}>
-            {char.name}
-          </h1>
-          <div style={{ fontSize: 14, color: C.muted, marginBottom: 4 }}>
-            {[char.className, char.characterData?.subclass, char.species]
-              .filter(Boolean).join(" · ")}
-            <span style={{ marginLeft: 10, color: accentColor, fontWeight: 700, fontSize: 13 }}>
-              Level {char.level}
-            </span>
-          </div>
-          {char.playerName && (
-            <div style={{ fontSize: 12, color: "rgba(160,180,220,0.45)" }}>Player: {char.playerName}</div>
-          )}
-          {char.campaigns.length > 0 && (
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
-              {char.campaigns.map((c) => (
-                <span key={c.id} style={{
-                  fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 600,
-                  background: `${accentColor}18`, border: `1px solid ${accentColor}44`, color: accentColor,
-                }}>
-                  {c.campaignName}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Edit */}
-        <button
-          onClick={() => navigate(`/characters/${char.id}/edit`)}
-          style={{
-            padding: "7px 16px", borderRadius: 8, cursor: "pointer",
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.16)",
-            color: C.muted, fontWeight: 600, fontSize: 13, flexShrink: 0,
+        {/* Top row: portrait + info + edit */}
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: 12, flexShrink: 0,
+            background: `${accentColor}22`, border: `2px solid ${accentColor}66`,
+            overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-          ✎ Edit
-        </button>
+            {char.imageUrl
+              ? <img src={char.imageUrl} alt={char.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <IconPlayer size={36} style={{ opacity: 0.35 }} />}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 900, letterSpacing: -0.5, color: C.text }}>
+              {char.name}
+            </h1>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 3 }}>
+              {[char.className, char.characterData?.subclass, char.species].filter(Boolean).join(" · ")}
+              <span style={{ marginLeft: 10, color: accentColor, fontWeight: 700, fontSize: 12 }}>Level {char.level}</span>
+            </div>
+            {char.playerName && (
+              <div style={{ fontSize: 11, color: "rgba(160,180,220,0.45)", marginBottom: 3 }}>Player: {char.playerName}</div>
+            )}
+            {char.campaigns.length > 0 && (
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {char.campaigns.map((c) => (
+                  <span key={c.id} style={{
+                    fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 600,
+                    background: `${accentColor}18`, border: `1px solid ${accentColor}44`, color: accentColor,
+                  }}>{c.campaignName}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={() => navigate(`/characters/${char.id}/edit`)} style={{
+            padding: "7px 16px", borderRadius: 8, cursor: "pointer",
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.16)",
+            color: C.muted, fontWeight: 600, fontSize: 13, flexShrink: 0,
+          }}>✎ Edit</button>
+        </div>
+
+        {/* HP bar */}
+        <div style={{ height: 32, borderRadius: 8, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden", position: "relative", marginBottom: 8 }}>
+          <div style={{ position: "absolute", inset: 0, right: `${(1 - hpPct) * 100}%`, background: hpPct > 0.5 ? C.green : hpPct > 0.25 ? "#f59e0b" : C.red, borderRadius: 8, transition: "right 0.3s, background 0.3s" }} />
+          {tempHp > 0 && tempPct > 0 && (
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: `${hpPct * 100}%`, width: `${tempPct * 100}%`, background: "#f59e0b", opacity: 0.7 }} />
+          )}
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)", gap: 4 }}>
+            <IconHeart size={11} style={{ opacity: 0.8 }} />
+            {char.hpCurrent} / {effectiveHpMax}
+            {tempHp > 0 && <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>+{tempHp} temp</span>}
+            {(overrides.hpMaxBonus ?? 0) !== 0 && <span style={{ fontSize: 10, color: "#f59e0b" }}>(max {(overrides.hpMaxBonus ?? 0) > 0 ? "+" : ""}{overrides.hpMaxBonus})</span>}
+          </div>
+        </div>
+
+        {/* HP actions — hex-button HUD */}
+        <style>{`
+          @keyframes playerHexPulse {
+            0%   { filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
+            50%  { filter: drop-shadow(0 0 10px rgba(255,255,255,0.10)); }
+            100% { filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
+          }
+        `}</style>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 8px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", marginBottom: 14 }}>
+          {/* Damage hex */}
+          <HexBtn variant="damage" title="Apply damage" disabled={hpSaving || !hpAmount} onClick={() => applyHp("damage")}>
+            <IconAttack size={22} />
+          </HexBtn>
+
+          {/* Amount input */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <input
+              value={hpAmount}
+              onChange={(e) => setHpAmount(e.target.value.replace(/[^0-9]/g, ""))}
+              onKeyDown={(e) => { if (e.key === "Enter") applyHp("heal"); if (e.key === "Escape") setHpAmount(""); }}
+              placeholder="1d6+2/+10"
+              inputMode="numeric"
+              style={{
+                width: 130, textAlign: "center",
+                padding: "10px 12px", borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.05)",
+                color: C.text, fontWeight: 900, fontSize: 17, outline: "none",
+              }}
+            />
+            {hd !== null && (
+              <span style={{ fontSize: 10, color: C.muted }}>HD: {char.level}d{hd}</span>
+            )}
+          </div>
+
+          {/* Heal hex */}
+          <HexBtn variant="heal" title="Apply heal" disabled={hpSaving || !hpAmount} onClick={() => applyHp("heal")}>
+            <IconHeal size={22} />
+          </HexBtn>
+
+          {/* Conditions hex */}
+          <HexBtn variant="conditions" title="Add / remove conditions" disabled={false} onClick={() => setCondPickerOpen((o) => !o)}>
+            <IconConditions size={22} />
+          </HexBtn>
+        </div>
+
+        {/* Mini stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginBottom: 14 }}>
+          <MiniStat
+            label="Armor Class"
+            value={effectiveAc !== char.ac ? `${effectiveAc} (${fmtMod(overrides.acBonus)})` : String(effectiveAc)}
+            accent={accentColor} icon={<IconShield size={11} />}
+          />
+          <MiniStat label="Speed" value={`${char.speed} ft`} icon={<IconSpeed size={11} />} />
+          <MiniStat label="Initiative" value={fmtMod(mod(char.dexScore))} accent={accentColor} icon={<IconInitiative size={11} />} />
+          <MiniStat label="Prof. Bonus" value={`+${pb}`} accent={accentColor} />
+          <MiniStat label="Passive Perc." value={String(passivePerc)} />
+          <MiniStat label="Passive Inv." value={String(passiveInv)} />
+        </div>
+
+        {/* Conditions */}
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+            <IconConditions size={10} /> Conditions
+            {condSaving && <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", fontSize: 9 }}>saving…</span>}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            {(char.conditions ?? []).map((cond, i) => (
+              <span key={i} style={{
+                fontSize: 12, fontWeight: 700, padding: "4px 6px 4px 10px", borderRadius: 6,
+                background: `${C.red}18`, border: `1px solid ${C.red}44`, color: C.red,
+                textTransform: "capitalize", display: "inline-flex", alignItems: "center", gap: 5,
+              }}>
+                {cond.key.replace(/-/g, " ")}
+                <button onClick={() => toggleCondition(cond.key)} style={{
+                  border: "none", background: "transparent", color: C.red,
+                  cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 0,
+                  display: "inline-flex", alignItems: "center",
+                }}>×</button>
+              </span>
+            ))}
+            {/* Add condition picker */}
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setCondPickerOpen((o) => !o)} style={{
+                fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 6,
+                background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.2)",
+                color: C.muted, cursor: "pointer",
+              }}>+ Add</button>
+              {condPickerOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
+                  background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 10, padding: 6, minWidth: 170,
+                  display: "flex", flexDirection: "column", gap: 1,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                }}>
+                  {CONDITIONS
+                    .filter((cd) => !(char.conditions ?? []).some((c) => c.key === cd.key))
+                    .map((cd) => (
+                      <button key={cd.key} onClick={() => toggleCondition(cd.key)} style={{
+                        background: "transparent", border: "none", color: C.text,
+                        textAlign: "left", fontSize: 13, padding: "5px 8px",
+                        borderRadius: 5, cursor: "pointer", fontWeight: 600,
+                      }}>{cd.name}</button>
+                    ))}
+                  {CONDITIONS.filter((cd) => !(char.conditions ?? []).some((c) => c.key === cd.key)).length === 0 && (
+                    <div style={{ fontSize: 12, color: C.muted, padding: "4px 8px" }}>All conditions applied</div>
+                  )}
+                </div>
+              )}
+            </div>
+            {(char.conditions ?? []).length === 0 && !condPickerOpen && (
+              <span style={{ fontSize: 12, color: "rgba(160,180,220,0.3)", fontStyle: "italic" }}>None</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Two-column body ──────────────────────────────────────────── */}
@@ -323,7 +518,6 @@ export function CharacterView() {
                   <div key={k} style={{
                     display: "flex", alignItems: "center", gap: 7,
                     padding: "3px 4px", borderRadius: 5,
-                    background: isProfSave ? `${accentColor}0d` : "transparent",
                   }}>
                     <ProfDot filled={isProfSave} color={accentColor} />
                     <span style={{ fontSize: 11, color: C.muted, fontWeight: 700, width: 28 }}>
@@ -357,7 +551,6 @@ export function CharacterView() {
                   <div key={name} style={{
                     display: "flex", alignItems: "center", gap: 6,
                     padding: "3px 4px", borderRadius: 4,
-                    background: isProfSkill ? `${C.green}0d` : "transparent",
                   }}>
                     <ProfDot filled={isProfSkill} color={C.green} />
                     <span style={{
@@ -391,96 +584,6 @@ export function CharacterView() {
 
         {/* ── RIGHT: Combat + Proficiencies + Spells + Features + Inventory ── */}
         <div style={{ flex: "1 1 360px", minWidth: 280, display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* HP bar + Combat Stats */}
-          <Panel>
-            <PanelTitle color={C.green}><IconHeart size={11} /> Hit Points</PanelTitle>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{
-                height: 28, borderRadius: 7,
-                background: "rgba(255,255,255,0.07)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                overflow: "hidden", position: "relative",
-              }}>
-                {/* HP fill */}
-                <div style={{
-                  position: "absolute", inset: 0, right: `${(1 - hpPct) * 100}%`,
-                  background: hpPct > 0.5 ? C.green : hpPct > 0.25 ? "#f59e0b" : C.red,
-                  borderRadius: 7, transition: "right 0.3s, background 0.3s",
-                }} />
-                {/* Temp HP fill (yellow, stacked after current HP) */}
-                {tempHp > 0 && tempPct > 0 && (
-                  <div style={{
-                    position: "absolute", top: 0, bottom: 0,
-                    left: `${hpPct * 100}%`,
-                    width: `${tempPct * 100}%`,
-                    background: "#f59e0b",
-                    opacity: 0.7,
-                  }} />
-                )}
-                <div style={{
-                  position: "absolute", inset: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 14, fontWeight: 800, color: "#fff",
-                  textShadow: "0 1px 3px rgba(0,0,0,0.6)",
-                }}>
-                  {char.hpCurrent} / {effectiveHpMax}
-                  {tempHp > 0 && (
-                    <span style={{ fontSize: 11, marginLeft: 6, color: "#f59e0b", fontWeight: 700 }}>
-                      +{tempHp} temp
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                {hd !== null && (
-                  <div style={{ fontSize: 11, color: C.muted }}>
-                    Hit Dice: {char.level}d{hd}
-                  </div>
-                )}
-                {overrides.hpMaxOverride !== null && (
-                  <div style={{ fontSize: 11, color: "#f59e0b" }}>
-                    HP max overridden
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-              <MiniStat
-                label="Armor Class"
-                value={effectiveAc !== char.ac ? `${effectiveAc} (${fmtMod(overrides.acBonus)})` : String(effectiveAc)}
-                accent={accentColor}
-                icon={<IconShield size={11} />}
-              />
-              <MiniStat label="Speed" value={`${char.speed} ft`} icon={<IconSpeed size={11} />} />
-              <MiniStat label="Initiative" value={fmtMod(mod(char.dexScore))} accent={accentColor} icon={<IconInitiative size={11} />} />
-              <MiniStat label="Prof. Bonus" value={`+${pb}`} accent={accentColor} />
-              <MiniStat label="Passive Perc." value={String(passivePerc)} />
-              <MiniStat label="Passive Inv." value={String(passiveInv)} />
-            </div>
-          </Panel>
-
-          {/* Conditions — always show so the player knows this panel is tracked */}
-          <Panel>
-            <PanelTitle color={C.red}><IconConditions size={11} /> Conditions</PanelTitle>
-            {(char.conditions ?? []).length > 0 ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {(char.conditions!).map((c, i) => (
-                  <span key={i} style={{
-                    fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 6,
-                    background: `${C.red}18`, border: `1px solid ${C.red}44`,
-                    color: C.red, textTransform: "capitalize",
-                  }}>
-                    {c.key.replace(/-/g, " ")}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: "rgba(160,180,220,0.3)", fontStyle: "italic" }}>
-                No active conditions
-              </div>
-            )}
-          </Panel>
 
           {/* Proficiencies */}
           {prof && (() => {
@@ -627,6 +730,7 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
   const [items, setItems] = useState<InventoryItem[]>(() =>
     (charData?.inventory ?? []) as InventoryItem[]
   );
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newQty, setNewQty] = useState(1);
@@ -644,18 +748,34 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
     }
   }
 
-  async function addItem() {
-    const name = newName.trim();
-    if (!name) return;
+  async function addItem(payload?: InventoryPickerPayload) {
+    const legacyName = newName.trim();
+    const next = payload ?? {
+      source: "custom" as const,
+      name: legacyName,
+      quantity: newQty,
+      description: newNotes.trim() || undefined,
+    };
+    if (!next.name) return;
     const item: InventoryItem = {
       id: uid(),
-      name,
-      quantity: Math.max(1, newQty),
+      name: next.name,
+      quantity: Math.max(1, next.quantity),
       equipped: false,
-      notes: newNotes.trim() || undefined,
+      source: next.source,
+      itemId: next.itemId,
+      rarity: next.rarity ?? null,
+      type: next.type ?? null,
+      attunement: next.attunement ?? false,
+      magic: next.magic ?? false,
+      description: next.description?.trim() || undefined,
     };
     await persist([...items, item]);
-    setNewName(""); setNewQty(1); setNewNotes(""); setAdding(false);
+    setAdding(false);
+    setNewName("");
+    setNewQty(1);
+    setNewNotes("");
+    setPickerOpen(false);
   }
 
   async function toggleEquipped(id: string) {
@@ -707,8 +827,8 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
         </div>
       )}
 
-      {/* Add form */}
-      {adding ? (
+      {/* Inventory add controls */}
+      {false ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: items.length > 0 ? 10 : 0 }}>
           <div style={{ display: "flex", gap: 6 }}>
             <input
@@ -735,7 +855,7 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
             style={{ ...inputStyle, fontSize: 11, color: C.muted }}
           />
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={addItem} disabled={!newName.trim()} style={addBtnStyle(accentColor)}>
+            <button onClick={() => { void addItem(); }} disabled={!newName.trim()} style={addBtnStyle(accentColor)}>
               Add
             </button>
             <button onClick={() => { setAdding(false); setNewName(""); setNewQty(1); setNewNotes(""); }} style={cancelBtnStyle}>
@@ -745,7 +865,7 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
         </div>
       ) : (
         <button
-          onClick={() => { setAdding(true); }}
+          onClick={() => { setPickerOpen(true); }}
           style={{
             marginTop: items.length > 0 ? 8 : 0,
             background: "transparent",
@@ -757,6 +877,13 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
           + Add item
         </button>
       )}
+
+      <InventoryItemPickerModal
+        isOpen={pickerOpen}
+        accentColor={accentColor}
+        onClose={() => setPickerOpen(false)}
+        onAdd={addItem}
+      />
     </Panel>
   );
 }
@@ -791,6 +918,16 @@ function ItemRow({ item, accentColor, onToggle, onRemove, onQty }: {
         <span style={{ fontSize: 13, color: C.text, fontWeight: item.equipped ? 600 : 400 }}>
           {item.name}
         </span>
+        {(item.rarity || item.type || item.attunement || item.magic) && (
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+            {[
+              item.rarity ? titleCase(item.rarity) : null,
+              item.type ?? null,
+              item.attunement ? "Attunement" : null,
+              item.magic ? "Magic" : null,
+            ].filter(Boolean).join(" • ")}
+          </div>
+        )}
         {item.notes && (
           <span style={{ fontSize: 11, color: C.muted, marginLeft: 6 }}>{item.notes}</span>
         )}
@@ -821,6 +958,349 @@ function ItemRow({ item, accentColor, onToggle, onRemove, onQty }: {
         ×
       </button>
     </div>
+  );
+}
+
+function InventoryItemPickerModal(props: {
+  isOpen: boolean;
+  accentColor: string;
+  onClose: () => void;
+  onAdd: (payload?: InventoryPickerPayload) => void;
+}) {
+  const {
+    q, setQ,
+    rarityFilter, setRarityFilter, rarityOptions,
+    typeFilter, setTypeFilter, typeOptions,
+    filterAttunement, setFilterAttunement,
+    filterMagic, setFilterMagic,
+    hasActiveFilters, clearFilters,
+    rows, busy,
+  } = useItemSearch();
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<CompendiumItemDetail | null>(null);
+  const [qty, setQty] = useState(1);
+  const [createMode, setCreateMode] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customRarity, setCustomRarity] = useState("");
+  const [customType, setCustomType] = useState("");
+  const [customAttunement, setCustomAttunement] = useState(false);
+  const [customMagic, setCustomMagic] = useState(false);
+  const [customDescription, setCustomDescription] = useState("");
+
+  useEffect(() => {
+    if (!props.isOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") props.onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [props]);
+
+  useEffect(() => {
+    if (!props.isOpen) {
+      setSelectedId(null);
+      setDetail(null);
+      setQty(1);
+      setCreateMode(false);
+      setCustomName("");
+      setCustomRarity("");
+      setCustomType("");
+      setCustomAttunement(false);
+      setCustomMagic(false);
+      setCustomDescription("");
+    }
+  }, [props.isOpen]);
+
+  useEffect(() => {
+    if (!props.isOpen || createMode || !selectedId) {
+      setDetail(null);
+      return;
+    }
+    let alive = true;
+    api<CompendiumItemDetail>(`/api/compendium/items/${selectedId}`)
+      .then((data) => { if (alive) setDetail(data); })
+      .catch(() => { if (alive) setDetail(null); });
+    return () => { alive = false; };
+  }, [props.isOpen, createMode, selectedId]);
+
+  if (!props.isOpen) return null;
+
+  const detailText = detail
+    ? (Array.isArray(detail.text) ? detail.text.join("\n\n") : detail.text ?? "")
+    : "";
+
+  return (
+    <div
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) props.onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        background: "rgba(4, 8, 18, 0.72)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          width: "min(980px, 100%)",
+          maxHeight: "min(760px, calc(100vh - 40px))",
+          background: C.bg,
+          border: `1px solid ${C.panelBorder}`,
+          borderRadius: 16,
+          boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+          display: "grid",
+          gridTemplateColumns: "minmax(320px, 380px) minmax(0, 1fr)",
+          gap: 12,
+          padding: 12,
+        }}
+      >
+        <div style={inventoryPickerColumnStyle}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#fbbf24" }}>
+              Browse Items
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateMode((v) => !v);
+                setSelectedId(null);
+              }}
+              style={{
+                border: `1px solid ${createMode ? props.accentColor : C.panelBorder}`,
+                background: createMode ? `${props.accentColor}22` : "transparent",
+                color: createMode ? props.accentColor : C.muted,
+                borderRadius: 8,
+                padding: "6px 10px",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {createMode ? "Browse" : "Create New"}
+            </button>
+          </div>
+
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search items..."
+            style={inputStyle}
+          />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Select value={rarityFilter} onChange={(e) => setRarityFilter(e.target.value)} style={{ width: "100%" }}>
+              {rarityOptions.map((r) => (
+                <option key={r} value={r}>{r === "all" ? "All Rarities" : titleCase(r)}</option>
+              ))}
+            </Select>
+            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ width: "100%" }}>
+              {typeOptions.map((t) => (
+                <option key={t} value={t}>{t === "all" ? "All Types" : t}</option>
+              ))}
+            </Select>
+          </div>
+
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => setFilterAttunement(!filterAttunement)} style={toggleFilterPill(filterAttunement, props.accentColor)}>
+              Attunement
+            </button>
+            <button type="button" onClick={() => setFilterMagic(!filterMagic)} style={toggleFilterPill(filterMagic, props.accentColor)}>
+              Magic
+            </button>
+            {hasActiveFilters && (
+              <button type="button" onClick={clearFilters} style={toggleFilterPill(false, props.accentColor)}>
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div style={{ fontSize: 12, color: C.muted }}>
+            {busy ? "Loading..." : `${rows.length} items`}
+          </div>
+
+          <div style={inventoryPickerListStyle}>
+            {!busy && rows.length === 0 && (
+              <div style={{ padding: 12, color: C.muted }}>No items found.</div>
+            )}
+            {rows.map((item) => {
+              const active = item.id === selectedId;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(item.id);
+                    setCreateMode(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    borderBottom: `1px solid ${C.panelBorder}`,
+                    background: active ? `${props.accentColor}18` : "transparent",
+                    color: C.text,
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {item.rarity && <span style={{ width: 7, height: 7, borderRadius: "50%", background: inventoryRarityColor(item.rarity), flexShrink: 0 }} />}
+                    <span style={{ fontWeight: 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.name}
+                    </span>
+                    {item.magic && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa" }}>Magic</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {[item.rarity ? titleCase(item.rarity) : null, item.type, item.attunement ? "Attunement" : null].filter(Boolean).join(" • ")}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={inventoryPickerColumnStyle}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>
+              {createMode ? "Create Item" : detail?.name ?? "Select an item"}
+            </div>
+            <div style={{ flex: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button type="button" onClick={() => setQty((v) => Math.max(1, v - 1))} style={stepperBtn}>−</button>
+              <input
+                type="number"
+                min={1}
+                value={qty}
+                onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
+                style={{ ...inputStyle, width: 64, textAlign: "center", flex: "0 0 auto" }}
+              />
+              <button type="button" onClick={() => setQty((v) => v + 1)} style={stepperBtn}>+</button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (createMode) {
+                  const name = customName.trim();
+                  if (!name) return;
+                  props.onAdd({
+                    source: "custom",
+                    name,
+                    quantity: qty,
+                    rarity: customRarity.trim() || null,
+                    type: customType.trim() || null,
+                    attunement: customAttunement,
+                    magic: customMagic,
+                    description: customDescription.trim() || undefined,
+                  });
+                  return;
+                }
+                if (!detail) return;
+                props.onAdd({
+                  source: "compendium",
+                  name: detail.name,
+                  quantity: qty,
+                  itemId: detail.id,
+                  rarity: detail.rarity,
+                  type: detail.type,
+                  attunement: detail.attunement,
+                  magic: detail.magic,
+                  description: detailText,
+                });
+              }}
+              disabled={createMode ? !customName.trim() : !detail}
+              style={addBtnStyle(props.accentColor)}
+            >
+              Add
+            </button>
+            <button type="button" onClick={props.onClose} style={cancelBtnStyle}>
+              Close
+            </button>
+          </div>
+
+          {createMode ? (
+            <>
+              <input
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="Item name"
+                style={inputStyle}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <input
+                  value={customRarity}
+                  onChange={(e) => setCustomRarity(e.target.value)}
+                  placeholder="Rarity"
+                  style={inputStyle}
+                />
+                <input
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value)}
+                  placeholder="Type"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                <label style={inventoryCheckboxLabel}>
+                  <input type="checkbox" checked={customAttunement} onChange={(e) => setCustomAttunement(e.target.checked)} />
+                  Requires Attunement
+                </label>
+                <label style={inventoryCheckboxLabel}>
+                  <input type="checkbox" checked={customMagic} onChange={(e) => setCustomMagic(e.target.checked)} />
+                  Magic Item
+                </label>
+              </div>
+              <textarea
+                value={customDescription}
+                onChange={(e) => setCustomDescription(e.target.value)}
+                placeholder="Description or notes..."
+                rows={12}
+                style={{ ...inputStyle, resize: "vertical", minHeight: 220, fontFamily: "inherit", lineHeight: 1.5 }}
+              />
+            </>
+          ) : detail ? (
+            <>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {detail.magic && <InventoryTag label="Magic" color="#a78bfa" />}
+                {detail.attunement && <InventoryTag label="Attunement" color={props.accentColor} />}
+                {detail.rarity && <InventoryTag label={titleCase(detail.rarity)} color={inventoryRarityColor(detail.rarity)} />}
+                {detail.type && <InventoryTag label={detail.type} color={C.muted} />}
+              </div>
+              <div style={inventoryPickerDetailStyle}>
+                {detailText || <span style={{ color: C.muted }}>No description.</span>}
+              </div>
+            </>
+          ) : (
+            <div style={{ color: C.muted, lineHeight: 1.5 }}>
+              Pick a compendium item on the left, or switch to <strong>Create New</strong> to add a custom entry.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InventoryTag({ label, color }: { label: string; color: string }) {
+  return (
+    <span style={{
+      fontSize: 11,
+      fontWeight: 700,
+      padding: "2px 8px",
+      borderRadius: 999,
+      color,
+      border: `1px solid ${color}44`,
+      background: `${color}18`,
+    }}>
+      {label}
+    </span>
   );
 }
 
@@ -908,6 +1388,42 @@ function ProfDot({ filled, color }: { filled: boolean; color: string }) {
   );
 }
 
+function HexBtn({ variant, title, disabled, onClick, children }: {
+  variant: "damage" | "heal" | "conditions";
+  title: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const bg = variant === "damage" ? C.red : variant === "heal" ? C.green : "#f59e0b";
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        width: 56, height: 52,
+        display: "grid", placeItems: "center",
+        cursor: disabled ? "not-allowed" : "pointer",
+        border: "2px solid rgba(255,255,255,0.1)",
+        background: bg, color: "#fff",
+        clipPath: "polygon(25% 4%, 75% 4%, 98% 50%, 75% 96%, 25% 96%, 2% 50%)",
+        boxShadow: disabled ? "none" : "0 2px 0 0 rgba(0,0,0,0.3)",
+        animation: disabled ? "none" : "playerHexPulse 2.2s ease-in-out infinite",
+        opacity: disabled ? 0.4 : 1,
+        transition: "transform 80ms ease, opacity 150ms ease",
+        userSelect: "none",
+      }}
+      onMouseDown={(e) => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(1px)"; }}
+      onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function MiniStat({ label, value, accent, icon }: { label: string; value: string; accent?: string; icon?: React.ReactNode }) {
   return (
     <div style={{
@@ -970,3 +1486,68 @@ const cancelBtnStyle: React.CSSProperties = {
   borderRadius: 7, padding: "6px 14px",
   fontSize: 13, color: C.muted, cursor: "pointer",
 };
+
+const inventoryCheckboxLabel: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  color: C.muted,
+};
+
+const inventoryPickerColumnStyle: React.CSSProperties = {
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+  border: `1px solid ${C.panelBorder}`,
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.03)",
+  padding: 12,
+  gap: 10,
+};
+
+const inventoryPickerListStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 220,
+  overflowY: "auto",
+  border: `1px solid ${C.panelBorder}`,
+  borderRadius: 10,
+};
+
+const inventoryPickerDetailStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 260,
+  overflowY: "auto",
+  border: `1px solid ${C.panelBorder}`,
+  borderRadius: 10,
+  padding: 12,
+  whiteSpace: "pre-wrap",
+  lineHeight: 1.5,
+  fontSize: 13,
+  color: C.text,
+};
+
+function inventoryRarityColor(rarity: string | null): string {
+  switch ((rarity ?? "").toLowerCase()) {
+    case "common": return C.muted;
+    case "uncommon": return "#1eff00";
+    case "rare": return "#0070dd";
+    case "very rare": return "#a335ee";
+    case "legendary": return "#ff8000";
+    case "artifact": return "#e6cc80";
+    default: return C.muted;
+  }
+}
+
+function toggleFilterPill(active: boolean, accentColor: string): React.CSSProperties {
+  return {
+    padding: "4px 10px",
+    borderRadius: 999,
+    border: `1px solid ${active ? accentColor : C.panelBorder}`,
+    background: active ? `${accentColor}18` : "rgba(255,255,255,0.04)",
+    color: active ? accentColor : C.muted,
+    cursor: "pointer",
+    fontSize: 11,
+    fontWeight: 700,
+  };
+}

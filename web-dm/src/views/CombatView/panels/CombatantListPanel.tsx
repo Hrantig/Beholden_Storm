@@ -30,7 +30,7 @@ export function CombatantListPanel({
         >
           <div style={{ fontWeight: 600 }}>{c.label}</div>
           <div style={{ fontSize: "var(--fs-medium)", opacity: 0.8 }}>
-            AC {Number(c.ac ?? 0) + (Number(c.overrides?.acBonus ?? 0) || 0)} · HP {Number(c.hpCurrent ?? 0)}/{Math.max(1, Number(c.hpMax ?? 0) + (Number(c.overrides?.hpMaxOverride ?? 0) || 0))}{(Number(c.overrides?.tempHp ?? 0) || 0) ? ` (+${Number(c.overrides?.tempHp ?? 0) || 0}t)` : ``}
+            AC {Number(c.ac ?? 0) + (Number(c.overrides?.acBonus ?? 0) || 0)} · HP {Number(c.hpCurrent ?? 0)}/{Math.max(1, Number(c.hpMax ?? 0) + (Number(c.overrides?.hpMaxBonus ?? 0) || 0))}{(Number(c.overrides?.tempHp ?? 0) || 0) ? ` (+${Number(c.overrides?.tempHp ?? 0) || 0}t)` : ``}
           </div>
         </div>
       ))}

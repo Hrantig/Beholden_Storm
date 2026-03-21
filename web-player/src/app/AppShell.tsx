@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/services/api";
 
 const NAV_LINKS = [
-  { to: "/", label: "Campaigns", end: true },
+  { to: "/", label: "Home", end: true },
   { to: "/compendium", label: "Compendium", end: false },
 ];
 

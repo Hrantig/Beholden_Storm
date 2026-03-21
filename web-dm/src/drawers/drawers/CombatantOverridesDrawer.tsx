@@ -23,7 +23,7 @@ export function CombatantOverridesDrawer(props: {
   const [friendly, setFriendly] = React.useState(false);
   const [acBonus, setAcBonus] = React.useState("0");
   const [tempHp, setTempHp] = React.useState("0");
-  const [hpMaxOverride, setHpMaxOverride] = React.useState("");
+  const [hpMaxBonus, setHpMaxBonus] = React.useState("0");
 
   const combatant = React.useMemo(
     () => state.combatants.find((x) => x.id === props.drawer.combatantId),
@@ -38,7 +38,7 @@ if (!combatant) return;
   const o = combatant.overrides;
   setAcBonus(String(o.acBonus ?? 0));
   setTempHp(String(o.tempHp ?? 0));
-  setHpMaxOverride(o.hpMaxOverride != null ? String(o.hpMaxOverride) : "");
+  setHpMaxBonus(String(o.hpMaxBonus ?? 0));
   }, [combatant]);
 
   const submit = React.useCallback(async () => {
@@ -49,7 +49,7 @@ if (!combatant) return;
     ...combatant.overrides,
       acBonus: Number(acBonus) || 0,
       tempHp: Number(tempHp) || 0,
-      hpMaxOverride: hpMaxOverride.trim() === "" ? null : Number(hpMaxOverride)
+      hpMaxBonus: Number(hpMaxBonus) || 0
     };
     await api(
       `/api/encounters/${d.encounterId}/combatants/${d.combatantId}`,
@@ -62,7 +62,7 @@ if (!combatant) return;
     );
     await props.refreshEncounter(d.encounterId);
     props.close();
-  }, [acBonus, color, combatant, friendly, hpMaxOverride, initiative, props, tempHp]);
+  }, [acBonus, color, combatant, friendly, hpMaxBonus, initiative, props, tempHp]);
 
   const showMonsterFields = combatant?.baseType === "monster";
 
@@ -107,7 +107,7 @@ if (!combatant) return;
 
         <div>
           <div style={{ color: theme.colors.muted, marginBottom: 6 }}>HP Modifier</div>
-          <Input value={hpMaxOverride} onChange={(e) => setHpMaxOverride(digitsOrEmpty(e.target.value))} placeholder="0" inputMode="numeric" />
+          <Input value={hpMaxBonus} onChange={(e) => setHpMaxBonus(digitsOrEmpty(e.target.value))} placeholder="0" inputMode="numeric" />
         </div>
       </div>
     ),

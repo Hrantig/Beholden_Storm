@@ -27,7 +27,7 @@ function parseSignedDelta(
   return { kind: defaultKind, amount };
 }
 
-function normalizeHpMaxOverride(v: unknown): number | null {
+function normalizeHpMaxBonus(v: unknown): number | null {
   if (v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -54,7 +54,7 @@ export function useCombatHpActions({ encounterId, delta, setDelta, target, refre
       const overrides = target.overrides ?? null;
       const rawMax = target.hpMax;
 
-      const hpMod = normalizeHpMaxOverride(overrides?.hpMaxOverride) ?? 0;
+      const hpMod = normalizeHpMaxBonus(overrides?.hpMaxBonus) ?? 0;
       const max = rawMax != null ? Math.max(1, Number(rawMax) + hpMod) : null;
       const tempHp = Math.max(0, Number(overrides.tempHp ?? 0) || 0);
       if (cur == null) return;

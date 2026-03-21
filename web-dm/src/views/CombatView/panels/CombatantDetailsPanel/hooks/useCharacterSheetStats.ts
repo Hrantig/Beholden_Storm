@@ -23,8 +23,7 @@ export function useCharacterSheetStats(args: {
 
     const acBonus = Number(overrides.acBonus ?? 0) || 0;
     const hpMod = (() => {
-      const v = overrides.hpMaxOverride;
-      if (v == null) return 0;
+      const v = overrides.hpMaxBonus;
       const n = Number(v);
       return Number.isFinite(n) ? n : 0;
     })();

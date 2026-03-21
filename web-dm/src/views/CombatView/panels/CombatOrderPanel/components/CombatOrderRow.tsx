@@ -83,9 +83,8 @@ export function CombatOrderRow(props: {
   const rawHpMax = Number(c.hpMax ?? 1);
   const acBonus = Number(c.overrides?.acBonus ?? 0) || 0;
   const hpMod = (() => {
-    const v = c.overrides?.hpMaxOverride;
-    if (v == null) return 0;
-    const n = Number(v); return Number.isFinite(n) ? n : 0;
+    const n = Number(c.overrides?.hpMaxBonus ?? 0);
+    return Number.isFinite(n) ? n : 0;
   })();
   const hpMax = Math.max(1, (rawHpMax || 1) + hpMod);
   const ac = Math.max(0, Number(c.ac ?? 0) + acBonus);

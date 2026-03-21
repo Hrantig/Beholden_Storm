@@ -17,7 +17,7 @@ export interface Timestamps {
 export interface StoredOverrides {
   tempHp: number;
   acBonus: number;
-  hpMaxOverride: number | null;
+  hpMaxBonus: number;
 }
 
 // Alias kept for call-site compatibility.

@@ -15,10 +15,10 @@ type Args = {
   persistCombatState: (next: { round: number; activeId: string | null }) => Promise<void>;
 };
 
-function normalizeHpMaxOverride(v: unknown): number | null {
+function normalizeHpMaxBonus(v: unknown): number | null {
   if (v == null) return null;
   const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return Number.isFinite(n) && n !== 0 ? n : null;
 }
 
 export function useCombatFightActions({
@@ -52,8 +52,8 @@ export function useCombatFightActions({
 
       // Non-player combatants (monsters, iNPCs): restore HP to max and clear conditions/initiative.
       const overrides = c.overrides ?? null;
-      const maxOverride = normalizeHpMaxOverride(overrides?.hpMaxOverride);
-      const max = maxOverride ?? Number(c.hpMax);
+      const hpBonus = normalizeHpMaxBonus(overrides?.hpMaxBonus) ?? 0;
+      const max = Math.max(1, Number(c.hpMax) + hpBonus);
 
       await api(`/api/encounters/${encounterId}/combatants/${c.id}`, {
         method: "PUT",

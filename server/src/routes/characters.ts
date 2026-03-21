@@ -89,8 +89,8 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       wisScore:    liveRow.wis ?? char.wisScore,
       chaScore:    liveRow.cha ?? char.chaScore,
       conditions:  JSON.parse(liveRow.conditions_json || "[]") as { key: string }[],
-      overrides:   JSON.parse(liveRow.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxOverride":null}') as {
-        tempHp: number; acBonus: number; hpMaxOverride: number | null;
+      overrides:   JSON.parse(liveRow.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxBonus":0}') as {
+        tempHp: number; acBonus: number; hpMaxBonus: number;
       },
     };
   }
@@ -255,6 +255,33 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
     const updated = db.prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE id = ?`).get(charId) as Record<string, unknown>;
     res.json(rowToUserCharacter(updated));
+  });
+
+  // Player self-updates their own conditions (writes to players.conditions_json + broadcasts)
+  app.patch("/api/me/characters/:id/conditions", requireAuth, (req, res) => {
+    const charId = requireParam(req, res, "id");
+    if (!charId) return;
+    const userId = (req as any).user.userId;
+    const existing = db
+      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
+      .get(charId, userId) as { id: string } | undefined;
+    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+
+    const conditions = Array.isArray(req.body?.conditions) ? req.body.conditions : [];
+    const conditionsJson = JSON.stringify(conditions);
+    const t = now();
+
+    const assignments = db
+      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
+      .all(charId) as { player_id: string; campaign_id: string }[];
+
+    for (const { player_id, campaign_id } of assignments) {
+      db.prepare("UPDATE players SET conditions_json=?, updated_at=? WHERE id=?")
+        .run(conditionsJson, t, player_id);
+      ctx.broadcast("players:changed", { campaignId: campaign_id });
+    }
+
+    res.json({ ok: true, conditions });
   });
 
   // Delete a user-owned character (cascades to character_campaigns)

@@ -12,7 +12,7 @@ export function useCombatantDerived(combatant: Combatant, player?: Player | null
   const overrides = combatant.overrides ?? null;
   const acBonus = Number(overrides?.acBonus ?? 0) || 0;
   const tempHp = Math.max(0, Number(overrides?.tempHp ?? 0) || 0);
-  function normalizeHpMaxOverride(v: unknown): number | null {
+  function normalizeHpMaxBonus(v: unknown): number | null {
     if (v == null) return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
@@ -26,7 +26,7 @@ export function useCombatantDerived(combatant: Combatant, player?: Player | null
   const hpParsed = parseHP(combatant.hpCurrent, combatant.hpMax);
   const hpCur = hpParsed.current;
   const hpMaxBase = hpParsed.max;
-  const hpMod = normalizeHpMaxOverride(overrides?.hpMaxOverride) ?? 0;
+  const hpMod = normalizeHpMaxBonus(overrides?.hpMaxBonus) ?? 0;
   const hpMax = hpMaxBase != null ? Math.max(1, hpMaxBase + hpMod) : null;
 
   const abilities = ABILITIES.map((key) => {

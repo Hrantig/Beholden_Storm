@@ -6,7 +6,7 @@ import type { StoredOverrides, StoredDeathSaves } from "../server/userData.js";
 export const DEFAULT_OVERRIDES: StoredOverrides = Object.freeze({
   tempHp: 0,
   acBonus: 0,
-  hpMaxOverride: null,
+  hpMaxBonus: 0,
 });
 
 export const DEFAULT_DEATH_SAVES: StoredDeathSaves = Object.freeze({

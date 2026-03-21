@@ -17,9 +17,9 @@ export const AttackOverrideSchema = z.record(
   }).passthrough()
 ).nullable();
 
-/** Temporary HP / AC bonus / HP max override for a combatant or player. */
+/** Temporary HP / AC bonus / HP max bonus for a combatant or player. */
 export const OverridesSchema = z.object({
   tempHp: z.number().default(0),
   acBonus: z.number().default(0),
-  hpMaxOverride: z.number().nullable().default(null),
+  hpMaxBonus: z.number().default(0),
 });

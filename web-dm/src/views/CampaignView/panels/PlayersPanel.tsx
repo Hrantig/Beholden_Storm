@@ -20,8 +20,7 @@ export function PlayersPanel(props: {
     return [...props.players].sort((a, b) => a.characterName.localeCompare(b.characterName)).map((p) => {
       const acBonus = Number(p.overrides?.acBonus ?? 0) || 0;
       const hpMod = (() => {
-        const v = p.overrides?.hpMaxOverride;
-        const n = Number(v);
+        const n = Number(p.overrides?.hpMaxBonus ?? 0);
         return Number.isFinite(n) ? n : 0;
       })();
       return {
