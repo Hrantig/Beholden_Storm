@@ -62,6 +62,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         `SELECT player_name, character_name, class, species, level,
                 hp_current, hp_max, ac, speed,
                 str, dex, con, int, wis, cha,
+                color, image_url,
                 conditions_json, overrides_json, death_saves_json
          FROM players
          WHERE id IN (${playerIds.map(() => "?").join(",")})
@@ -72,6 +73,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         hp_current: number; hp_max: number; ac: number; speed: number | null;
         str: number | null; dex: number | null; con: number | null;
         int: number | null; wis: number | null; cha: number | null;
+        color: string | null; image_url: string | null;
         conditions_json: string; overrides_json: string; death_saves_json: string | null;
       } | undefined;
     if (!liveRow) return char;
@@ -92,6 +94,8 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       intScore:    liveRow.int ?? char.intScore,
       wisScore:    liveRow.wis ?? char.wisScore,
       chaScore:    liveRow.cha ?? char.chaScore,
+      color:       liveRow.color ?? char.color,
+      imageUrl:    liveRow.image_url ?? char.imageUrl,
       conditions:  JSON.parse(liveRow.conditions_json || "[]") as { key: string }[],
       overrides:   JSON.parse(liveRow.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxBonus":0}') as {
         tempHp: number; acBonus: number; hpMaxBonus: number;
@@ -115,6 +119,20 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
   function assignmentsToJson(assignments: Assignment[]) {
     return assignments.map((a) => ({ id: a.id, campaignId: a.campaign_id, campaignName: a.campaign_name, playerId: a.player_id }));
+  }
+
+  function broadcastPlayerCombatantChanges(playerId: string) {
+    const encounterIds = (
+      db.prepare(
+        `SELECT DISTINCT encounter_id
+         FROM combatants
+         WHERE base_type = 'player' AND base_id = ?`
+      ).all(playerId) as { encounter_id: string }[]
+    ).map((r) => r.encounter_id);
+
+    for (const encounterId of encounterIds) {
+      ctx.broadcast("encounter:combatantsChanged", { encounterId });
+    }
   }
 
   // List all user-owned characters with campaign assignment info
@@ -286,6 +304,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       db.prepare("UPDATE players SET conditions_json=?, updated_at=? WHERE id=?")
         .run(conditionsJson, t, player_id);
       ctx.broadcast("players:changed", { campaignId: campaign_id });
+      broadcastPlayerCombatantChanges(player_id);
     }
 
     res.json({ ok: true, conditions });
@@ -320,6 +339,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       db.prepare("UPDATE players SET death_saves_json=?, updated_at=? WHERE id=?")
         .run(deathSavesJson, t, player_id);
       ctx.broadcast("players:changed", { campaignId: campaign_id });
+      broadcastPlayerCombatantChanges(player_id);
     }
 
     res.json({ ok: true, deathSaves });
