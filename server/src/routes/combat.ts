@@ -13,6 +13,7 @@ import {
   createPlayerCombatant,
   nextLabelNumber,
   syncCombatantToPlayer,
+  hydratePlayerCombatant,
 } from "../services/combat.js";
 import {
   ConditionInstanceSchema,
@@ -387,7 +388,7 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
       if (!existingRow)
         return res.status(404).json({ ok: false, message: "Not found" });
 
-      const existing = rowToCombatant(existingRow);
+      const existing = hydratePlayerCombatant(db, rowToCombatant(existingRow));
       const body = parseBody(CombatantUpdateBody, req);
       const t = now();
 

@@ -1,7 +1,7 @@
 // server/src/services/combat.ts
 import type Database from "better-sqlite3";
 import { now, uid } from "../lib/runtime.js";
-import { rowToCombatant, COMBATANT_COLS } from "../lib/db.js";
+import { rowToCombatant, rowToPlayer, COMBATANT_COLS, PLAYER_COLS } from "../lib/db.js";
 import type { StoredCombatant, StoredPlayer } from "../server/userData.js";
 import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
 
@@ -117,6 +117,35 @@ export function syncCombatantToPlayer(
     combatant.baseId
   );
   return pRow.campaign_id;
+}
+
+/**
+ * For player combatants, rehydrate mutable persistent fields from the canonical
+ * players row so encounter-scoped updates never push stale snapshot values back.
+ */
+export function hydratePlayerCombatant(
+  db: Database.Database,
+  combatant: StoredCombatant
+): StoredCombatant {
+  if (combatant.baseType !== "player") return combatant;
+  const pRow = db
+    .prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`)
+    .get(combatant.baseId) as Record<string, unknown> | undefined;
+  if (!pRow) return combatant;
+  const player = rowToPlayer(pRow);
+  return {
+    ...combatant,
+    name: player.characterName,
+    label: combatant.label || player.characterName,
+    hpCurrent: player.hpCurrent,
+    hpMax: player.hpMax,
+    ac: player.ac,
+    conditions: player.conditions ?? [],
+    overrides: player.overrides ?? combatant.overrides,
+    ...((player.deathSaves ?? combatant.deathSaves) !== undefined
+      ? { deathSaves: player.deathSaves ?? combatant.deathSaves }
+      : {}),
+  };
 }
 
 /** Load all combatants for an encounter, sorted by position. */

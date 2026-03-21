@@ -62,7 +62,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         `SELECT player_name, character_name, class, species, level,
                 hp_current, hp_max, ac, speed,
                 str, dex, con, int, wis, cha,
-                conditions_json, overrides_json
+                conditions_json, overrides_json, death_saves_json
          FROM players
          WHERE id IN (${playerIds.map(() => "?").join(",")})
          ORDER BY updated_at DESC LIMIT 1`
@@ -72,7 +72,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         hp_current: number; hp_max: number; ac: number; speed: number | null;
         str: number | null; dex: number | null; con: number | null;
         int: number | null; wis: number | null; cha: number | null;
-        conditions_json: string; overrides_json: string;
+        conditions_json: string; overrides_json: string; death_saves_json: string | null;
       } | undefined;
     if (!liveRow) return char;
     return {
@@ -96,6 +96,9 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       overrides:   JSON.parse(liveRow.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxBonus":0}') as {
         tempHp: number; acBonus: number; hpMaxBonus: number;
       },
+      deathSaves:  liveRow.death_saves_json
+        ? JSON.parse(liveRow.death_saves_json) as { success: number; fail: number }
+        : char.deathSaves,
     };
   }
 
