@@ -337,6 +337,18 @@ function weaponDamageDice(item: InventoryItem, state: "mainhand-1h" | "mainhand-
   return item.dmg1 ?? item.dmg2 ?? null;
 }
 
+function totalInventoryWeight(items: InventoryItem[]): number {
+  return items.reduce((sum, item) => {
+    const weight = typeof item.weight === "number" && Number.isFinite(item.weight) ? item.weight : 0;
+    const qty = typeof item.quantity === "number" && Number.isFinite(item.quantity) ? item.quantity : 1;
+    return sum + (weight * Math.max(1, qty));
+  }, 0);
+}
+
+function formatWeight(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function hasWeaponProficiency(item: InventoryItem, prof: ProficiencyMap | undefined): boolean {
   const names = (prof?.weapons ?? []).map((w) => w.name.toLowerCase());
   const itemName = item.name.replace(/\s+\[2024\]\s*$/i, "").toLowerCase();
@@ -1262,14 +1274,8 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
   }
 
   async function addItem(payload?: InventoryPickerPayload) {
-    const legacyName = newName.trim();
-    const next = payload ?? {
-      source: "custom" as const,
-      name: legacyName,
-      quantity: newQty,
-      description: newNotes.trim() || undefined,
-    };
-    if (!next.name) return;
+    const next = payload;
+    if (!next?.name) return;
     const item: InventoryItem = {
       id: uid(),
       name: next.name,
@@ -1291,10 +1297,6 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
       description: next.description?.trim() || undefined,
     };
     await persist([...items, item]);
-    setAdding(false);
-    setNewName("");
-    setNewQty(1);
-    setNewNotes("");
     setPickerOpen(false);
   }
 
@@ -1360,13 +1362,39 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
   const backpack = items.filter((it) => getEquipState(it) === "backpack");
   const actionItems = equipped.filter((it) => isWeaponItem(it));
   const prof = charData?.proficiencies;
+  const carriedWeight = totalInventoryWeight(items);
+  const strScore = Math.max(0, char.strScore ?? 0);
+  const carryCapacity = strScore * 15;
+  const overCapacity = carryCapacity > 0 && carriedWeight > carryCapacity;
 
   return (
     <Panel>
-      <PanelTitle color="#fbbf24">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <PanelTitle color="#fbbf24" style={{ flex: 1, marginBottom: 0 }}>
         Inventory
         {saving && <span style={{ fontSize: 9, color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}
       </PanelTitle>
+        <button
+          type="button"
+          onClick={() => { setPickerOpen(true); }}
+          title="Add item"
+          style={inventoryHeaderAddBtn}
+        >
+          +
+        </button>
+      </div>
+
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        marginBottom: 10,
+        padding: "0 2px",
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: overCapacity ? C.red : C.muted }}>
+          {formatWeight(carriedWeight)} / {formatWeight(carryCapacity)} lb
+        </div>
+      </div>
 
       {/* Equipped */}
       {equipped.length > 0 && (
@@ -1432,20 +1460,7 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
             </button>
           </div>
         </div>
-      ) : (
-        <button
-          onClick={() => { setPickerOpen(true); }}
-          style={{
-            marginTop: items.length > 0 ? 8 : 0,
-            background: "transparent",
-            border: "1px dashed rgba(255,255,255,0.18)",
-            borderRadius: 7, padding: "5px 12px",
-            color: C.muted, fontSize: 12, cursor: "pointer",
-            width: "100%",
-          }}>
-          + Add item
-        </button>
-      )}
+      ) : null}
 
       <InventoryItemPickerModal
         isOpen={pickerOpen}
@@ -2047,13 +2062,14 @@ function Panel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function PanelTitle({ children, color }: { children: React.ReactNode; color: string }) {
+function PanelTitle({ children, color, style }: { children: React.ReactNode; color: string; style?: React.CSSProperties }) {
   return (
     <div style={{
       fontSize: 10, fontWeight: 700, textTransform: "uppercase",
       letterSpacing: "0.1em", color,
       marginBottom: 10,
       display: "flex", alignItems: "center", gap: 8,
+      ...style,
     }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{children}</span>
       <div style={{ flex: 1, height: 1, background: `${color}30` }} />
@@ -2152,6 +2168,24 @@ const stepperBtn: React.CSSProperties = {
   color: C.muted, cursor: "pointer", fontSize: 13,
   display: "flex", alignItems: "center", justifyContent: "center",
   padding: 0, lineHeight: 1,
+};
+
+const inventoryHeaderAddBtn: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  border: "none",
+  background: "#f0a500",
+  color: "#0d1525",
+  fontSize: 28,
+  lineHeight: 1,
+  padding: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  flexShrink: 0,
+  boxShadow: "0 10px 24px rgba(240,165,0,0.18)",
 };
 
 function inventoryEquipBtn(active: boolean, color: string): React.CSSProperties {
