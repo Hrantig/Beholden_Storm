@@ -45,6 +45,7 @@ const ItemBody = z.object({
   attunement: z.boolean().optional(),
   magic: z.boolean().optional(),
   weight: z.number().nullable().optional(),
+  value: z.number().nullable().optional(),
   dmg1: z.string().trim().nullable().optional(),
   dmg2: z.string().trim().nullable().optional(),
   dmgType: z.string().trim().nullable().optional(),
@@ -143,6 +144,7 @@ function buildItemRecord(id: string, b: ItemBodyType) {
     rarity: rarityVal, type: typeVal, typeKey: typeKeyVal, type_key: typeKeyVal,
     attunement, magic,
     weight: b.weight ?? null,
+    value: b.value ?? null,
     dmg1: b.dmg1?.trim() || null,
     dmg2: b.dmg2?.trim() || null,
     dmgType: b.dmgType?.trim() || null,
@@ -151,6 +153,10 @@ function buildItemRecord(id: string, b: ItemBodyType) {
     text: textArr,
   };
   return { name, nameKey, rarityVal, typeVal, typeKeyVal, attunement, magic, data };
+}
+
+function baseItemName(name: string): string | null {
+  return String(name).replace(/\s+\[2024\]\s*$/i, "").trim() || null;
 }
 
 type SpellBodyType = z.infer<typeof SpellBody>;
@@ -290,14 +296,23 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
 
   // --- Items ---------------------------------------------------------------
   app.get("/api/compendium/items", (_req, res) => {
-    const rows = db
+    const rawRows = db
       .prepare("SELECT id, name, rarity, type, type_key, attunement, magic FROM compendium_items ORDER BY name COLLATE NOCASE")
       .all() as { id: string; name: string; rarity: string | null; type: string | null; type_key: string | null; attunement: number; magic: number; }[];
-    res.json(rows.map((r) => ({
-      id: r.id, name: r.name,
-      rarity: r.rarity ?? null, type: r.type ?? null, typeKey: r.type_key ?? null,
-      attunement: Boolean(r.attunement), magic: Boolean(r.magic),
-    })));
+    const rarityByBaseName = new Map<string, string>();
+    for (const row of rawRows) {
+      const baseName = baseItemName(row.name);
+      if (row.rarity && baseName) rarityByBaseName.set(baseName, row.rarity);
+    }
+    res.json(rawRows.map((r) => {
+      const baseName = baseItemName(r.name);
+      return {
+        id: r.id, name: r.name,
+        rarity: r.rarity ?? (baseName ? rarityByBaseName.get(baseName) ?? null : null),
+        type: r.type ?? null, typeKey: r.type_key ?? null,
+        attunement: Boolean(r.attunement), magic: Boolean(r.magic),
+      };
+    }));
   });
 
   app.get("/api/compendium/items/:itemId", (req, res) => {
@@ -309,11 +324,16 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     if (!row)
       return res.status(404).json({ ok: false, message: "Item not found in compendium" });
     const it = JSON.parse(row.data_json as string);
+    const rowBaseName = baseItemName(String(row.name));
+    const fallbackRarity = row.rarity == null && rowBaseName
+      ? ((db.prepare("SELECT rarity FROM compendium_items WHERE name = ?").get(rowBaseName) as { rarity: string | null } | undefined)?.rarity ?? null)
+      : null;
     res.json({
       id: row.id, name: row.name, nameKey: row.name_key ?? null,
-      rarity: row.rarity ?? null, type: row.type ?? null, typeKey: row.type_key ?? null,
+      rarity: row.rarity ?? fallbackRarity, type: row.type ?? null, typeKey: row.type_key ?? null,
       attunement: Boolean(row.attunement), magic: Boolean(row.magic),
       weight: it.weight ?? null,
+      value: it.value ?? null,
       dmg1: it.dmg1 ?? null,
       dmg2: it.dmg2 ?? null,
       dmgType: it.dmgType ?? null,

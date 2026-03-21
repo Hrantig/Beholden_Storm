@@ -406,6 +406,7 @@ function xmlItemToJson(it: any): any | null {
   const dmg2 = it?.dmg2 != null ? String(it.dmg2).trim() : null;
   const dmgType = it?.dmgType != null ? String(it.dmgType).trim() : null;
   const weight = it?.weight != null ? Number(it.weight) : null;
+  const value = it?.value != null ? Number(it.value) : null;
 
   // Properties: single tag with comma-separated codes e.g. "F,L" or "2H"
   const propertyRaw = it?.property != null ? String(it.property).trim() : "";
@@ -434,6 +435,7 @@ function xmlItemToJson(it: any): any | null {
     attunement,
     magic,
     weight: Number.isFinite(weight) ? weight : null,
+    value: Number.isFinite(value) ? value : null,
     dmg1: dmg1 || null,
     dmg2: dmg2 || null,
     dmgType: dmgType || null,

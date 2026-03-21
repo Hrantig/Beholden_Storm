@@ -38,6 +38,7 @@ export interface InventoryItem {
   name: string;
   quantity: number;
   equipped: boolean;
+  equipState?: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand";
   notes?: string;
   source?: "compendium" | "custom";
   itemId?: string;
@@ -45,6 +46,12 @@ export interface InventoryItem {
   type?: string | null;
   attunement?: boolean;
   magic?: boolean;
+  weight?: number | null;
+  value?: number | null;
+  dmg1?: string | null;
+  dmg2?: string | null;
+  dmgType?: string | null;
+  properties?: string[];
   description?: string;
 }
 
@@ -57,6 +64,12 @@ interface InventoryPickerPayload {
   type?: string | null;
   attunement?: boolean;
   magic?: boolean;
+  weight?: number | null;
+  value?: number | null;
+  dmg1?: string | null;
+  dmg2?: string | null;
+  dmgType?: string | null;
+  properties?: string[];
   description?: string;
 }
 
@@ -67,6 +80,13 @@ interface CompendiumItemDetail {
   type: string | null;
   attunement: boolean;
   magic: boolean;
+  weight: number | null;
+  value: number | null;
+  dmg1: string | null;
+  dmg2: string | null;
+  dmgType: string | null;
+  properties: string[];
+  modifiers?: Array<{ category?: string; text?: string }>;
   text: string | string[];
 }
 
@@ -95,6 +115,39 @@ interface ConditionInstance {
 }
 
 const INVENTORY_PICKER_ROW_HEIGHT = 52;
+
+const ITEM_DAMAGE_TYPE_LABELS: Record<string, string> = {
+  B: "Bludgeoning",
+  P: "Piercing",
+  S: "Slashing",
+  A: "Acid",
+  C: "Cold",
+  F: "Fire",
+  FC: "Force",
+  L: "Lightning",
+  N: "Necrotic",
+  PS: "Poison",
+  PY: "Psychic",
+  R: "Radiant",
+  T: "Thunder",
+};
+
+const ITEM_PROPERTY_LABELS: Record<string, string> = {
+  A: "Ammunition",
+  AF: "Ammunition (Firearm)",
+  BF: "Burst Fire",
+  F: "Finesse",
+  H: "Heavy",
+  L: "Light",
+  LD: "Loading",
+  M: "Martial",
+  R: "Reach",
+  RC: "Reload",
+  S: "Special",
+  T: "Thrown",
+  V: "Versatile",
+  "2H": "Two-Handed",
+};
 
 interface Character {
   id: string;
@@ -208,6 +261,87 @@ function conditionDisplayLabel(cond: ConditionInstance): string {
     (typeof cond.sourceName === "string" && cond.sourceName.trim());
 
   return source ? `${base} (${source})` : base;
+}
+
+function formatItemDamageType(code: string | null | undefined): string | null {
+  const key = String(code ?? "").trim().toUpperCase();
+  if (!key) return null;
+  return ITEM_DAMAGE_TYPE_LABELS[key] ?? key;
+}
+
+function formatItemProperties(properties: string[] | null | undefined): string {
+  return (properties ?? [])
+    .map((code) => {
+      const key = String(code ?? "").trim().toUpperCase();
+      return ITEM_PROPERTY_LABELS[key] ?? key;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function getEquipState(item: InventoryItem): "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand" {
+  if (item.equipState) return item.equipState;
+  return item.equipped ? "mainhand-1h" : "backpack";
+}
+
+function isWeaponItem(item: InventoryItem): boolean {
+  return Boolean(item.dmg1) || /weapon/i.test(item.type ?? "");
+}
+
+function hasItemProperty(item: InventoryItem, code: string): boolean {
+  return (item.properties ?? []).some((p) => String(p).trim().toUpperCase() === code.toUpperCase());
+}
+
+function isShieldOrTorch(item: InventoryItem): boolean {
+  const type = String(item.type ?? "").toLowerCase();
+  const name = String(item.name ?? "").toLowerCase();
+  return type.includes("shield") || name.includes("shield") || name.includes("torch");
+}
+
+function hasDualWielder(charData: CharacterData | null): boolean {
+  return (charData?.chosenOptionals ?? []).some((f) => /dual wield/i.test(f));
+}
+
+function canEquipOffhand(item: InventoryItem, charData: CharacterData | null): boolean {
+  if (isShieldOrTorch(item)) return true;
+  if (!isWeaponItem(item)) return false;
+  if (hasItemProperty(item, "L")) return true;
+  if (hasDualWielder(charData) && (hasItemProperty(item, "F") || hasItemProperty(item, "V"))) return true;
+  return false;
+}
+
+function canUseTwoHands(item: InventoryItem): boolean {
+  return isWeaponItem(item) && Boolean(item.dmg2);
+}
+
+function isMartialWeapon(item: InventoryItem): boolean {
+  return hasItemProperty(item, "M");
+}
+
+function isRangedWeapon(item: InventoryItem): boolean {
+  return /ranged/i.test(item.type ?? "");
+}
+
+function weaponAbilityMod(item: InventoryItem, char: Character): number {
+  const strMod = mod(char.strScore);
+  const dexMod = mod(char.dexScore);
+  if (hasItemProperty(item, "F")) return Math.max(strMod, dexMod);
+  if (isRangedWeapon(item)) return dexMod;
+  return strMod;
+}
+
+function weaponDamageDice(item: InventoryItem, state: "mainhand-1h" | "mainhand-2h" | "offhand"): string | null {
+  if (state === "mainhand-2h") return item.dmg2 ?? item.dmg1 ?? null;
+  return item.dmg1 ?? item.dmg2 ?? null;
+}
+
+function hasWeaponProficiency(item: InventoryItem, prof: ProficiencyMap | undefined): boolean {
+  const names = (prof?.weapons ?? []).map((w) => w.name.toLowerCase());
+  const itemName = item.name.replace(/\s+\[2024\]\s*$/i, "").toLowerCase();
+  if (names.some((n) => n === itemName || itemName.includes(n) || n.includes(itemName))) return true;
+  if (isMartialWeapon(item) && names.some((n) => n.includes("martial weapon"))) return true;
+  if (isWeaponItem(item) && names.some((n) => n.includes("simple weapon"))) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,13 +500,14 @@ export function CharacterView() {
   }
 
   return (
-    <Wrap>
-      {/* ── Character header / HUD ───────────────────────────────────── */}
-      <div style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 14, padding: "18px 20px", marginBottom: 20,
-      }}>
+    <Wrap wide>
+      {/* ── 4-column layout ──────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, alignItems: "flex-start" }}>
+
+        {/* ── COL 1: HUD + Abilities & Saves + Skills + Proficiencies ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* ── Player HUD ─────────────────────────────────────────────── */}
+        <Panel>
         {/* Top row: portrait + info + edit */}
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
           <div style={{
@@ -638,7 +773,7 @@ export function CharacterView() {
           </div>
         )}
 
-      </div>
+        </Panel>
 
       {/* ── Condition picker drawer (fixed overlay) ───────────────────────── */}
       {condPickerOpen && (
@@ -719,78 +854,47 @@ export function CharacterView() {
         </>
       )}
 
-      {/* ── Two-column body ──────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
-
-        {/* ── LEFT: Abilities + Saves + Skills ─────────────────────── */}
-        <div style={{ flex: "0 0 270px", minWidth: 230, display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* Ability Scores */}
+          {/* Ability Scores + Saving Throws (combined) */}
           <Panel>
-            <PanelTitle color={accentColor}>Ability Scores</PanelTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7 }}>
-              {ABILITY_KEYS.map((k) => {
-                const score = scores[k];
-                const m = mod(score);
-                const isSave = prof ? isProficientIn(prof.saves, ABILITY_FULL[k]) : false;
-                return (
-                  <div key={k} style={{
-                    textAlign: "center", padding: "8px 4px", borderRadius: 9,
-                    background: "rgba(255,255,255,0.05)",
-                    border: `1px solid ${isSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`,
-                    position: "relative",
-                  }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: "0.08em", marginBottom: 2 }}>
-                      {ABILITY_LABELS[k]}
-                    </div>
-                    <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1, color: isSave ? accentColor : C.text }}>
-                      {m >= 0 ? "+" : ""}{m}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{score ?? "—"}</div>
-                    {isSave && (
-                      <div style={{
-                        position: "absolute", top: 3, right: 4,
-                        width: 5, height: 5, borderRadius: "50%",
-                        background: accentColor,
-                      }} title="Save proficiency" />
-                    )}
-                  </div>
-                );
-              })}
+            <PanelTitle color={accentColor}>Abilities &amp; Saves</PanelTitle>
+            {/* Header row */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 44px 36px 32px 32px)", columnGap: 4, rowGap: 0, marginBottom: 4 }}>
+              <div /><div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SCORE</div>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>MOD</div>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SAVE</div>
+              <div /><div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SCORE</div>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>MOD</div>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SAVE</div>
             </div>
-          </Panel>
-
-          {/* Saving Throws */}
-          <Panel>
-            <PanelTitle color={accentColor}>Saving Throws</PanelTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {ABILITY_KEYS.map((k) => {
-                const isProfSave = prof ? isProficientIn(prof.saves, ABILITY_FULL[k]) : false;
-                const bonus = mod(scores[k]) + (isProfSave ? pb : 0);
-                const src = prof?.saves.find((s) => s.name.toLowerCase() === ABILITY_FULL[k].toLowerCase())?.source;
-                return (
-                  <div key={k} style={{
-                    display: "flex", alignItems: "center", gap: 7,
-                    padding: "3px 4px", borderRadius: 5,
-                  }}>
-                    <ProfDot filled={isProfSave} color={accentColor} />
-                    <span style={{ fontSize: 11, color: C.muted, fontWeight: 700, width: 28 }}>
-                      {ABILITY_LABELS[k]}
-                    </span>
-                    <span style={{ fontSize: 11, color: C.muted, flex: 1 }}>{ABILITY_FULL[k]}</span>
-                    <span style={{
-                      fontSize: 13, fontWeight: 700, minWidth: 28, textAlign: "right",
-                      color: isProfSave ? accentColor : C.text,
-                    }}>
-                      {isProfSave && src
-                        ? <Tooltip text={src}>{fmtMod(bonus)}</Tooltip>
-                        : fmtMod(bonus)
-                      }
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            {/* Data rows: STR/INT, DEX/WIS, CON/CHA */}
+            {(["str", "dex", "con"] as AbilKey[]).map((leftKey, i) => {
+              const rightKey = (["int", "wis", "cha"] as AbilKey[])[i];
+              return (
+                <div key={leftKey} style={{ display: "grid", gridTemplateColumns: "repeat(2, 44px 36px 32px 32px)", columnGap: 4, rowGap: 0, alignItems: "center", padding: "3px 0" }}>
+                  {([leftKey, rightKey] as AbilKey[]).map((k) => {
+                    const score = scores[k];
+                    const m = mod(score);
+                    const isProfSave = prof ? isProficientIn(prof.saves, ABILITY_FULL[k]) : false;
+                    const save = m + (isProfSave ? pb : 0);
+                    return (
+                      <React.Fragment key={k}>
+                        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
+                          {ABILITY_LABELS[k]}
+                        </div>
+                        <div style={{ padding: "4px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: 14, fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
+                          {score ?? "—"}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: C.text }}>{fmtMod(m)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: isProfSave ? accentColor : C.text, position: "relative" }}>
+                          {fmtMod(save)}
+                          {isProfSave && <span style={{ position: "absolute", top: -2, right: -2, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </Panel>
 
           {/* Skills */}
@@ -834,12 +938,7 @@ export function CharacterView() {
             </div>
           </Panel>
 
-        </div>
-
-        {/* ── RIGHT: Combat + Proficiencies + Spells + Features + Inventory ── */}
-        <div style={{ flex: "1 1 360px", minWidth: 280, display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* Proficiencies */}
+          {/* Proficiencies & Languages */}
           {prof && (() => {
             const sections = [
               { label: "Armor",     items: prof.armor,     color: "#a78bfa" },
@@ -872,6 +971,89 @@ export function CharacterView() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </Panel>
+            );
+          })()}
+
+        </div>
+        {/* end COL 1 */}
+
+        {/* ── COL 2: Actions + Spells & Invocations ────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* Actions */}
+          {(() => {
+            const inventory: InventoryItem[] = ((char.characterData?.inventory ?? []) as InventoryItem[]).map((item) => ({
+              ...item, equipState: getEquipState(item), properties: item.properties ?? [],
+            }));
+            const actionItems = inventory.filter((it) => getEquipState(it) !== "backpack" && isWeaponItem(it));
+            const strMod = mod(char.strScore);
+            const unarmedToHit = strMod + pb;
+            const unarmedDmg = 1 + strMod;
+            return (
+              <Panel>
+                <PanelTitle color={accentColor}>Actions</PanelTitle>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", marginBottom: 6 }}>
+                  {(["ATTACK", "RANGE", "HIT / DC", "DAMAGE / NOTES"] as const).map((h) => (
+                    <div key={h} style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, paddingBottom: 4, borderBottom: `1px solid rgba(255,255,255,0.08)` }}>{h}</div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {actionItems.map((it) => {
+                    const state = getEquipState(it);
+                    const attackState = state === "mainhand-2h" ? "mainhand-2h" : state === "offhand" ? "offhand" : "mainhand-1h";
+                    const dmg = weaponDamageDice(it, attackState);
+                    const ability = weaponAbilityMod(it, char);
+                    const proficient = attackState !== "offhand" && hasWeaponProficiency(it, prof);
+                    const toHit = ability + (proficient ? pb : 0);
+                    const damageType = formatItemDamageType(it.dmgType);
+                    const props = formatItemProperties(it.properties);
+                    const isReach = hasItemProperty(it, "R");
+                    const rangeLabel = isRangedWeapon(it)
+                      ? (it.properties?.find((p) => /^\d/.test(p)) ?? "Range")
+                      : `${isReach ? "10" : "5"} ft.`;
+                    const dmgText = dmg ? `${dmg}${ability >= 0 ? "+" : ""}${ability}${damageType ? ` ${damageType}` : ""}` : "—";
+                    const modeLabel = attackState === "mainhand-2h" ? "2H" : attackState === "offhand" ? "Offhand" : null;
+                    return (
+                      <div key={`${it.id}:${attackState}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0", borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</span>
+                            {modeLabel && <span style={{ fontSize: 9, fontWeight: 800, color: accentColor, border: `1px solid ${accentColor}44`, background: `${accentColor}18`, borderRadius: 999, padding: "1px 5px" }}>{modeLabel}</span>}
+                            {!proficient && <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>No proficiency</span>}
+                          </div>
+                          <div style={{ fontSize: 10, color: C.muted }}>{isWeaponItem(it) ? "Melee Weapon" : it.type ?? ""}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>{rangeLabel}</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: C.text, textAlign: "center", minWidth: 36,
+                          border: `1px solid ${proficient ? accentColor + "55" : "rgba(255,255,255,0.15)"}`,
+                          borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
+                          {fmtMod(toHit)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dmgText}</div>
+                          {props && <div style={{ fontSize: 11, color: C.muted }}>{props}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Unarmed Strike */}
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>Unarmed Strike</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>Melee Attack</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>5 ft.</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: C.text, textAlign: "center", minWidth: 36,
+                      border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
+                      {fmtMod(unarmedToHit)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{unarmedDmg}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>Bludgeoning</div>
+                    </div>
+                  </div>
                 </div>
               </Panel>
             );
@@ -924,6 +1106,23 @@ export function CharacterView() {
             </Panel>
           )}
 
+        </div>
+        {/* end COL 2 */}
+
+        {/* ── COL 3: Inventory ─────────────────────────────────────────── */}
+        <div>
+          <InventoryPanel
+            char={char}
+            charData={char.characterData}
+            accentColor={accentColor}
+            onSave={saveCharacterData}
+          />
+        </div>
+        {/* end COL 3 */}
+
+        {/* ── COL 4: Everything Else ───────────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
           {/* Class Features */}
           {char.characterData?.chosenOptionals && char.characterData.chosenOptionals.length > 0 && (
             <Panel>
@@ -942,15 +1141,6 @@ export function CharacterView() {
             </Panel>
           )}
 
-          {/* Inventory */}
-          <InventoryPanel
-            charId={char.id}
-            charName={char.name}
-            charData={char.characterData}
-            accentColor={accentColor}
-            onSave={saveCharacterData}
-          />
-
           {/* Back button */}
           <div style={{ paddingTop: 4 }}>
             <button
@@ -965,7 +1155,10 @@ export function CharacterView() {
           </div>
 
         </div>
+        {/* end COL 4 */}
+
       </div>
+      {/* end 4-column grid */}
     </Wrap>
   );
 }
@@ -974,15 +1167,18 @@ export function CharacterView() {
 // Inventory Panel
 // ---------------------------------------------------------------------------
 
-function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
-  charId: string;
-  charName: string;
+function InventoryPanel({ char, charData, accentColor, onSave }: {
+  char: Character;
   charData: CharacterData | null;
   accentColor: string;
   onSave: (data: CharacterData) => Promise<unknown>;
 }) {
   const [items, setItems] = useState<InventoryItem[]>(() =>
-    (charData?.inventory ?? []) as InventoryItem[]
+    ((charData?.inventory ?? []) as InventoryItem[]).map((item) => ({
+      ...item,
+      equipState: getEquipState(item),
+      properties: item.properties ?? [],
+    }))
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -1016,12 +1212,19 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
       name: next.name,
       quantity: Math.max(1, next.quantity),
       equipped: false,
+      equipState: "backpack",
       source: next.source,
       itemId: next.itemId,
       rarity: next.rarity ?? null,
       type: next.type ?? null,
       attunement: next.attunement ?? false,
       magic: next.magic ?? false,
+      weight: next.weight ?? null,
+      value: next.value ?? null,
+      dmg1: next.dmg1 ?? null,
+      dmg2: next.dmg2 ?? null,
+      dmgType: next.dmgType ?? null,
+      properties: next.properties ?? [],
       description: next.description?.trim() || undefined,
     };
     await persist([...items, item]);
@@ -1032,8 +1235,49 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
     setPickerOpen(false);
   }
 
-  async function toggleEquipped(id: string) {
-    await persist(items.map((it) => it.id === id ? { ...it, equipped: !it.equipped } : it));
+  async function setEquipStateFor(id: string, state: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand") {
+    const updated = items.map((it) => {
+      if (it.id === id) return { ...it, equipped: state !== "backpack", equipState: state };
+      const currentState = getEquipState(it);
+      if (state === "offhand" && currentState === "mainhand-2h") {
+        return canUseTwoHands(it)
+          ? { ...it, equipped: true, equipState: "mainhand-1h" as const }
+          : { ...it, equipped: false, equipState: "backpack" as const };
+      }
+      if (state === "mainhand-2h" && currentState === "offhand") {
+        return { ...it, equipped: false, equipState: "backpack" as const };
+      }
+      if (state.startsWith("mainhand") && currentState.startsWith("mainhand")) {
+        return { ...it, equipped: false, equipState: "backpack" as const };
+      }
+      if (state === "offhand" && currentState === "offhand") {
+        return { ...it, equipped: false, equipState: "backpack" as const };
+      }
+      return { ...it, equipped: currentState !== "backpack", equipState: currentState };
+    });
+    await persist(updated);
+  }
+
+  async function cycleMainHand(id: string) {
+    const item = items.find((it) => it.id === id);
+    if (!item || !isWeaponItem(item)) return;
+    const state = getEquipState(item);
+    if (state === "backpack" || state === "offhand") {
+      await setEquipStateFor(id, "mainhand-1h");
+      return;
+    }
+    if (state === "mainhand-1h" && canUseTwoHands(item)) {
+      await setEquipStateFor(id, "mainhand-2h");
+      return;
+    }
+    await setEquipStateFor(id, "backpack");
+  }
+
+  async function toggleOffhand(id: string) {
+    const item = items.find((it) => it.id === id);
+    if (!item || !canEquipOffhand(item, charData)) return;
+    const state = getEquipState(item);
+    await setEquipStateFor(id, state === "offhand" ? "backpack" : "offhand");
   }
 
   async function removeItem(id: string) {
@@ -1049,8 +1293,10 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
     await persist(updated);
   }
 
-  const equipped = items.filter((it) => it.equipped);
-  const backpack = items.filter((it) => !it.equipped);
+  const equipped = items.filter((it) => getEquipState(it) !== "backpack");
+  const backpack = items.filter((it) => getEquipState(it) === "backpack");
+  const actionItems = equipped.filter((it) => isWeaponItem(it));
+  const prof = charData?.proficiencies;
 
   return (
     <Panel>
@@ -1065,7 +1311,10 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
           <div style={subLabelStyle}>Equipped</div>
           {equipped.map((it) => (
             <ItemRow key={it.id} item={it} accentColor={accentColor}
-              onToggle={toggleEquipped} onRemove={removeItem} onQty={changeQty} />
+              charData={charData}
+              onCycleMain={cycleMainHand}
+              onToggleOffhand={toggleOffhand}
+              onRemove={removeItem} onQty={changeQty} />
           ))}
         </div>
       )}
@@ -1076,7 +1325,10 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
           <div style={subLabelStyle}>{equipped.length > 0 ? "Backpack" : "Items"}</div>
           {backpack.map((it) => (
             <ItemRow key={it.id} item={it} accentColor={accentColor}
-              onToggle={toggleEquipped} onRemove={removeItem} onQty={changeQty} />
+              charData={charData}
+              onCycleMain={cycleMainHand}
+              onToggleOffhand={toggleOffhand}
+              onRemove={removeItem} onQty={changeQty} />
           ))}
         </div>
       )}
@@ -1142,37 +1394,74 @@ function InventoryPanel({ charId, charName, charData, accentColor, onSave }: {
   );
 }
 
-function ItemRow({ item, accentColor, onToggle, onRemove, onQty }: {
+function ItemRow({ item, accentColor, charData, onCycleMain, onToggleOffhand, onRemove, onQty }: {
   item: InventoryItem;
   accentColor: string;
-  onToggle: (id: string) => void;
+  charData: CharacterData | null;
+  onCycleMain: (id: string) => void;
+  onToggleOffhand: (id: string) => void;
   onRemove: (id: string) => void;
   onQty: (id: string, delta: number) => void;
 }) {
+  const state = getEquipState(item);
+  const isWeapon = isWeaponItem(item);
+  const offhandAllowed = canEquipOffhand(item, charData);
+  const mainActive = state === "mainhand-1h" || state === "mainhand-2h";
+  const mainLabel = state === "mainhand-2h" ? "2H" : "1H";
+  const equipped = state !== "backpack";
+  const stateLabel =
+    state === "mainhand-2h" ? "Main Hand (2H)"
+      : state === "mainhand-1h" ? "Main Hand (1H)"
+      : state === "offhand" ? "Offhand"
+      : null;
+  const meta = [
+    item.rarity ? titleCase(item.rarity) : null,
+    item.type ?? null,
+    item.attunement ? "Attunement" : null,
+    item.magic ? "Magic" : null,
+  ].filter(Boolean).join(" • ");
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 8,
       padding: "4px 2px",
       borderBottom: "1px solid rgba(255,255,255,0.05)",
     }}>
-      {/* Equip toggle */}
-      <button
-        onClick={() => onToggle(item.id)}
-        title={item.equipped ? "Unequip" : "Equip"}
-        style={{
-          width: 14, height: 14, borderRadius: "50%", flexShrink: 0, padding: 0,
-          border: `1.5px solid ${item.equipped ? accentColor : "rgba(255,255,255,0.3)"}`,
-          background: item.equipped ? accentColor : "transparent",
-          cursor: "pointer",
-        }}
-      />
+      {isWeapon ? (
+        <button
+          onClick={() => onCycleMain(item.id)}
+          title="Cycle main hand"
+          style={inventoryEquipBtn(mainActive, accentColor)}
+        >
+          {mainLabel}
+        </button>
+      ) : offhandAllowed ? (
+        <button
+          onClick={() => onToggleOffhand(item.id)}
+          title={state === "offhand" ? "Unequip offhand" : "Equip to offhand"}
+          style={inventoryEquipBtn(state === "offhand", "#94a3b8")}
+        >
+          OH
+        </button>
+      ) : (
+        <div style={{ width: 30, flexShrink: 0 }} />
+      )}
+
+      {isWeapon && offhandAllowed ? (
+        <button
+          onClick={() => onToggleOffhand(item.id)}
+          title={state === "offhand" ? "Unequip offhand" : "Equip to offhand"}
+          style={inventoryEquipBtn(state === "offhand", "#94a3b8")}
+        >
+          OH
+        </button>
+      ) : null}
 
       {/* Name + notes */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: 13, color: C.text, fontWeight: item.equipped ? 600 : 400 }}>
+        <div style={{ fontSize: 13, color: C.text, fontWeight: equipped ? 600 : 400 }}>
           {item.name}
-        </span>
-        {(item.rarity || item.type || item.attunement || item.magic) && (
+        </div>
+        {meta && (
           <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
             {[
               item.rarity ? titleCase(item.rarity) : null,
@@ -1182,8 +1471,13 @@ function ItemRow({ item, accentColor, onToggle, onRemove, onQty }: {
             ].filter(Boolean).join(" • ")}
           </div>
         )}
+        {stateLabel && (
+          <div style={{ fontSize: 10, color: accentColor, marginTop: 2, fontWeight: 700 }}>
+            {stateLabel}
+          </div>
+        )}
         {item.notes && (
-          <span style={{ fontSize: 11, color: C.muted, marginLeft: 6 }}>{item.notes}</span>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{item.notes}</div>
         )}
       </div>
 
@@ -1499,6 +1793,12 @@ function InventoryItemPickerModal(props: {
                   type: detail.type,
                   attunement: detail.attunement,
                   magic: detail.magic,
+                  weight: detail.weight,
+                  value: detail.value,
+                  dmg1: detail.dmg1,
+                  dmg2: detail.dmg2,
+                  dmgType: detail.dmgType,
+                  properties: detail.properties,
                   description: detailText,
                 });
               }}
@@ -1560,6 +1860,20 @@ function InventoryItemPickerModal(props: {
                 {detail.rarity && <InventoryTag label={titleCase(detail.rarity)} color={inventoryRarityColor(detail.rarity)} />}
                 {detail.type && <InventoryTag label={detail.type} color={C.muted} />}
               </div>
+              {(detail.dmg1 || detail.dmg2 || detail.dmgType || detail.weight != null || detail.value != null || detail.properties.length > 0) && (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                  gap: 8,
+                }}>
+                  {detail.dmg1 && <InventoryStat label="One-Handed Damage" value={detail.dmg1} />}
+                  {detail.dmg2 && <InventoryStat label="Two-Handed Damage" value={detail.dmg2} />}
+                  {detail.dmgType && <InventoryStat label="Damage Type" value={formatItemDamageType(detail.dmgType) ?? detail.dmgType} />}
+                  {detail.weight != null && <InventoryStat label="Weight" value={`${detail.weight} lb`} />}
+                  {detail.value != null && <InventoryStat label="Value" value={`${detail.value} gp`} />}
+                  {detail.properties.length > 0 && <InventoryStat label="Properties" value={formatItemProperties(detail.properties)} />}
+                </div>
+              )}
               <div style={inventoryPickerDetailStyle}>
                 {detailText || <span style={{ color: C.muted }}>No description.</span>}
               </div>
@@ -1588,6 +1902,25 @@ function InventoryTag({ label, color }: { label: string; color: string }) {
     }}>
       {label}
     </span>
+  );
+}
+
+function InventoryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      border: `1px solid ${C.panelBorder}`,
+      borderRadius: 10,
+      background: "rgba(255,255,255,0.035)",
+      padding: "8px 10px",
+      minWidth: 0,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -1629,10 +1962,10 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 // Shared sub-components
 // ---------------------------------------------------------------------------
 
-function Wrap({ children }: { children: React.ReactNode }) {
+function Wrap({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
   return (
     <div style={{ height: "100%", overflowY: "auto", background: C.bg, color: C.text }}>
-      <div style={{ maxWidth: 1060, margin: "0 auto", padding: "28px 20px" }}>
+      <div style={{ maxWidth: wide ? "none" : 1060, margin: "0 auto", padding: wide ? "16px" : "28px 20px" }}>
         {children}
       </div>
     </div>
@@ -1757,6 +2090,21 @@ const stepperBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   padding: 0, lineHeight: 1,
 };
+
+function inventoryEquipBtn(active: boolean, color: string): React.CSSProperties {
+  return {
+    minWidth: 30,
+    height: 24,
+    borderRadius: 999,
+    border: `1px solid ${active ? color : C.panelBorder}`,
+    background: active ? withAlpha(color, 0.14) : "transparent",
+    color: active ? color : C.muted,
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+}
 
 function addBtnStyle(accent: string): React.CSSProperties {
   return {
