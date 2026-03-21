@@ -1,7 +1,8 @@
 import React from "react";
 import { CampaignNotesPanel } from "@/views/CampaignView/panels/CampaignNotesPanel";
 import { AdventureNotesPanel } from "@/views/CampaignView/panels/AdventureNotesPanel";
-import type { Note } from "@/domain/types/domain";
+import { SharedNotesPanel } from "@/views/CampaignView/panels/SharedNotesPanel";
+import type { Note, Player } from "@/domain/types/domain";
 
 export function CampaignRightSidebar(props: {
   selectedAdventureId: string | null;
@@ -9,6 +10,7 @@ export function CampaignRightSidebar(props: {
   adventureNotes: Note[];
   expandedNoteIds: string[]
   onToggleNote: (noteId: string) => void;
+  players: Player[];
 
   onAddCampaignNote: () => void;
   onEditCampaignNote: (noteId: string) => void;
@@ -42,6 +44,8 @@ export function CampaignRightSidebar(props: {
         onDelete={props.onDeleteAdventureNote}
         onReorder={props.onReorderAdventureNotes}
       />
+
+      <SharedNotesPanel players={props.players} />
     </div>
   );
 }

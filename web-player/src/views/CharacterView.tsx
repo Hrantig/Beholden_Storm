@@ -104,6 +104,7 @@ interface CharacterData {
   chosenInvocations?: string[];
   proficiencies?: ProficiencyMap;
   inventory?: InventoryItem[];
+  playerNotes?: string;
 }
 
 interface ConditionInstance {
@@ -173,6 +174,7 @@ interface Character {
   conditions?: ConditionInstance[];
   overrides?: { tempHp: number; acBonus: number; hpMaxBonus: number };
   deathSaves?: { success: number; fail: number };
+  sharedNotes?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +365,10 @@ export function CharacterView() {
   const [condPickerOpen, setCondPickerOpen] = useState(false);
   const [condSaving, setCondSaving] = useState(false);
   const [dsSaving, setDsSaving] = useState(false);
+  const [playerNotesText, setPlayerNotesText] = useState("");
+  const [sharedNotesText, setSharedNotesText] = useState("");
+  const playerNotesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sharedNotesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchChar = useCallback(() => {
     if (!id) return;
@@ -373,6 +379,13 @@ export function CharacterView() {
   }, [id]);
 
   useEffect(() => { fetchChar(); }, [fetchChar]);
+
+  // Sync notes text when character loads or reloads
+  useEffect(() => {
+    if (!char) return;
+    setPlayerNotesText(char.characterData?.playerNotes ?? "");
+    setSharedNotesText(char.sharedNotes ?? "");
+  }, [char?.id]); // only reset when character identity changes, not on every update
 
   // Re-fetch whenever the DM changes something in any campaign this character is in
   useWs(useCallback((msg) => {
@@ -497,6 +510,23 @@ export function CharacterView() {
     }));
     setChar((prev) => prev ? { ...prev, characterData: { ...prev.characterData, ...updatedData } } : prev);
     return updated;
+  }
+
+  function handlePlayerNotesChange(val: string) {
+    setPlayerNotesText(val);
+    if (playerNotesTimer.current) clearTimeout(playerNotesTimer.current);
+    playerNotesTimer.current = setTimeout(() => {
+      void saveCharacterData({ ...char!.characterData, playerNotes: val } as CharacterData);
+    }, 800);
+  }
+
+  function handleSharedNotesChange(val: string) {
+    setSharedNotesText(val);
+    if (sharedNotesTimer.current) clearTimeout(sharedNotesTimer.current);
+    sharedNotesTimer.current = setTimeout(() => {
+      void api(`/api/me/characters/${char!.id}/sharedNotes`, jsonInit("PATCH", { sharedNotes: val }));
+      setChar((prev) => prev ? { ...prev, sharedNotes: val } : prev);
+    }, 800);
   }
 
   return (
@@ -1122,6 +1152,39 @@ export function CharacterView() {
 
         {/* ── COL 4: Everything Else ───────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* Player Notes */}
+          <Panel>
+            <PanelTitle color={accentColor}>Player Notes</PanelTitle>
+            <textarea
+              value={playerNotesText}
+              onChange={(e) => handlePlayerNotesChange(e.target.value)}
+              placeholder="Private notes visible only to you…"
+              style={{
+                width: "100%", minHeight: 120, resize: "vertical", boxSizing: "border-box",
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
+                borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px",
+                fontFamily: "inherit", lineHeight: 1.5,
+              }}
+            />
+          </Panel>
+
+          {/* Shared Notes */}
+          <Panel>
+            <PanelTitle color={C.green}>Shared Notes</PanelTitle>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>Visible to all players and the DM</div>
+            <textarea
+              value={sharedNotesText}
+              onChange={(e) => handleSharedNotesChange(e.target.value)}
+              placeholder="Notes shared with the party and DM…"
+              style={{
+                width: "100%", minHeight: 120, resize: "vertical", boxSizing: "border-box",
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
+                borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px",
+                fontFamily: "inherit", lineHeight: 1.5,
+              }}
+            />
+          </Panel>
 
           {/* Class Features */}
           {char.characterData?.chosenOptionals && char.characterData.chosenOptionals.length > 0 && (

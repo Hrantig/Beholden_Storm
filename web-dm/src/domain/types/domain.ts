@@ -60,6 +60,7 @@ export interface Player {
   deathSaves?: DeathSaves;
   color?: string;
   imageUrl?: string | null;
+  sharedNotes?: string;
   createdAt?: number;
   updatedAt?: number;
 }

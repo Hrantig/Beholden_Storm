@@ -149,6 +149,7 @@ export interface StoredPlayer extends Timestamps {
   cha?: number;
   color?: string;
   imageUrl?: string | null;
+  sharedNotes?: string;
 }
 
 export interface StoredUserCharacter extends Timestamps {
@@ -173,6 +174,7 @@ export interface StoredUserCharacter extends Timestamps {
   imageUrl: string | null;
   characterData: Record<string, unknown> | null;
   deathSaves?: StoredDeathSaves;
+  sharedNotes: string;
 }
 
 export interface StoredCharacterCampaign {

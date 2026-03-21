@@ -393,6 +393,35 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true, deathSaves });
   });
 
+  // Update shared notes (written to user_characters + synced to all players rows + broadcast)
+  app.patch("/api/me/characters/:id/sharedNotes", requireAuth, (req, res) => {
+    const charId = requireParam(req, res, "id");
+    if (!charId) return;
+    const userId = (req as any).user.userId;
+    const existing = db
+      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
+      .get(charId, userId) as { id: string } | undefined;
+    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+
+    const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
+    const t = now();
+
+    db.prepare("UPDATE user_characters SET shared_notes=?, updated_at=? WHERE id=?")
+      .run(sharedNotes, t, charId);
+
+    const assignments = db
+      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
+      .all(charId) as { player_id: string; campaign_id: string }[];
+
+    for (const { player_id, campaign_id } of assignments) {
+      db.prepare("UPDATE players SET shared_notes=?, updated_at=? WHERE id=?")
+        .run(sharedNotes, t, player_id);
+      ctx.broadcast("players:changed", { campaignId: campaign_id });
+    }
+
+    res.json({ ok: true, sharedNotes });
+  });
+
   // Delete a user-owned character (cascades to character_campaigns)
   app.delete("/api/me/characters/:id", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");

@@ -141,6 +141,7 @@ export function CampaignView(props: {
         adventureNotes={adventureNotes}
         expandedNoteIds={expandedNoteIds}
         onToggleNote={(noteId) => dispatch({ type: "toggleNote", noteId })}
+        players={players}
         onAddCampaignNote={props.onAddCampaignNote}
         onEditCampaignNote={props.onEditCampaignNote}
         onDeleteCampaignNote={props.onDeleteCampaignNote}

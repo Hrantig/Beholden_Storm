@@ -81,7 +81,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
       <Panel
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span style={{ display: "inline-flex", color: theme.colors.text }}>
+            <span style={{ display: "inline-flex" }}>
               <IconChest />
             </span>
             {titleFromScope({ selectedAdventureId: scopeAdventureId, adventureName: scopeAdventureName })}

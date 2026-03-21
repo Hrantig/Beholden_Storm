@@ -35,13 +35,13 @@ export const ENCOUNTER_COLS =
 export const PLAYER_COLS =
   "id, campaign_id, user_id, player_name, character_name, class, species, level, " +
   "hp_max, hp_current, ac, speed, str, dex, con, int, wis, cha, color, image_url, " +
-  "overrides_json, conditions_json, death_saves_json, created_at, updated_at";
+  "overrides_json, conditions_json, death_saves_json, shared_notes, created_at, updated_at";
 
 export const USER_CHARACTER_COLS =
   "id, user_id, name, player_name, class_name, species, level, " +
   "hp_max, hp_current, ac, speed, str_score, dex_score, con_score, " +
   "int_score, wis_score, cha_score, color, image_url, character_data_json, " +
-  "death_saves_json, created_at, updated_at";
+  "death_saves_json, shared_notes, created_at, updated_at";
 
 export const INPC_COLS =
   "id, campaign_id, monster_id, name, label, friendly, " +
@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS players (
   overrides_json TEXT NOT NULL DEFAULT '{"tempHp":0,"acBonus":0,"hpMaxBonus":0}',
   conditions_json TEXT NOT NULL DEFAULT '[]',
   death_saves_json TEXT,
+  shared_notes TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -324,6 +325,8 @@ CREATE TABLE IF NOT EXISTS user_characters (
   color TEXT,
   image_url TEXT,
   character_data_json TEXT,
+  death_saves_json TEXT,
+  shared_notes TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -488,6 +491,16 @@ function runMigrations(db: Db): void {
   if (!playerCols3.includes("death_saves_json")) {
     db.exec("ALTER TABLE players ADD COLUMN death_saves_json TEXT");
   }
+
+  // Add shared_notes to players and user_characters if missing (character notes feature).
+  const playerCols4 = (db.pragma("table_info(players)") as { name: string }[]).map((c) => c.name);
+  if (!playerCols4.includes("shared_notes")) {
+    db.exec("ALTER TABLE players ADD COLUMN shared_notes TEXT NOT NULL DEFAULT ''");
+  }
+  const ucharCols2 = (db.pragma("table_info(user_characters)") as { name: string }[]).map((c) => c.name);
+  if (!ucharCols2.includes("shared_notes")) {
+    db.exec("ALTER TABLE user_characters ADD COLUMN shared_notes TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -602,6 +615,7 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
     ...(row.death_saves_json
       ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
       : {}),
+    sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
@@ -632,6 +646,7 @@ export function rowToUserCharacter(row: Record<string, unknown>): StoredUserChar
     ...(row.death_saves_json
       ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
       : {}),
+    sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
