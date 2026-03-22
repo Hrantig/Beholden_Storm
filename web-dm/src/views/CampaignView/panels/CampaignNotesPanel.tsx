@@ -26,7 +26,7 @@ export function CampaignNotesPanel(props: {
         </span>
       }
       actions={
-        <IconButton onClick={props.onAdd} title="Add note">
+        <IconButton onClick={props.onAdd} title="Add note" variant="accent">
           <IconPlus />
         </IconButton>
       }

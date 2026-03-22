@@ -34,7 +34,6 @@ export function LoginView() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "system-ui, Segoe UI, Arial",
         color: theme.colors.text,
       }}
     >
@@ -52,7 +51,7 @@ export function LoginView() {
         <h1
           style={{
             margin: "0 0 6px",
-            fontSize: 26,
+            fontSize: "var(--fs-hero)",
             fontWeight: 800,
             color: theme.colors.accentPrimary,
             letterSpacing: "-0.5px",
@@ -60,13 +59,13 @@ export function LoginView() {
         >
           Beholden
         </h1>
-        <p style={{ margin: "0 0 28px", color: theme.colors.muted, fontSize: 14 }}>
+        <p style={{ margin: "0 0 28px", color: theme.colors.muted, fontSize: "var(--fs-medium)" }}>
           Sign in to continue
         </p>
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "var(--fs-subtitle)", fontWeight: 600 }}>
               Username
             </label>
             <Input
@@ -80,7 +79,7 @@ export function LoginView() {
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "var(--fs-subtitle)", fontWeight: 600 }}>
               Password
             </label>
             <Input
@@ -101,7 +100,7 @@ export function LoginView() {
                 background: `${theme.colors.red}22`,
                 border: `1px solid ${theme.colors.red}55`,
                 color: theme.colors.red,
-                fontSize: 13,
+                fontSize: "var(--fs-subtitle)",
               }}
             >
               {error}

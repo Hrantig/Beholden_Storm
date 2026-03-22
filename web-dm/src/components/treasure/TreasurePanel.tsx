@@ -88,7 +88,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
           </span>
         }
         actions={
-          <IconButton title="Add item" onClick={() => setIsOpen(true)}>
+          <IconButton title="Add item" onClick={() => setIsOpen(true)} variant="accent">
             <IconPlus />
           </IconButton>
         }

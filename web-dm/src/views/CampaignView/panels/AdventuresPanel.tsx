@@ -31,7 +31,7 @@ export function AdventuresPanel(props: {
           <IconButton onClick={props.onImport} title="Import adventure">
             <IconImport />
           </IconButton>
-          <IconButton onClick={props.onCreate} title="Add adventure" variant="solid">
+          <IconButton onClick={props.onCreate} title="Add adventure" variant="accent">
             <IconPlus />
           </IconButton>
         </div>

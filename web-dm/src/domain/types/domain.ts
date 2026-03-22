@@ -16,6 +16,7 @@ export interface Campaign {
   updatedAt?: number;
   playerCount?: number;
   imageUrl?: string | null;
+  sharedNotes?: string;
 }
 
 export interface Adventure {

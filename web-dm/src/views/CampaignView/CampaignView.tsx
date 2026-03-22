@@ -62,6 +62,9 @@ export function CampaignView(props: {
     expandedNoteIds,
   } = state;
 
+  const selectedCampaign = state.campaigns.find((c) => c.id === state.selectedCampaignId);
+  const campaignSharedNotes = selectedCampaign?.sharedNotes ?? "";
+
   const selectedEncounter = React.useMemo(() => {
     return encounters.find((e) => e.id === selectedEncounterId) ?? null;
   }, [encounters, selectedEncounterId]);
@@ -142,6 +145,8 @@ export function CampaignView(props: {
         expandedNoteIds={expandedNoteIds}
         onToggleNote={(noteId) => dispatch({ type: "toggleNote", noteId })}
         players={players}
+        campaignId={state.selectedCampaignId}
+        campaignSharedNotes={campaignSharedNotes}
         onAddCampaignNote={props.onAddCampaignNote}
         onEditCampaignNote={props.onEditCampaignNote}
         onDeleteCampaignNote={props.onDeleteCampaignNote}

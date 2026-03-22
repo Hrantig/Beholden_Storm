@@ -2,13 +2,11 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { theme, withAlpha } from "@/theme/theme";
 import { useStore } from "@/store";
+import { TopBar } from "@/layout/TopBar";
 
 export function ShellLayout(props: { children: React.ReactNode }) {
   const { state } = useStore();
 
-  // Support button visibility comes from the server (/api/meta), which reads BEHOLDEN_SUPPORT.
-  // As a dev fallback, we also allow Vite-side env (VITE_BEHOLDEN_SUPPORT) so you can
-  // force it on/off even if the server env isn't being picked up for some reason.
   function parseBool(v: unknown): boolean | undefined {
     if (typeof v === "boolean") return v;
     if (typeof v !== "string") return undefined;
@@ -20,7 +18,6 @@ export function ShellLayout(props: { children: React.ReactNode }) {
 
   const supportFromMeta = state.meta?.support;
   const supportFromVite = parseBool((import.meta as any).env?.VITE_BEHOLDEN_SUPPORT);
-    // Precedence: explicit Vite env overrides server meta (useful in dev).
   const showSupport = (supportFromVite ?? supportFromMeta ?? false) === true;
 
   const ips = state.meta?.ips ?? [];
@@ -30,9 +27,7 @@ export function ShellLayout(props: { children: React.ReactNode }) {
 
   return (
     <div
-      className="shellLayout"
       style={{
-        fontFamily: "system-ui, Segoe UI, Arial",
         background: theme.colors.bg,
         height: "100vh",
         overflow: "hidden",
@@ -40,7 +35,22 @@ export function ShellLayout(props: { children: React.ReactNode }) {
         flexDirection: "column",
       }}
     >
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>{props.children}</div>
+      {/* Header with surface chrome */}
+      <header
+        style={{
+          background: theme.colors.panelBg,
+          borderBottom: `1px solid ${theme.colors.panelBorder}`,
+          padding: "8px 16px",
+          flexShrink: 0,
+        }}
+      >
+        <TopBar />
+      </header>
+
+      {/* Scrollable content */}
+      <div className="shellLayout" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {props.children}
+      </div>
 
       <footer
         className="footerGrid"
@@ -50,9 +60,9 @@ export function ShellLayout(props: { children: React.ReactNode }) {
           color: theme.colors.muted,
           fontSize: "var(--fs-medium)",
           background: withAlpha(theme.colors.panelBg, 0.12),
+          flexShrink: 0,
         }}
       >
-        {/* Column 1 — Left */}
         <div style={{ minWidth: 0, justifySelf: "start" }}>
           <div>© {new Date().getFullYear()} Beholden. All rights reserved.</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -63,62 +73,30 @@ export function ShellLayout(props: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Column 2 — Center Left */}
-        <div
-          style={{
-            justifySelf: "center",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
-          <Link to="/about" style={{ color: theme.colors.accentPrimary, textDecoration: "none" }}>
-            About
-          </Link>
-          <Link to="/faq" style={{ color: theme.colors.accentPrimary, textDecoration: "none" }}>
-            FAQ
-          </Link>
-          <Link to="/updates" style={{ color: theme.colors.accentPrimary, textDecoration: "none" }}>
-            Future Updates
-          </Link>
+        <div style={{ justifySelf: "center", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          <Link to="/about" style={{ color: theme.colors.accentPrimary, textDecoration: "none" }}>About</Link>
+          <Link to="/faq" style={{ color: theme.colors.accentPrimary, textDecoration: "none" }}>FAQ</Link>
+          <Link to="/updates" style={{ color: theme.colors.accentPrimary, textDecoration: "none" }}>Future Updates</Link>
         </div>
 
-        {/* Column 3 — Center Right */}
         <div style={{ justifySelf: "center", display: "flex", justifyContent: "center" }}>
           {showSupport ? (
-            <a
-              href="https://www.buymeacoffee.com/beholden"
-              target="_blank"
-              rel="noreferrer"
-              title="Buy me a pizza"
-              style={{ display: "inline-flex", alignItems: "center" }}
-            >
-              <img
-                src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-                alt="Buy me a pizza"
-                style={{ height: 44, width: "auto" }}
-              />
+            <a href="https://www.buymeacoffee.com/beholden" target="_blank" rel="noreferrer" title="Buy me a pizza" style={{ display: "inline-flex", alignItems: "center" }}>
+              <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a pizza" style={{ height: 44, width: "auto" }} />
             </a>
           ) : null}
         </div>
 
-        {/* Column 4 — Right */}
         <div className="footerIps">
           {primaryIp && (
             <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-              <code>
-                http://{primaryIp}:{state.meta?.port}
-              </code>
-
+              <code>http://{primaryIp}:{state.meta?.port}</code>
               {otherIps.length > 0 && (
                 <details>
                   <summary style={{ cursor: "pointer", userSelect: "none" }}>more</summary>
                   <div style={{ marginTop: 6, display: "grid", gap: 4, justifyItems: "end" }}>
                     {otherIps.map((ip) => (
-                      <code key={ip}>
-                        http://{ip}:{state.meta?.port}
-                      </code>
+                      <code key={ip}>http://{ip}:{state.meta?.port}</code>
                     ))}
                   </div>
                 </details>

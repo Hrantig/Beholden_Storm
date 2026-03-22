@@ -22,7 +22,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     const user = req.user!;
     const rows = user.isAdmin
       ? db.prepare(`
-          SELECT c.id, c.name, c.color, c.image_url, c.created_at, c.updated_at,
+          SELECT c.id, c.name, c.color, c.image_url, c.shared_notes, c.created_at, c.updated_at,
                  COUNT(p.id) AS player_count
           FROM campaigns c
           LEFT JOIN players p ON p.campaign_id = c.id
@@ -30,7 +30,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
           ORDER BY c.updated_at DESC
         `).all() as Record<string, unknown>[]
       : db.prepare(`
-          SELECT c.id, c.name, c.color, c.image_url, c.created_at, c.updated_at,
+          SELECT c.id, c.name, c.color, c.image_url, c.shared_notes, c.created_at, c.updated_at,
                  COUNT(p.id) AS player_count
           FROM campaigns c
           LEFT JOIN players p ON p.campaign_id = c.id
@@ -55,13 +55,13 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     ).run(id, name, t, t);
     ctx.helpers.seedDefaultConditions(id);
     ctx.broadcast("campaigns:changed", { campaignId: id });
-    res.json({ id, name, color: null, imageUrl: null, createdAt: t, updatedAt: t });
+    res.json({ id, name, color: null, imageUrl: null, sharedNotes: "", createdAt: t, updatedAt: t });
   });
 
   app.put("/api/campaigns/:campaignId", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;
-    const row = db.prepare("SELECT id, name, color, image_url, created_at, updated_at FROM campaigns WHERE id = ?").get(campaignId) as Record<string, unknown> | undefined;
+    const row = db.prepare("SELECT id, name, color, image_url, shared_notes, created_at, updated_at FROM campaigns WHERE id = ?").get(campaignId) as Record<string, unknown> | undefined;
     if (!row) return res.status(404).json({ ok: false, message: "Campaign not found" });
     const body = parseBody(CampaignUpsertBody, req);
     const name = (body.name ?? "").toString().trim() || (row.name as string);
@@ -175,6 +175,21 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     db.prepare("UPDATE campaigns SET image_url = ?, updated_at = ? WHERE id = ?").run(imageUrl, now(), campaignId);
     ctx.broadcast("campaigns:changed", { campaignId });
     res.json({ ok: true, imageUrl });
+  });
+
+  // Update DM-created shared notes for a campaign.
+  app.patch("/api/campaigns/:campaignId/sharedNotes", dmOrAdmin(db), (req, res) => {
+    const campaignId = requireParam(req, res, "campaignId");
+    if (!campaignId) return;
+    const row = db.prepare("SELECT id FROM campaigns WHERE id = ?").get(campaignId);
+    if (!row) return res.status(404).json({ ok: false, message: "Campaign not found" });
+    const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
+    const t = now();
+    db.prepare("UPDATE campaigns SET shared_notes = ?, updated_at = ? WHERE id = ?").run(sharedNotes, t, campaignId);
+    ctx.broadcast("campaigns:changed", { campaignId });
+    // Also notify player clients so web-player refreshes character data.
+    ctx.broadcast("players:changed", { campaignId });
+    res.json({ ok: true, sharedNotes });
   });
 
   // Remove campaign banner image.

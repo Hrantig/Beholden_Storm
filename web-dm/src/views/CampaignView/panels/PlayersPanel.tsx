@@ -56,7 +56,7 @@ export function PlayersPanel(props: {
           <IconButton title="Full Rest" onClick={props.onFullRest}>
             <IconRest />
           </IconButton>
-          <IconButton onClick={props.onCreatePlayer} title="Add player">
+          <IconButton onClick={props.onCreatePlayer} title="Add player" variant="accent">
             <IconPlus />
           </IconButton>
         </div>

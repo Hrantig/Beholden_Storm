@@ -29,7 +29,7 @@ export function EncountersPanel(props: {
         </span>
       }
       actions={
-        <IconButton onClick={props.onCreate} disabled={!selectedAdventureId} title="Add encounter">
+        <IconButton onClick={props.onCreate} disabled={!selectedAdventureId} title="Add encounter" variant="accent">
           <IconPlus />
         </IconButton>
       }

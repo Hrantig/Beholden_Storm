@@ -26,50 +26,44 @@ export function useOpenEncounterMetrics(args: {
 }) {
   const { encounters, players, inpcs, monsterDetails, dispatch } = args;
 
-  // Open encounters show XP (hostile monsters only) next to the status label.
-  const [encounterXp, setEncounterXp] = React.useState<Record<string, number>>(
-    {},
-  );
-  const [encounterDifficulty, setEncounterDifficulty] = React.useState<
-    Record<string, DifficultyRow>
-  >({});
+  // All encounters show XP (hostile monsters only) and difficulty next to the status label.
+  const [encounterXp, setEncounterXp] = React.useState<Record<string, number>>({});
+  const [encounterDifficulty, setEncounterDifficulty] = React.useState<Record<string, DifficultyRow>>({});
 
   React.useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
-      const openIds = (encounters ?? [])
-        .filter((e) => String(e.status).toLowerCase() === "open")
-        .map((e) => e.id);
-
-      const toFetch = openIds.filter(
+      const encounterIds = (encounters ?? []).map((e) => e.id);
+      const toFetch = encounterIds.filter(
         (id) => encounterXp[id] == null || encounterDifficulty[id] == null,
       );
       if (!toFetch.length) return;
 
       const nextXp: Record<string, number> = {};
       const nextDiff: Record<string, DifficultyRow> = {};
-
-const partyHpMax = players.reduce((sum, p) => sum + (p.hpMax ?? 0), 0);
+      const partyHpMax = players.reduce((sum, p) => sum + (p.hpMax ?? 0), 0);
 
       for (const encId of toFetch) {
         try {
-          const cs: any[] = await api(`/api/encounters/${encId}/combatants`);
+          const combatants: any[] = await api(`/api/encounters/${encId}/combatants`);
 
           // Ensure we have monster details for referenced monsters.
           const monsterIds = new Set<string>();
-          for (const c of cs ?? []) {
-            if (c?.baseType === "monster" && c.baseId != null)
-              monsterIds.add(String(c.baseId));
-            if (c?.baseType === "inpc" && c.baseId != null) {
-              const inpcId = String(c.baseId);
-const inpc = inpcs.find((x) => String(x.id) === inpcId);
-              if (inpc?.monsterId != null)
+          for (const combatant of combatants ?? []) {
+            if (combatant?.baseType === "monster" && combatant.baseId != null) {
+              monsterIds.add(String(combatant.baseId));
+            }
+            if (combatant?.baseType === "inpc" && combatant.baseId != null) {
+              const inpcId = String(combatant.baseId);
+              const inpc = inpcs.find((x) => String(x.id) === inpcId);
+              if (inpc?.monsterId != null) {
                 monsterIds.add(String(inpc.monsterId));
+              }
             }
           }
 
-const missing = Array.from(monsterIds).filter((id) => !monsterDetails?.[id]);
+          const missing = Array.from(monsterIds).filter((id) => !monsterDetails?.[id]);
           const patch: Record<string, MonsterDetail> = {};
           if (missing.length) {
             for (const id of missing) {
@@ -79,45 +73,49 @@ const missing = Array.from(monsterIds).filter((id) => !monsterDetails?.[id]);
                 // ignore
               }
             }
-            if (!cancelled && Object.keys(patch).length)
+            if (!cancelled && Object.keys(patch).length) {
               dispatch({ type: "mergeMonsterDetails", patch });
+            }
           }
 
           const details = { ...monsterDetails, ...patch };
 
-          // Compute hostile XP + planning DPR.
-          let total = 0;
+          let totalXp = 0;
           let hostileDpr = 0;
           let burstFactor = 1.0;
 
-          for (const c of cs ?? []) {
-            if (c?.baseType === "player") continue;
-            if (c?.friendly) continue;
+          for (const combatant of combatants ?? []) {
+            if (combatant?.baseType === "player") continue;
+            if (combatant?.friendly) continue;
 
             let monsterId: string | null = null;
-            if (c?.baseType === "monster")
-              monsterId = c.baseId != null ? String(c.baseId) : null;
-            if (c?.baseType === "inpc") {
-              const inpcId = c.baseId != null ? String(c.baseId) : null;
+            if (combatant?.baseType === "monster") {
+              monsterId = combatant.baseId != null ? String(combatant.baseId) : null;
+            }
+            if (combatant?.baseType === "inpc") {
+              const inpcId = combatant.baseId != null ? String(combatant.baseId) : null;
               const inpc = inpcId
                 ? (inpcs ?? []).find((x: any) => String(x.id) === inpcId)
                 : null;
-              monsterId =
-                inpc?.monsterId != null ? String(inpc.monsterId) : null;
+              monsterId = inpc?.monsterId != null ? String(inpc.monsterId) : null;
             }
             if (!monsterId) continue;
 
             const xp = getMonsterXp(details?.[monsterId]);
-            if (xp != null && Number.isFinite(xp)) total += xp;
+            if (xp != null && Number.isFinite(xp)) {
+              totalXp += xp;
+            }
 
-            const est = estimateMonsterDpr(details?.[monsterId]);
-            if (est?.dpr != null && Number.isFinite(est.dpr))
-              hostileDpr += Math.max(0, est.dpr);
-            if (est?.burstFactor != null && Number.isFinite(est.burstFactor))
-              burstFactor = Math.max(burstFactor, est.burstFactor);
+            const estimate = estimateMonsterDpr(details?.[monsterId]);
+            if (estimate?.dpr != null && Number.isFinite(estimate.dpr)) {
+              hostileDpr += Math.max(0, estimate.dpr);
+            }
+            if (estimate?.burstFactor != null && Number.isFinite(estimate.burstFactor)) {
+              burstFactor = Math.max(burstFactor, estimate.burstFactor);
+            }
           }
 
-          nextXp[encId] = Math.max(0, Math.round(total));
+          nextXp[encId] = Math.max(0, Math.round(totalXp));
 
           const diff = calcEncounterDifficulty({
             partyHpMax,
@@ -137,10 +135,12 @@ const missing = Array.from(monsterIds).filter((id) => !monsterDetails?.[id]);
       }
 
       if (cancelled) return;
-      if (Object.keys(nextXp).length)
+      if (Object.keys(nextXp).length) {
         setEncounterXp((prev) => ({ ...prev, ...nextXp }));
-      if (Object.keys(nextDiff).length)
+      }
+      if (Object.keys(nextDiff).length) {
         setEncounterDifficulty((prev) => ({ ...prev, ...nextDiff }));
+      }
     };
 
     run();
@@ -158,23 +158,24 @@ const missing = Array.from(monsterIds).filter((id) => !monsterDetails?.[id]);
   ]);
 
   const encountersForPanel = React.useMemo(() => {
-    return (encounters ?? []).map((e) => {
-      const status = String(e.status ?? "");
-      const isOpen = status.toLowerCase() === "open";
-      const xp = encounterXp[e.id];
-      const diff = encounterDifficulty[e.id];
+    return (encounters ?? []).map((encounter) => {
+      const status = String(encounter.status ?? "");
+      const xp = encounterXp[encounter.id];
+      const diff = encounterDifficulty[encounter.id];
 
-      const parts: string[] = [status];
-      if (isOpen) {
-        if (typeof xp === "number" && Number.isFinite(xp) && xp > 0)
-          parts.push(`${xp.toLocaleString()} XP`);
-        if (diff?.label) parts.push(diff.label);
+      const parts: string[] = [];
+      if (status) parts.push(status);
+      if (typeof xp === "number" && Number.isFinite(xp) && xp > 0) {
+        parts.push(`${xp.toLocaleString()} XP`);
+      }
+      if (diff?.label) {
+        parts.push(diff.label);
       }
 
       return {
-        id: e.id,
-        name: e.name,
-        status: isOpen && parts.length > 1 ? parts.join(" • ") : status,
+        id: encounter.id,
+        name: encounter.name,
+        status: parts.join(" • "),
       };
     });
   }, [encounterDifficulty, encounterXp, encounters]);

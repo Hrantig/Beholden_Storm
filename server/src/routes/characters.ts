@@ -63,7 +63,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
                 hp_current, hp_max, ac, speed,
                 str, dex, con, int, wis, cha,
                 color, image_url,
-                conditions_json, overrides_json, death_saves_json
+                conditions_json, overrides_json, death_saves_json, shared_notes
          FROM players
          WHERE id IN (${playerIds.map(() => "?").join(",")})
          ORDER BY updated_at DESC LIMIT 1`
@@ -75,6 +75,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         int: number | null; wis: number | null; cha: number | null;
         color: string | null; image_url: string | null;
         conditions_json: string; overrides_json: string; death_saves_json: string | null;
+        shared_notes: string | null;
       } | undefined;
     if (!liveRow) return char;
     const liveConditions = JSON.parse(liveRow.conditions_json || "[]") as Array<{
@@ -150,6 +151,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       deathSaves:  liveRow.death_saves_json
         ? JSON.parse(liveRow.death_saves_json) as { success: number; fail: number }
         : char.deathSaves,
+      sharedNotes: liveRow.shared_notes ?? char.sharedNotes,
     };
   }
 
@@ -287,7 +289,11 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       p.wisScore !== undefined ? p.wisScore : ex.wisScore,
       p.chaScore !== undefined ? p.chaScore : ex.chaScore,
       p.color !== undefined ? p.color : ex.color,
-      p.characterData !== undefined ? (p.characterData ? JSON.stringify(p.characterData) : null) : existing.character_data_json,
+      p.characterData !== undefined
+        ? (p.characterData === null
+          ? null
+          : JSON.stringify({ ...(ex.characterData ?? {}), ...p.characterData }))
+        : existing.character_data_json,
       t, charId, userId
     );
 

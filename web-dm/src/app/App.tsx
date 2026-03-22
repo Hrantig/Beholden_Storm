@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useMatch } from "react-router-dom";
 import { ShellLayout } from "@/layout/ShellLayout";
-import { TopBar } from "@/layout/TopBar";
+import { theme } from "@/theme/theme";
 import { StoreProvider, useStore } from "@/store";
 import { api } from "@/services/api";
 import type { Adventure, Campaign, Combatant, Encounter, INpc, Meta, Note, Player, TreasureEntry } from "@/domain/types/domain";
@@ -157,8 +157,6 @@ function AppInner() {
 
   return (
     <ShellLayout>
-      <TopBar />
-
       <DrawerHost refreshAll={refreshAll} refreshCampaign={refreshCampaign} refreshAdventure={refreshAdventure} refreshEncounter={refreshEncounter} />
       <input
         ref={importAdventureFileRef}
@@ -250,12 +248,11 @@ function AuthGate() {
       <div
         style={{
           minHeight: "100vh",
-          background: "#0d1525",
+          background: theme.colors.bg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "rgba(160,180,220,0.75)",
-          fontFamily: "system-ui, Segoe UI, Arial",
+          color: theme.colors.muted,
         }}
       >
         Loading…

@@ -4,9 +4,11 @@ import { theme } from "@/theme/theme";
 export function SectionTitle({
   children,
   color = theme.colors.accentPrimary,
+  actions,
 }: {
   children: React.ReactNode;
   color?: string;
+  actions?: React.ReactNode;
 }) {
   return (
     <div
@@ -26,6 +28,11 @@ export function SectionTitle({
         {children}
       </span>
       <div style={{ flex: 1, height: 1, background: `${color}40` }} />
+      {actions ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

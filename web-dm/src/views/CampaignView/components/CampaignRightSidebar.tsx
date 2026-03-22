@@ -11,6 +11,8 @@ export function CampaignRightSidebar(props: {
   expandedNoteIds: string[]
   onToggleNote: (noteId: string) => void;
   players: Player[];
+  campaignId: string;
+  campaignSharedNotes: string;
 
   onAddCampaignNote: () => void;
   onEditCampaignNote: (noteId: string) => void;
@@ -45,7 +47,11 @@ export function CampaignRightSidebar(props: {
         onReorder={props.onReorderAdventureNotes}
       />
 
-      <SharedNotesPanel players={props.players} />
+      <SharedNotesPanel
+        campaignId={props.campaignId}
+        campaignSharedNotes={props.campaignSharedNotes}
+        players={props.players}
+      />
     </div>
   );
 }

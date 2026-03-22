@@ -156,6 +156,20 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rowToPlayer(updated));
   });
 
+  // DM can update a player's shared notes (edit/delete individual notes).
+  app.patch("/api/players/:playerId/sharedNotes", dmOrAdmin(db), (req, res) => {
+    const playerId = requireParam(req, res, "playerId");
+    if (!playerId) return;
+    const existingRow = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(playerId) as Record<string, unknown> | undefined;
+    if (!existingRow) return res.status(404).json({ ok: false, message: "Not found" });
+    const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
+    const t = now();
+    db.prepare("UPDATE players SET shared_notes = ?, updated_at = ? WHERE id = ?").run(sharedNotes, t, playerId);
+    const existing = rowToPlayer(existingRow);
+    ctx.broadcast("players:changed", { campaignId: existing.campaignId });
+    res.json({ ok: true, sharedNotes });
+  });
+
   app.delete("/api/players/:playerId", dmOrAdmin(db), (req, res) => {
     const playerId = requireParam(req, res, "playerId");
     if (!playerId) return;

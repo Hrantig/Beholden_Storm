@@ -62,10 +62,9 @@ export function PlayerRow(props: {
 
   const iconColor = isDead ? theme.colors.muted : theme.colors.blue;
 
-  const bg = isCombatList ? "transparent" : withAlpha(theme.colors.shadowColor, 0.18);
-  const border = isCombatList ? "none" : `1px solid ${theme.colors.panelBorder}`;
-  const borderRadius = isCombatList ? 0 : 12;
-  const padding = isCombatList ? "8px 10px" : "10px 12px";
+  const rowStyle = isCombatList
+    ? { background: "transparent", border: "none", borderRadius: 0, padding: "8px 10px" }
+    : { background: withAlpha(theme.colors.shadowColor, 0.18), border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 12, padding: "10px 12px" };
 
   const hasLegacyActions = props.actions !== undefined;
   const showMenu = !hasLegacyActions && Boolean(props.menuItems?.length);
@@ -77,7 +76,7 @@ export function PlayerRow(props: {
   );
 
   return (
-    <div style={{ padding, borderRadius, background: bg, border, display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ ...rowStyle, display: "flex", flexDirection: "column", gap: 6 }}>
 
       {/* Top row: avatar · name/meta · stats · actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flexWrap: "wrap" }}>

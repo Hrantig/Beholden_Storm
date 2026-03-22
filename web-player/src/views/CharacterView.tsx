@@ -9,6 +9,7 @@ import { useWs } from "@/services/ws";
 import { Select } from "@/ui/Select";
 import { useVirtualList } from "@/lib/monsterPicker/useVirtualList";
 import { useItemSearch } from "@/views/CompendiumView/hooks/useItemSearch";
+import { DraggableList } from "@/ui/DraggableList";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,9 +103,10 @@ interface CharacterData {
   chosenCantrips?: string[];
   chosenSpells?: string[];
   chosenInvocations?: string[];
+  classFeatures?: ClassFeatureEntry[];
   proficiencies?: ProficiencyMap;
   inventory?: InventoryItem[];
-  playerNotes?: string;
+  playerNotesList?: PlayerNote[];
 }
 
 interface ConditionInstance {
@@ -183,6 +185,18 @@ interface Character {
 
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
 type AbilKey = typeof ABILITY_KEYS[number];
+
+interface PlayerNote {
+  id: string;
+  title: string;
+  text: string;
+}
+
+interface ClassFeatureEntry {
+  id: string;
+  name: string;
+  text: string;
+}
 
 const ABILITY_LABELS: Record<AbilKey, string> = {
   str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA",
@@ -349,6 +363,22 @@ function formatWeight(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function normalizeClassFeatures(charData: CharacterData | null | undefined): ClassFeatureEntry[] {
+  const saved = charData?.classFeatures ?? [];
+  if (saved.length > 0) {
+    return saved.map((feature) => ({
+      id: feature.id || feature.name,
+      name: feature.name,
+      text: feature.text ?? "",
+    }));
+  }
+  return (charData?.chosenOptionals ?? []).map((name) => ({
+    id: name,
+    name,
+    text: "",
+  }));
+}
+
 function hasWeaponProficiency(item: InventoryItem, prof: ProficiencyMap | undefined): boolean {
   const names = (prof?.weapons ?? []).map((w) => w.name.toLowerCase());
   const itemName = item.name.replace(/\s+\[2024\]\s*$/i, "").toLowerCase();
@@ -377,10 +407,9 @@ export function CharacterView() {
   const [condPickerOpen, setCondPickerOpen] = useState(false);
   const [condSaving, setCondSaving] = useState(false);
   const [dsSaving, setDsSaving] = useState(false);
-  const [playerNotesText, setPlayerNotesText] = useState("");
-  const [sharedNotesText, setSharedNotesText] = useState("");
-  const playerNotesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sharedNotesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [expandedNoteIds, setExpandedNoteIds] = useState<string[]>([]);
+  const [expandedClassFeatureIds, setExpandedClassFeatureIds] = useState<string[]>([]);
+  const [noteDrawer, setNoteDrawer] = useState<{ scope: "player" | "shared"; note: PlayerNote | null } | null>(null);
 
   const fetchChar = useCallback(() => {
     if (!id) return;
@@ -391,13 +420,6 @@ export function CharacterView() {
   }, [id]);
 
   useEffect(() => { fetchChar(); }, [fetchChar]);
-
-  // Sync notes text when character loads or reloads
-  useEffect(() => {
-    if (!char) return;
-    setPlayerNotesText(char.characterData?.playerNotes ?? "");
-    setSharedNotesText(char.sharedNotes ?? "");
-  }, [char?.id]); // only reset when character identity changes, not on every update
 
   // Re-fetch whenever the DM changes something in any campaign this character is in
   useWs(useCallback((msg) => {
@@ -419,6 +441,7 @@ export function CharacterView() {
   const prof = char.characterData?.proficiencies;
   const pb = profBonus(char.level);
   const hd = char.characterData?.hd ?? null;
+  const classFeaturesList = normalizeClassFeatures(char.characterData);
 
   const scores: Record<AbilKey, number | null> = {
     str: char.strScore, dex: char.dexScore, con: char.conScore,
@@ -518,27 +541,65 @@ export function CharacterView() {
   async function saveCharacterData(updatedData: CharacterData) {
     const updated = await api<Character>(`/api/me/characters/${char!.id}`, jsonInit("PUT", {
       name: char!.name,
-      characterData: { ...char!.characterData, ...updatedData },
+      characterData: updatedData,
     }));
     setChar((prev) => prev ? { ...prev, characterData: { ...prev.characterData, ...updatedData } } : prev);
     return updated;
   }
 
-  function handlePlayerNotesChange(val: string) {
-    setPlayerNotesText(val);
-    if (playerNotesTimer.current) clearTimeout(playerNotesTimer.current);
-    playerNotesTimer.current = setTimeout(() => {
-      void saveCharacterData({ ...char!.characterData, playerNotes: val } as CharacterData);
-    }, 800);
+  const playerNotesList: PlayerNote[] = char.characterData?.playerNotesList ?? [];
+  const sharedNotesList: PlayerNote[] = (() => {
+    if (!char.sharedNotes) return [];
+    try { return JSON.parse(char.sharedNotes) as PlayerNote[]; } catch { return []; }
+  })();
+
+  async function savePlayerNotesList(list: PlayerNote[]) {
+    await saveCharacterData({ playerNotesList: list });
   }
 
-  function handleSharedNotesChange(val: string) {
-    setSharedNotesText(val);
-    if (sharedNotesTimer.current) clearTimeout(sharedNotesTimer.current);
-    sharedNotesTimer.current = setTimeout(() => {
-      void api(`/api/me/characters/${char!.id}/sharedNotes`, jsonInit("PATCH", { sharedNotes: val }));
-      setChar((prev) => prev ? { ...prev, sharedNotes: val } : prev);
-    }, 800);
+  async function saveClassFeaturesList(list: ClassFeatureEntry[]) {
+    await saveCharacterData({
+      classFeatures: list,
+      chosenOptionals: list.map((feature) => feature.name),
+    });
+  }
+
+  function saveSharedNotesList(list: PlayerNote[]) {
+    const val = JSON.stringify(list);
+    void api(`/api/me/characters/${char!.id}/sharedNotes`, jsonInit("PATCH", { sharedNotes: val }));
+    setChar((prev) => prev ? { ...prev, sharedNotes: val } : prev);
+  }
+
+  function handleNoteSave(title: string, text: string) {
+    if (!noteDrawer) return;
+    const { scope, note } = noteDrawer;
+    const list = scope === "player" ? playerNotesList : sharedNotesList;
+    const updated = note
+      ? list.map((n) => n.id === note.id ? { ...n, title, text } : n)
+      : [...list, { id: uid(), title, text }];
+    if (scope === "player") void savePlayerNotesList(updated);
+    else saveSharedNotesList(updated);
+    setNoteDrawer(null);
+  }
+
+  function handleNoteDelete(scope: "player" | "shared", id: string) {
+    const list = scope === "player" ? playerNotesList : sharedNotesList;
+    const updated = list.filter((n) => n.id !== id);
+    if (scope === "player") void savePlayerNotesList(updated);
+    else saveSharedNotesList(updated);
+    setExpandedNoteIds((prev) => prev.filter((eid) => eid !== id));
+  }
+
+  function toggleNoteExpanded(id: string) {
+    setExpandedNoteIds((prev) =>
+      prev.includes(id) ? prev.filter((eid) => eid !== id) : [...prev, id]
+    );
+  }
+
+  function toggleClassFeatureExpanded(id: string) {
+    setExpandedClassFeatureIds((prev) =>
+      prev.includes(id) ? prev.filter((eid) => eid !== id) : [...prev, id]
+    );
   }
 
   return (
@@ -899,49 +960,39 @@ export function CharacterView() {
           {/* Ability Scores + Saving Throws (combined) */}
           <Panel>
             <PanelTitle color={accentColor}>Abilities &amp; Saves</PanelTitle>
-            {/* Header row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 44px 36px 32px 32px)", columnGap: 4, rowGap: 0, marginBottom: 4 }}>
-              <div /><div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SCORE</div>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>MOD</div>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SAVE</div>
-              <div /><div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SCORE</div>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>MOD</div>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, textAlign: "center" }}>SAVE</div>
-            </div>
-            {/* Data rows: STR/INT, DEX/WIS, CON/CHA */}
-            {(["str", "dex", "con"] as AbilKey[]).map((leftKey, i) => {
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 18, rowGap: 8, width: "100%" }}>
+            {(["str", "dex", "con"] as AbilKey[]).flatMap((leftKey, i) => {
               const rightKey = (["int", "wis", "cha"] as AbilKey[])[i];
-              return (
-                <div key={leftKey} style={{ display: "grid", gridTemplateColumns: "repeat(2, 44px 36px 32px 32px)", columnGap: 4, rowGap: 0, alignItems: "center", padding: "3px 0" }}>
-                  {([leftKey, rightKey] as AbilKey[]).map((k) => {
+              return ([leftKey, rightKey] as AbilKey[]).map((k) => {
                     const score = scores[k];
                     const m = mod(score);
                     const isProfSave = prof ? isProficientIn(prof.saves, ABILITY_FULL[k]) : false;
                     const save = m + (isProfSave ? pb : 0);
                     return (
-                      <React.Fragment key={k}>
+                      <div key={k} style={{ minWidth: 0 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "44px minmax(56px, 1fr) 40px 40px", columnGap: 10, alignItems: "center" }}>
                         <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
                           {ABILITY_LABELS[k]}
                         </div>
-                        <div style={{ padding: "4px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: 14, fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
+                        <div style={{ padding: "8px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: 14, fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
                           {score ?? "—"}
                         </div>
                         <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: C.text }}>{fmtMod(m)}</div>
                         <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: isProfSave ? accentColor : C.text, position: "relative" }}>
                           {fmtMod(save)}
-                          {isProfSave && <span style={{ position: "absolute", top: -2, right: -2, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
+                          {isProfSave && <span style={{ position: "absolute", top: -2, right: 0, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
                         </div>
-                      </React.Fragment>
+                        </div>
+                      </div>
                     );
-                  })}
-                </div>
-              );
+                  });
             })}
+            </div>
           </Panel>
 
           {/* Skills */}
           <Panel>
-            <PanelTitle color={C.green}>Skills</PanelTitle>
+            <PanelTitle color={accentColor}>Skills</PanelTitle>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {ALL_SKILLS.map(({ name, abil }) => {
                 const isProfSkill = prof ? isProficientIn(prof.skills, name) : false;
@@ -1167,59 +1218,114 @@ export function CharacterView() {
 
           {/* Player Notes */}
           <Panel>
-            <PanelTitle color={accentColor}>Player Notes</PanelTitle>
-            <textarea
-              value={playerNotesText}
-              onChange={(e) => handlePlayerNotesChange(e.target.value)}
-              placeholder="Private notes visible only to you…"
-              style={{
-                width: "100%", minHeight: 120, resize: "vertical", boxSizing: "border-box",
-                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
-                borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px",
-                fontFamily: "inherit", lineHeight: 1.5,
-              }}
-            />
+            <PanelTitle color={accentColor} actions={
+              <button
+                type="button"
+                onClick={() => setNoteDrawer({ scope: "player", note: null })}
+                title="Add note"
+                style={panelHeaderAddBtn(accentColor)}
+              >
+                +
+              </button>
+            }>Player Notes</PanelTitle>
+            {playerNotesList.length ? (
+              <DraggableList
+                items={playerNotesList}
+                expandedIds={expandedNoteIds}
+                onSelect={(id) => toggleNoteExpanded(id)}
+                onReorder={(ids) => {
+                  const byId = Object.fromEntries(playerNotesList.map((n) => [n.id, n]));
+                  void savePlayerNotesList(ids.map((id) => byId[id]).filter(Boolean));
+                }}
+                renderItem={(it) => {
+                  const note = playerNotesList.find((n) => n.id === it.id)!;
+                  return (
+                    <NoteItem
+                      note={note}
+                      expanded={expandedNoteIds.includes(it.id)}
+                      accentColor={accentColor}
+                      onToggle={() => toggleNoteExpanded(it.id)}
+                      onEdit={() => setNoteDrawer({ scope: "player", note })}
+                      onDelete={() => handleNoteDelete("player", it.id)}
+                    />
+                  );
+                }}
+              />
+            ) : (
+              <div style={{ color: C.muted, fontSize: 12 }}>No notes yet.</div>
+            )}
           </Panel>
 
           {/* Shared Notes */}
           <Panel>
-            <PanelTitle color={C.green}>Shared Notes</PanelTitle>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>Visible to all players and the DM</div>
-            <textarea
-              value={sharedNotesText}
-              onChange={(e) => handleSharedNotesChange(e.target.value)}
-              placeholder="Notes shared with the party and DM…"
-              style={{
-                width: "100%", minHeight: 120, resize: "vertical", boxSizing: "border-box",
-                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
-                borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px",
-                fontFamily: "inherit", lineHeight: 1.5,
-              }}
-            />
+            <PanelTitle color={accentColor} actions={
+              <button
+                type="button"
+                onClick={() => setNoteDrawer({ scope: "shared", note: null })}
+                title="Add shared note"
+                style={panelHeaderAddBtn(accentColor)}
+              >
+                +
+              </button>
+            }>Shared Notes</PanelTitle>
+            {sharedNotesList.length ? (
+              <DraggableList
+                items={sharedNotesList}
+                expandedIds={expandedNoteIds}
+                onSelect={(id) => toggleNoteExpanded(id)}
+                onReorder={(ids) => {
+                  const byId = Object.fromEntries(sharedNotesList.map((n) => [n.id, n]));
+                  saveSharedNotesList(ids.map((id) => byId[id]).filter(Boolean));
+                }}
+                renderItem={(it) => {
+                  const note = sharedNotesList.find((n) => n.id === it.id)!;
+                  return (
+                    <NoteItem
+                      note={note}
+                      expanded={expandedNoteIds.includes(it.id)}
+                      accentColor={C.green}
+                      hideTitle
+                      onToggle={() => toggleNoteExpanded(it.id)}
+                      onEdit={() => setNoteDrawer({ scope: "shared", note })}
+                      onDelete={() => handleNoteDelete("shared", it.id)}
+                    />
+                  );
+                }}
+              />
+            ) : (
+              <div style={{ color: C.muted, fontSize: 12 }}>No notes yet.</div>
+            )}
           </Panel>
 
           {/* Class Features */}
-          {char.characterData?.chosenOptionals && char.characterData.chosenOptionals.length > 0 && (
+          {classFeaturesList.length > 0 && (
             <Panel>
-              <PanelTitle color={C.green}>Class Features</PanelTitle>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {char.characterData.chosenOptionals.map((f) => (
-                  <span key={f} style={{
-                    fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 6,
-                    background: "rgba(94,203,107,0.11)", border: "1px solid rgba(94,203,107,0.28)",
-                    color: C.green,
-                  }}>
-                    {f}
-                  </span>
-                ))}
-              </div>
+              <PanelTitle color={accentColor}>Class Features</PanelTitle>
+              <DraggableList
+                items={classFeaturesList}
+                expandedIds={expandedClassFeatureIds}
+                onSelect={(id) => toggleClassFeatureExpanded(id)}
+                onReorder={(ids) => {
+                  const byId = Object.fromEntries(classFeaturesList.map((feature) => [feature.id, feature]));
+                  void saveClassFeaturesList(ids.map((id) => byId[id]).filter(Boolean));
+                }}
+                renderItem={(it) => {
+                  const feature = classFeaturesList.find((entry) => entry.id === it.id)!;
+                  return (
+                    <ClassFeatureItem
+                      feature={feature}
+                      expanded={expandedClassFeatureIds.includes(it.id)}
+                      accentColor={accentColor}
+                      onToggle={() => toggleClassFeatureExpanded(it.id)}
+                    />
+                  );
+                }}
+              />
             </Panel>
           )}
 
-          {/* Back button */}
-          <div style={{ paddingTop: 4 }}>
+          <div style={{ display: "none" }}>
             <button
-              onClick={() => navigate("/")}
               style={{
                 background: "transparent", border: "1px solid rgba(255,255,255,0.14)",
                 borderRadius: 8, padding: "7px 16px", color: C.muted,
@@ -1234,6 +1340,18 @@ export function CharacterView() {
 
       </div>
       {/* end 4-column grid */}
+
+      {/* Note edit drawer */}
+      {noteDrawer && (
+        <NoteEditDrawer
+          scope={noteDrawer.scope}
+          note={noteDrawer.note}
+          accentColor={accentColor}
+          onSave={handleNoteSave}
+          onDelete={noteDrawer.note ? () => { handleNoteDelete(noteDrawer.scope, noteDrawer.note!.id); setNoteDrawer(null); } : undefined}
+          onClose={() => setNoteDrawer(null)}
+        />
+      )}
     </Wrap>
   );
 }
@@ -1369,20 +1487,19 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
 
   return (
     <Panel>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-      <PanelTitle color="#fbbf24" style={{ flex: 1, marginBottom: 0 }}>
-        Inventory
-        {saving && <span style={{ fontSize: 9, color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}
-      </PanelTitle>
+      <PanelTitle color={accentColor} actions={
         <button
           type="button"
-          onClick={() => { setPickerOpen(true); }}
+          onClick={() => setPickerOpen(true)}
           title="Add item"
-          style={inventoryHeaderAddBtn}
+          style={panelHeaderAddBtn(accentColor)}
         >
           +
         </button>
-      </div>
+      }>
+        Inventory
+        {saving && <span style={{ fontSize: 9, color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}
+      </PanelTitle>
 
       <div style={{
         display: "flex",
@@ -2062,7 +2179,7 @@ function Panel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function PanelTitle({ children, color, style }: { children: React.ReactNode; color: string; style?: React.CSSProperties }) {
+function PanelTitle({ children, color, actions, style }: { children: React.ReactNode; color: string; actions?: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
       fontSize: 10, fontWeight: 700, textTransform: "uppercase",
@@ -2073,6 +2190,7 @@ function PanelTitle({ children, color, style }: { children: React.ReactNode; col
     }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{children}</span>
       <div style={{ flex: 1, height: 1, background: `${color}30` }} />
+      {actions ? <div style={{ flexShrink: 0 }}>{actions}</div> : null}
     </div>
   );
 }
@@ -2170,23 +2288,6 @@ const stepperBtn: React.CSSProperties = {
   padding: 0, lineHeight: 1,
 };
 
-const inventoryHeaderAddBtn: React.CSSProperties = {
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  border: "none",
-  background: "#f0a500",
-  color: "#0d1525",
-  fontSize: 28,
-  lineHeight: 1,
-  padding: 0,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
-  flexShrink: 0,
-  boxShadow: "0 10px 24px rgba(240,165,0,0.18)",
-};
 
 function inventoryEquipBtn(active: boolean, color: string): React.CSSProperties {
   return {
@@ -2200,6 +2301,26 @@ function inventoryEquipBtn(active: boolean, color: string): React.CSSProperties 
     fontWeight: 800,
     cursor: "pointer",
     flexShrink: 0,
+  };
+}
+
+function panelHeaderAddBtn(color: string): React.CSSProperties {
+  return {
+    minWidth: 32,
+    height: 32,
+    padding: "0 9px",
+    borderRadius: 10,
+    border: `1px solid ${withAlpha(color, 0.38)}`,
+    background: withAlpha(color, 0.18),
+    color,
+    cursor: "pointer",
+    fontSize: 20,
+    lineHeight: 1,
+    fontWeight: 800,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: `0 6px 18px ${withAlpha(color, 0.12)}`,
   };
 }
 
@@ -2282,4 +2403,180 @@ function toggleFilterPill(active: boolean, accentColor: string): React.CSSProper
     fontSize: 11,
     fontWeight: 700,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Notes sub-components
+// ---------------------------------------------------------------------------
+
+function NoteItem(props: {
+  note: PlayerNote;
+  expanded: boolean;
+  accentColor: string;
+  hideTitle?: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { note, expanded, accentColor, hideTitle } = props;
+  const preview = (note.text ?? "").trim().split(/\r?\n/).find(Boolean) ?? "";
+  const label = hideTitle ? (preview || note.title || "Untitled") : (note.title || "Untitled");
+  return (
+    <div style={{
+      padding: "5px 6px", borderRadius: 7,
+      background: expanded ? withAlpha(accentColor, 0.07) : "transparent",
+      border: `1px solid ${expanded ? withAlpha(accentColor, 0.22) : "transparent"}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onToggle(); }}
+          style={{ all: "unset", cursor: "pointer", fontWeight: 700, color: C.text, flex: 1, fontSize: 13, lineHeight: 1.4 }}
+        >
+          {label}
+        </button>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit(); }}
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: C.muted, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+        >
+          Edit
+        </button>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onDelete(); }}
+          style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: C.red, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+        >
+          ×
+        </button>
+      </div>
+      {expanded && note.text && (
+        <div style={{ marginTop: 6, color: C.muted, fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+          {note.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClassFeatureItem(props: {
+  feature: ClassFeatureEntry;
+  expanded: boolean;
+  accentColor: string;
+  onToggle: () => void;
+}) {
+  const { feature, expanded, accentColor } = props;
+  return (
+    <div style={{
+      padding: "5px 6px",
+      borderRadius: 7,
+      background: expanded ? withAlpha(accentColor, 0.07) : "transparent",
+      border: `1px solid ${expanded ? withAlpha(accentColor, 0.22) : "transparent"}`,
+    }}>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onToggle(); }}
+        style={{
+          all: "unset",
+          cursor: "pointer",
+          display: "block",
+          width: "100%",
+          fontWeight: 700,
+          color: C.text,
+          fontSize: 13,
+          lineHeight: 1.4,
+        }}
+      >
+        {feature.name}
+      </button>
+      {expanded && feature.text && (
+        <div style={{ marginTop: 6, color: C.muted, fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+          {feature.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NoteEditDrawer(props: {
+  scope: "player" | "shared";
+  note: PlayerNote | null;
+  accentColor: string;
+  onSave: (title: string, text: string) => void;
+  onDelete?: () => void;
+  onClose: () => void;
+}) {
+  const color = props.scope === "shared" ? C.green : props.accentColor;
+  const label = props.scope === "shared" ? "Shared Note" : "Player Note";
+  const [title, setTitle] = useState(props.note?.title ?? "");
+  const [text, setText] = useState(props.note?.text ?? "");
+
+  useEffect(() => {
+    setTitle(props.note?.title ?? "");
+    setText(props.note?.text ?? "");
+  }, [props.note]);
+
+  return (
+    <>
+      <div onClick={props.onClose} style={{ position: "fixed", inset: 0, zIndex: 900, background: "rgba(0,0,0,0.45)" }} />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 901,
+        width: "min(400px, 90vw)",
+        background: "#0e1220",
+        borderLeft: "1px solid rgba(255,255,255,0.12)",
+        display: "flex", flexDirection: "column",
+        boxShadow: "-8px 0 30px rgba(0,0,0,0.5)",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "18px 20px 14px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontWeight: 900, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", color }}>
+            {props.note ? `Edit ${label}` : `New ${label}`}
+          </span>
+          <button onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, color: C.muted, cursor: "pointer", padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>
+            Close
+          </button>
+        </div>
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Title</div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Note title…"
+              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px", fontFamily: "inherit" }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Text</div>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Write…"
+              rows={12}
+              style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px", fontFamily: "inherit", lineHeight: 1.5 }}
+            />
+          </div>
+        </div>
+        {/* Footer */}
+        <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", gap: 8 }}>
+          <div>
+            {props.note && props.onDelete && (
+              <button onClick={props.onDelete} style={{ background: "rgba(255,93,93,0.12)", border: "1px solid rgba(255,93,93,0.3)", borderRadius: 8, color: C.red, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+                Delete
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontSize: 13 }}>
+              Cancel
+            </button>
+            <button onClick={() => props.onSave(title.trim() || "Note", text)} style={{ background: `${color}22`, border: `1px solid ${color}55`, borderRadius: 8, color, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }

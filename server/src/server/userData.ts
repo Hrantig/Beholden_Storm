@@ -72,6 +72,7 @@ export interface StoredCampaign extends Timestamps {
   name: string;
   color: string | null;
   imageUrl?: string | null;
+  sharedNotes: string;
 }
 
 export interface StoredAdventure extends Timestamps {

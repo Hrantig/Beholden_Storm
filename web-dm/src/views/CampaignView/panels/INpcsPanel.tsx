@@ -48,7 +48,7 @@ export function INpcsPanel(props: Props) {
         </span>
       }
       actions={
-        <IconButton title="Add iNPC" onClick={() => setIsPickerOpen(true)} disabled={!props.selectedCampaignId}>
+        <IconButton title="Add iNPC" onClick={() => setIsPickerOpen(true)} disabled={!props.selectedCampaignId} variant="accent">
           <IconPlus />
         </IconButton>
       }

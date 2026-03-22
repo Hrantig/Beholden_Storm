@@ -27,7 +27,7 @@ export function AdventureNotesPanel(props: {
         </span>
       }
       actions={
-        <IconButton onClick={props.onAdd} disabled={!props.selectedAdventureId} title="Add note">
+        <IconButton onClick={props.onAdd} disabled={!props.selectedAdventureId} title="Add note" variant="accent">
           <IconPlus />
         </IconButton>
       }

@@ -492,6 +492,12 @@ function runMigrations(db: Db): void {
     db.exec("ALTER TABLE players ADD COLUMN death_saves_json TEXT");
   }
 
+  // Add shared_notes to campaigns if missing (DM-created shared notes).
+  const campaignCols = (db.pragma("table_info(campaigns)") as { name: string }[]).map((c) => c.name);
+  if (!campaignCols.includes("shared_notes")) {
+    db.exec("ALTER TABLE campaigns ADD COLUMN shared_notes TEXT NOT NULL DEFAULT ''");
+  }
+
   // Add shared_notes to players and user_characters if missing (character notes feature).
   const playerCols4 = (db.pragma("table_info(players)") as { name: string }[]).map((c) => c.name);
   if (!playerCols4.includes("shared_notes")) {
@@ -555,6 +561,7 @@ export function rowToCampaign(row: Record<string, unknown>): StoredCampaign {
     name: row.name as string,
     color: (row.color as string | null) ?? null,
     imageUrl: (row.image_url as string | null) ?? null,
+    sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };

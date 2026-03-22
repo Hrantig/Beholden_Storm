@@ -53,6 +53,12 @@ interface BgDetail {
   equipment?: string;
 }
 
+interface ClassFeatureEntry {
+  id: string;
+  name: string;
+  text: string;
+}
+
 // Canonical pick lists mirrored from server/src/lib/proficiencyConstants.ts
 const ALL_TOOLS = [
   "Alchemist's Supplies","Brewer's Supplies","Calligrapher's Supplies",
@@ -791,6 +797,26 @@ export function CharacterCreatorView() {
     setBusy(true); setError(null);
     try {
       const scores = resolvedScores(form);
+      const classFeatures: ClassFeatureEntry[] = (() => {
+        if (!classDetail) return [];
+        const featureByName = new Map<string, ClassFeatureEntry>();
+        for (const al of classDetail.autolevels) {
+          if (al.level == null || al.level > form.level) continue;
+          for (const f of al.features) {
+            if (!f.optional) continue;
+            if (!form.chosenOptionals.includes(f.name)) continue;
+            if (featureByName.has(f.name)) continue;
+            featureByName.set(f.name, {
+              id: f.name,
+              name: f.name,
+              text: f.text?.trim() ?? "",
+            });
+          }
+        }
+        return form.chosenOptionals
+          .map((name) => featureByName.get(name) ?? { id: name, name, text: "" })
+          .filter(Boolean);
+      })();
       const body = {
         name: form.characterName.trim(),
         playerName: form.playerName.trim(),
@@ -809,6 +835,7 @@ export function CharacterCreatorView() {
           subclass: form.subclass || null, abilityMethod: form.abilityMethod,
           hd: classDetail?.hd ?? null,
           chosenOptionals: form.chosenOptionals,
+          classFeatures,
           chosenSkills: form.chosenSkills,
           chosenCantrips: form.chosenCantrips,
           chosenSpells: form.chosenSpells,
