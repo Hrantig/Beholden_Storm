@@ -1,7 +1,8 @@
 import React from "react";
 import { Panel } from "@/ui/Panel";
 import { theme, withAlpha } from "@/theme/theme";
-import { IconNotes } from "@/icons";
+import { IconNotes, IconPlus } from "@/icons";
+import { IconButton } from "@/ui/IconButton";
 import type { Player } from "@/domain/types/domain";
 import { api, jsonInit } from "@/services/api";
 
@@ -130,13 +131,9 @@ export function SharedNotesPanel(props: {
           </span>
         }
         actions={
-          <button
-            onClick={openCreate}
-            title="Add shared note"
-            style={{ background: "transparent", border: `1px solid ${accent}55`, borderRadius: 6, color: accent, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "1px 7px", fontWeight: 900 }}
-          >
-            +
-          </button>
+          <IconButton onClick={openCreate} title="Add shared note" variant="accent">
+            <IconPlus />
+          </IconButton>
         }
       >
         {totalCount === 0 ? (

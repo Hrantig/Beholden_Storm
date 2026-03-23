@@ -176,7 +176,7 @@ export function parseFeat(args: {
   }
 
   for (const paragraph of paragraphs) {
-    if (/^Repeatable\./i.test(paragraph)) continue;
+    if (/^Repeatable[.:]/i.test(paragraph)) continue;
 
     let match = paragraph.match(/You (?:gain )?learn (\w+) cantrips? of your choice from the ([^.]+?) spell list/i);
     if (match) {

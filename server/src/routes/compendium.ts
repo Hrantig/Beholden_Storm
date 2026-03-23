@@ -545,21 +545,10 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     const row = db.prepare("SELECT data_json FROM compendium_backgrounds WHERE id = ?").get(id) as { data_json: string } | undefined;
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
     const bg = JSON.parse(row.data_json);
-    const featEntries = Array.isArray(bg.proficiencies?.feats) ? bg.proficiencies.feats : [];
-    const needsBgParsing =
-      !bg.proficiencies ||
-      featEntries.some((feat: unknown) =>
-        typeof feat === "string" ||
-        !feat ||
-        typeof feat !== "object" ||
-        !("parsed" in feat)
-      );
-    if (needsBgParsing) {
-      bg.proficiencies = parseBackgroundProficiencies({
-        proficiency: bg.proficiency,
-        trait: bg.traits,
-      });
-    }
+    bg.proficiencies = parseBackgroundProficiencies({
+      proficiency: bg.proficiency,
+      trait: bg.traits,
+    });
     res.json(bg);
   });
 

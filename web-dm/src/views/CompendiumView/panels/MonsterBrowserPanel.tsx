@@ -141,10 +141,22 @@ export function MonsterBrowserPanel(props: {
   const { start, end, padTop, padBottom } = vl.getRange(filteredRows.length);
 
   // CRUD state
-  const [formTarget, setFormTarget] = React.useState<{ mode: "create" } | { mode: "edit"; monster: MonsterForEdit } | null>(null);
+  const [formTarget, setFormTarget] = React.useState<{ mode: "create" } | { mode: "edit"; monster: MonsterForEdit } | { mode: "duplicate"; source: MonsterForEdit } | null>(null);
   const [editLoading, setEditLoading] = React.useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = React.useState(false);
+
+  // Create-choice + duplicate-picker state
+  const [showCreateChoice, setShowCreateChoice] = React.useState(false);
+  const [dupPickerOpen, setDupPickerOpen] = React.useState(false);
+  const [dupSearchQ, setDupSearchQ] = React.useState("");
+  const [dupLoading, setDupLoading] = React.useState<string | null>(null);
+
+  const dupFilteredRows = React.useMemo(() => {
+    const q = dupSearchQ.trim().toLowerCase();
+    const rows = q ? baseRows.filter((m) => m.name.toLowerCase().includes(q)) : baseRows;
+    return rows.slice(0, 200);
+  }, [baseRows, dupSearchQ]);
 
   async function handleEditClick(id: string) {
     setEditLoading(id);
@@ -155,6 +167,20 @@ export function MonsterBrowserPanel(props: {
       // ignore
     } finally {
       setEditLoading(null);
+    }
+  }
+
+  async function handleDuplicateClick(id: string) {
+    setDupLoading(id);
+    try {
+      const source = await api<MonsterForEdit>(`/api/compendium/monsters/${encodeURIComponent(id)}`);
+      setDupPickerOpen(false);
+      setDupSearchQ("");
+      setFormTarget({ mode: "duplicate", source });
+    } catch {
+      // ignore
+    } finally {
+      setDupLoading(null);
     }
   }
 
@@ -185,7 +211,7 @@ export function MonsterBrowserPanel(props: {
               <button
                 type="button"
                 title="New monster"
-                onClick={() => setFormTarget({ mode: "create" })}
+                onClick={() => setShowCreateChoice(true)}
                 style={{
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                   width: 28, height: 28, borderRadius: 8,
@@ -285,9 +311,81 @@ export function MonsterBrowserPanel(props: {
         </div>
       </Panel>
 
+      {/* Create-choice modal */}
+      {showCreateChoice && (
+        <div
+          onClick={() => setShowCreateChoice(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 1001, display: "flex", alignItems: "center", justifyContent: "center", background: theme.colors.scrim }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: theme.colors.modalBg, border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 10, width: 260 }}
+          >
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>New Monster</div>
+            <button type="button"
+              onClick={() => { setShowCreateChoice(false); setFormTarget({ mode: "create" }); }}
+              style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: theme.colors.accentPrimary, color: theme.colors.textDark, fontWeight: 700, cursor: "pointer", fontSize: 13, textAlign: "left" }}>
+              Create New
+            </button>
+            <button type="button"
+              onClick={() => { setShowCreateChoice(false); setDupPickerOpen(true); }}
+              style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: "transparent", color: theme.colors.text, fontWeight: 600, cursor: "pointer", fontSize: 13, textAlign: "left" }}>
+              Duplicate Existing…
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate picker modal */}
+      {dupPickerOpen && (
+        <div
+          onClick={() => { setDupPickerOpen(false); setDupSearchQ(""); }}
+          style={{ position: "fixed", inset: 0, zIndex: 1001, display: "flex", alignItems: "center", justifyContent: "center", background: theme.colors.scrim }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: theme.colors.modalBg, border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 12, width: "min(480px, 95vw)", display: "flex", flexDirection: "column", maxHeight: "80vh" }}
+          >
+            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${theme.colors.panelBorder}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Pick a monster to duplicate</span>
+              <button type="button" onClick={() => { setDupPickerOpen(false); setDupSearchQ(""); }}
+                style={{ background: "none", border: "none", color: theme.colors.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${theme.colors.panelBorder}`, flexShrink: 0 }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Search monsters…"
+                value={dupSearchQ}
+                onChange={(e) => setDupSearchQ(e.target.value)}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: theme.colors.inputBg, color: theme.colors.text, fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {dupFilteredRows.map((m) => (
+                <button key={m.id} type="button"
+                  disabled={dupLoading === m.id}
+                  onClick={() => handleDuplicateClick(m.id)}
+                  style={{ width: "100%", padding: "10px 16px", border: "none", borderBottom: `1px solid ${theme.colors.panelBorder}`, background: "transparent", color: theme.colors.text, cursor: dupLoading === m.id ? "wait" : "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 2, opacity: dupLoading === m.id ? 0.5 : 1 }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{m.name}</div>
+                  <div style={{ color: theme.colors.muted, fontSize: 11 }}>
+                    {m.cr != null ? `CR ${formatCr(m.cr)}` : "CR —"}{m.type ? ` • ${m.type}` : ""}
+                  </div>
+                </button>
+              ))}
+              {dupFilteredRows.length === 0 && (
+                <div style={{ padding: 16, color: theme.colors.muted, fontSize: 13 }}>No monsters found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {formTarget && (
         <MonsterFormModal
-          monster={formTarget.mode === "edit" ? formTarget.monster : null}
+          monster={formTarget.mode === "edit" ? formTarget.monster : formTarget.mode === "duplicate" ? formTarget.source : null}
+          isDuplicate={formTarget.mode === "duplicate"}
           onClose={() => setFormTarget(null)}
           onSaved={(id) => {
             setFormTarget(null);

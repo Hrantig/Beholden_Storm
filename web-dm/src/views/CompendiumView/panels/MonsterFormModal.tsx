@@ -14,13 +14,15 @@ export type { MonsterBlock, MonsterForEdit };
 
 export function MonsterFormModal(props: {
   monster: MonsterForEdit | null;
+  isDuplicate?: boolean;
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
-  const isEdit = props.monster != null;
+  const isDuplicate = props.isDuplicate ?? false;
+  const isEdit = props.monster != null && !isDuplicate;
   const m = props.monster;
 
-  const [name, setName]               = React.useState(m?.name ?? "");
+  const [name, setName]               = React.useState(isDuplicate ? `${m?.name ?? ""} (Copy)` : (m?.name ?? ""));
   const [cr, setCr]                   = React.useState(toStr(m?.cr));
   const [typeFull, setTypeFull]       = React.useState(toStr(m?.typeFull ?? (m as any)?.typeKey));
   const [size, setSize]               = React.useState(normalizeSize(m?.size) || "Medium");
@@ -127,7 +129,7 @@ export function MonsterFormModal(props: {
           display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
         }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>
-            {isEdit ? `Edit: ${m!.name}` : "New Monster"}
+            {isEdit ? `Edit: ${m!.name}` : isDuplicate ? `Duplicate: ${m!.name}` : "New Monster"}
           </span>
           <button type="button" onClick={props.onClose}
             style={{ background: "none", border: "none", color: theme.colors.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>
@@ -272,7 +274,7 @@ export function MonsterFormModal(props: {
           </button>
           <button type="submit" disabled={busy}
             style={{ ...btnBase, background: theme.colors.accentPrimary, color: theme.colors.textDark, opacity: busy ? 0.6 : 1 }}>
-            {busy ? "Saving…" : isEdit ? "Save Changes" : "Create Monster"}
+            {busy ? "Saving…" : isEdit ? "Save Changes" : isDuplicate ? "Create Duplicate" : "Create Monster"}
           </button>
         </div>
       </form>

@@ -98,6 +98,15 @@ interface BgDetail {
   traits: { name: string; text: string }[];
   equipment?: string;
 }
+interface InventoryItemSeed {
+  id: string;
+  name: string;
+  quantity: number;
+  equipped: boolean;
+  equipState?: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand";
+  notes?: string;
+  source?: "compendium" | "custom";
+}
 
 interface ClassFeatureEntry {
   id: string;
@@ -435,6 +444,112 @@ function classifyFeatSelection(choice: ParsedFeatChoice, value: string): "skill"
   return null;
 }
 
+interface StartingEquipmentOption {
+  id: string;
+  entries: string[];
+  text: string;
+}
+
+function parseStartingEquipmentOptions(equipment: string | undefined): StartingEquipmentOption[] {
+  if (!equipment) return [];
+  const normalized = equipment
+    .replace(/\r/g, "")
+    .replace(/Choose\s+A\s+or\s+8/gi, "Choose A or B")
+    .replace(/\(8\)/g, "(B)")
+    .replace(/•/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const matches = [...normalized.matchAll(/\(([A-Z])\)\s*([\s\S]*?)(?=(?:;\s*or\s*\([A-Z]\))|(?:;\s*\([A-Z]\))|$)/g)];
+  return matches.map((match) => ({
+    id: match[1] ?? "",
+    text: (match[2] ?? "").trim().replace(/;$/, ""),
+    entries: splitEquipmentEntries((match[2] ?? "").trim()),
+  })).filter((option) => option.id && option.entries.length > 0);
+}
+
+function splitEquipmentEntries(text: string): string[] {
+  return text
+    .replace(/\s+or\s+$/i, "")
+    .split(/\s*,\s*/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function getBackgroundGrantedToolSelections(form: FormState, bgDetail: BgDetail | null): string[] {
+  const granted = new Set<string>([
+    ...(bgDetail?.proficiencies?.tools.fixed ?? []),
+    ...form.chosenBgTools,
+  ]);
+  for (const featChoice of getBackgroundFeatChoices(bgDetail)) {
+    const selected = form.chosenFeatOptions[featChoice.key] ?? [];
+    for (const value of selected) {
+      if (classifyFeatSelection(featChoice.choice, value) === "tool") granted.add(value);
+    }
+  }
+  return [...granted];
+}
+
+function buildStartingInventory(form: FormState, bgDetail: BgDetail | null): InventoryItemSeed[] {
+  const optionId = form.chosenBgEquipmentOption;
+  const options = parseStartingEquipmentOptions(bgDetail?.equipment);
+  const selected = options.find((option) => option.id === optionId);
+  if (!selected) return [];
+
+  const grantedTools = getBackgroundGrantedToolSelections(form, bgDetail);
+  const items: InventoryItemSeed[] = [];
+  let autoId = 1;
+
+  function pushItem(name: string, quantity: number) {
+    const trimmed = name.trim();
+    if (!trimmed || quantity <= 0) return;
+    items.push({
+      id: `bg-eq-${autoId++}`,
+      name: trimmed,
+      quantity,
+      equipped: false,
+      source: "custom",
+    });
+  }
+
+  for (const entry of selected.entries) {
+    const normalized = entry
+      .replace(/\bC\s*p\b/gi, "CP")
+      .replace(/\bG\s*p\b/gi, "GP")
+      .trim();
+    if (/same as above/i.test(normalized)) {
+      const prefix = normalized.replace(/\s*\(same as above\)\s*/i, "").trim();
+      const matching = grantedTools.filter((tool) => {
+        if (/Musical Instrument/i.test(prefix)) return MUSICAL_INSTRUMENTS.includes(tool);
+        if (/Artisan'?s Tools/i.test(prefix)) return ALL_TOOLS.includes(tool) && !MUSICAL_INSTRUMENTS.includes(tool);
+        if (/Gaming Set/i.test(prefix)) return /Set$/i.test(tool);
+        return true;
+      });
+      if (matching.length > 0) {
+        matching.forEach((tool) => pushItem(tool, 1));
+      } else {
+        pushItem(prefix || normalized, 1);
+      }
+      continue;
+    }
+
+    const currencyMatch = normalized.match(/^(\d+)\s*(GP|CP|SP|EP|PP)$/i);
+    if (currencyMatch) {
+      pushItem(currencyMatch[2].toUpperCase(), Number(currencyMatch[1]));
+      continue;
+    }
+
+    const countMatch = normalized.match(/^(\d+)\s+(.+)$/);
+    if (countMatch) {
+      pushItem(countMatch[2], Number(countMatch[1]));
+      continue;
+    }
+
+    pushItem(normalized, 1);
+  }
+
+  return items;
+}
+
 function getWeaponMasteryChoice(classDetail: ClassDetail | null, level: number): WeaponMasteryChoice | null {
   if (!classDetail) return null;
   for (const al of classDetail.autolevels) {
@@ -654,6 +769,7 @@ interface FormState {
   // Background tool / language / ability choices (Step 3)
   chosenBgTools: string[];
   chosenBgLanguages: string[];
+  chosenBgEquipmentOption: string | null;
   chosenFeatOptions: Record<string, string[]>;
   bgAbilityMode: "split" | "even";
   bgAbilityBonuses: Record<string, number>; // e.g. { str: 2, dex: 1 } or { str:1, dex:1, con:1 }
@@ -691,7 +807,7 @@ function initForm(user: { name?: string } | null, params: URLSearchParams): Form
   return {
     classId: "", raceId: "", bgId: "",
     level: 1, subclass: "", chosenOptionals: [],
-    chosenBgTools: [], chosenBgLanguages: [], chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {},
+    chosenBgTools: [], chosenBgLanguages: [], chosenBgEquipmentOption: null, chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {},
     chosenSkills: [], chosenWeaponMasteries: [], chosenCantrips: [], chosenSpells: [], chosenInvocations: [],
     abilityMethod: "standard",
     standardAssign: { str: -1, dex: -1, con: -1, int: -1, wis: -1, cha: -1 },
@@ -894,6 +1010,7 @@ export function CharacterCreatorView() {
           subclass: cd.subclass ?? "",
           chosenOptionals: cd.chosenOptionals ?? [],
           chosenSkills: cd.chosenSkills ?? [],
+          chosenBgEquipmentOption: cd.chosenBgEquipmentOption ?? null,
           chosenFeatOptions: cd.chosenFeatOptions ?? {},
           chosenWeaponMasteries: cd.chosenWeaponMasteries ?? [],
           chosenCantrips: cd.chosenCantrips ?? [],
@@ -970,7 +1087,7 @@ export function CharacterCreatorView() {
   // Load bg detail when selected
   React.useEffect(() => {
     if (!form.bgId) { setBgDetail(null); return; }
-    setForm(f => ({ ...f, chosenBgTools: [], chosenBgLanguages: [], chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {} }));
+    setForm(f => ({ ...f, chosenBgTools: [], chosenBgLanguages: [], chosenBgEquipmentOption: null, chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {} }));
     api<BgDetail>(`/api/compendium/backgrounds/${form.bgId}`).then(setBgDetail).catch(() => {});
   }, [form.bgId]);
 
@@ -1017,6 +1134,9 @@ export function CharacterCreatorView() {
           .map((name) => featureByName.get(name) ?? { id: name, name, text: "" })
           .filter(Boolean);
       })();
+      const startingInventory = isEditing
+        ? undefined
+        : buildStartingInventory(form, bgDetail);
       const body = {
         name: form.characterName.trim(),
         playerName: optionalText(form.playerName),
@@ -1044,11 +1164,13 @@ export function CharacterCreatorView() {
           chosenOptionals: form.chosenOptionals,
           classFeatures,
           chosenSkills: form.chosenSkills,
+          chosenBgEquipmentOption: form.chosenBgEquipmentOption,
           chosenFeatOptions: form.chosenFeatOptions,
           chosenWeaponMasteries: form.chosenWeaponMasteries,
           chosenCantrips: form.chosenCantrips,
           chosenSpells: form.chosenSpells,
           chosenInvocations: form.chosenInvocations,
+          ...(startingInventory ? { inventory: startingInventory } : {}),
           proficiencies: buildProficiencyMap(
             form, classDetail, raceDetail, bgDetail,
             classCantrips, classSpells, classInvocations
@@ -1336,6 +1458,7 @@ export function CharacterCreatorView() {
     const filtered = bgSearch
       ? bgs.filter((b) => b.name.toLowerCase().includes(bgSearch.toLowerCase()))
       : bgs;
+    const equipmentOptions = parseStartingEquipmentOptions(bgDetail?.equipment);
 
     return (
       <div>
@@ -1391,6 +1514,7 @@ export function CharacterCreatorView() {
           const skills  = prof?.skills  ?? { fixed: bgDetail.proficiency.split(/[,;]/).map(s=>s.trim()).filter(Boolean), choose: 0, from: null };
           const tools    = prof?.tools    ?? { fixed: [], choose: 0, from: null };
           const langs    = prof?.languages ?? { fixed: [], choose: 0, from: null };
+          const equipmentOptions = parseStartingEquipmentOptions(bgDetail.equipment);
           const flavorTraits = bgDetail.traits.filter((t) => !/tool|language|starting equipment/i.test(t.name)).slice(0, 1);
 
           // Toggle helper for bg tool/language pickers
@@ -1601,9 +1725,33 @@ export function CharacterCreatorView() {
                 <div style={{ marginBottom: 10 }}>
                   <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Starting Equipment </span>
                   <span style={sourceTagStyle}>{bgDetail.name}</span>
+                  {equipmentOptions.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                      {equipmentOptions.map((option) => {
+                        const selected = form.chosenBgEquipmentOption === option.id;
+                        return (
+                          <button key={option.id} type="button"
+                            onClick={() => setForm((f) => ({ ...f, chosenBgEquipmentOption: option.id }))}
+                            style={{
+                              padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
+                              border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.15)"}`,
+                              background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
+                              color: selected ? C.accentHl : C.muted,
+                            }}>
+                            Option {option.id}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 5, lineHeight: 1.6 }}>
                     {bgDetail.equipment}
                   </div>
+                  {form.chosenBgEquipmentOption && equipmentOptions.length > 0 && (
+                    <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
+                      Inventory will start with option {form.chosenBgEquipmentOption}.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1619,7 +1767,7 @@ export function CharacterCreatorView() {
         })()}
 
         <NavButtons step={step} onBack={() => setStep(2)} onNext={() => setStep(4)}
-          nextDisabled={!form.bgId} />
+          nextDisabled={!form.bgId || (equipmentOptions.length > 0 && !form.chosenBgEquipmentOption)} />
       </div>
     );
   }
