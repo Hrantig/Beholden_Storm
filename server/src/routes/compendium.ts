@@ -5,7 +5,16 @@ import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { requireAdmin, requireAnyDm, requireAuth } from "../middleware/auth.js";
 import { parseFeat } from "../lib/featParser.js";
-import { parseBackgroundProficiencies } from "../lib/proficiencyConstants.js";
+import { parseBackgroundProficiencies, parseRaceChoicesByRuleset } from "../lib/proficiencyConstants.js";
+
+type Ruleset = "5e" | "5.5e";
+
+function inferRuleset(...values: Array<unknown>): Ruleset {
+  const text = values
+    .map((value) => String(value ?? ""))
+    .join("\n");
+  return /\[(?:2024|5\.5e)\]|\((?:2024|5\.5e)\)|\b2024\b|\b5\.5e\b/i.test(text) ? "5.5e" : "5e";
+}
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +57,8 @@ const ItemBody = z.object({
   magic: z.boolean().optional(),
   weight: z.number().nullable().optional(),
   value: z.number().nullable().optional(),
+  ac: z.number().nullable().optional(),
+  stealthDisadvantage: z.boolean().optional(),
   dmg1: z.string().trim().nullable().optional(),
   dmg2: z.string().trim().nullable().optional(),
   dmgType: z.string().trim().nullable().optional(),
@@ -147,6 +158,8 @@ function buildItemRecord(id: string, b: ItemBodyType) {
     attunement, magic,
     weight: b.weight ?? null,
     value: b.value ?? null,
+    ac: b.ac ?? null,
+    stealthDisadvantage: b.stealthDisadvantage ?? false,
     dmg1: b.dmg1?.trim() || null,
     dmg2: b.dmg2?.trim() || null,
     dmgType: b.dmgType?.trim() || null,
@@ -336,6 +349,8 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
       attunement: Boolean(row.attunement), magic: Boolean(row.magic),
       weight: it.weight ?? null,
       value: it.value ?? null,
+      ac: it.ac ?? null,
+      stealthDisadvantage: Boolean(it.stealthDisadvantage),
       dmg1: it.dmg1 ?? null,
       dmg2: it.dmg2 ?? null,
       dmgType: it.dmgType ?? null,
@@ -507,8 +522,11 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
 
   // --- Classes ---------------------------------------------------------------
   app.get("/api/compendium/classes", requireAuth, (_req, res) => {
-    const rows = db.prepare("SELECT id, name, hd FROM compendium_classes ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; hd: number | null }[];
-    res.json(rows);
+    const rows = db.prepare("SELECT id, name, hd, data_json FROM compendium_classes ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; hd: number | null; data_json: string }[];
+    res.json(rows.map((row) => {
+      const data = JSON.parse(row.data_json);
+      return { id: row.id, name: row.name, hd: row.hd, ruleset: data.ruleset ?? inferRuleset(row.name) };
+    }));
   });
 
   app.get("/api/compendium/classes/:id", requireAuth, (req, res) => {
@@ -516,13 +534,18 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     if (!id) return;
     const row = db.prepare("SELECT data_json FROM compendium_classes WHERE id = ?").get(id) as { data_json: string } | undefined;
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
-    res.json(JSON.parse(row.data_json));
+    const cls = JSON.parse(row.data_json);
+    if (!cls.ruleset) cls.ruleset = inferRuleset(cls.name);
+    res.json(cls);
   });
 
   // --- Races -----------------------------------------------------------------
   app.get("/api/compendium/races", requireAuth, (_req, res) => {
-    const rows = db.prepare("SELECT id, name, size, speed FROM compendium_races ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; size: string | null; speed: number | null }[];
-    res.json(rows);
+    const rows = db.prepare("SELECT id, name, size, speed, data_json FROM compendium_races ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; size: string | null; speed: number | null; data_json: string }[];
+    res.json(rows.map((row) => {
+      const data = JSON.parse(row.data_json);
+      return { id: row.id, name: row.name, size: row.size, speed: row.speed, ruleset: data.ruleset ?? inferRuleset(row.name) };
+    }));
   });
 
   app.get("/api/compendium/races/:id", requireAuth, (req, res) => {
@@ -530,13 +553,26 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     if (!id) return;
     const row = db.prepare("SELECT data_json FROM compendium_races WHERE id = ?").get(id) as { data_json: string } | undefined;
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
-    res.json(JSON.parse(row.data_json));
+    const race = JSON.parse(row.data_json);
+    if (!race.ruleset) {
+      race.ruleset = inferRuleset(race.name, Array.isArray(race.traits) ? race.traits.map((t: any) => `${t?.name ?? ""}\n${t?.text ?? ""}`).join("\n") : "");
+    }
+    if (!race.parsedChoices) {
+      race.parsedChoices = parseRaceChoicesByRuleset(
+        race.ruleset,
+        Array.isArray(race.traits) ? race.traits.map((t: any) => ({ name: String(t?.name ?? ""), text: String(t?.text ?? "") })) : [],
+      );
+    }
+    res.json(race);
   });
 
   // --- Backgrounds -----------------------------------------------------------
   app.get("/api/compendium/backgrounds", requireAuth, (_req, res) => {
-    const rows = db.prepare("SELECT id, name FROM compendium_backgrounds ORDER BY name COLLATE NOCASE").all() as { id: string; name: string }[];
-    res.json(rows);
+    const rows = db.prepare("SELECT id, name, data_json FROM compendium_backgrounds ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; data_json: string }[];
+    res.json(rows.map((row) => {
+      const data = JSON.parse(row.data_json);
+      return { id: row.id, name: row.name, ruleset: data.ruleset ?? inferRuleset(row.name) };
+    }));
   });
 
   app.get("/api/compendium/backgrounds/:id", requireAuth, (req, res) => {
@@ -545,17 +581,24 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     const row = db.prepare("SELECT data_json FROM compendium_backgrounds WHERE id = ?").get(id) as { data_json: string } | undefined;
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
     const bg = JSON.parse(row.data_json);
+    if (!bg.ruleset) {
+      bg.ruleset = inferRuleset(bg.name, bg.equipment, Array.isArray(bg.traits) ? bg.traits.map((t: any) => `${t?.name ?? ""}\n${t?.text ?? ""}`).join("\n") : "");
+    }
     bg.proficiencies = parseBackgroundProficiencies({
       proficiency: bg.proficiency,
       trait: bg.traits,
+      ruleset: bg.ruleset,
     });
     res.json(bg);
   });
 
   // --- Feats -----------------------------------------------------------------
   app.get("/api/compendium/feats", requireAuth, (_req, res) => {
-    const rows = db.prepare("SELECT id, name FROM compendium_feats ORDER BY name COLLATE NOCASE").all() as { id: string; name: string }[];
-    res.json(rows);
+    const rows = db.prepare("SELECT id, name, data_json FROM compendium_feats ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; data_json: string }[];
+    res.json(rows.map((row) => {
+      const data = JSON.parse(row.data_json);
+      return { id: row.id, name: row.name, ruleset: data.ruleset ?? inferRuleset(row.name) };
+    }));
   });
 
   app.get("/api/compendium/feats/:featId", requireAuth, (req, res) => {
@@ -564,6 +607,9 @@ export function registerCompendiumRoutes(app: Express, ctx: ServerContext) {
     const row = db.prepare("SELECT data_json FROM compendium_feats WHERE id = ?").get(featId) as { data_json: string } | undefined;
     if (!row) return res.status(404).json({ ok: false, message: "Feat not found" });
     const feat = JSON.parse(row.data_json);
+    if (!feat.ruleset) {
+      feat.ruleset = inferRuleset(feat.name, feat.text, feat.prerequisite, feat.special);
+    }
     if (!feat.parsed) {
       feat.parsed = parseFeat({
         name: String(feat.name ?? ""),

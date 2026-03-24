@@ -1,0 +1,189 @@
+export type Ruleset = "5e" | "5.5e";
+
+export interface RuleTaggedRecord {
+  ruleset?: Ruleset | null;
+  name?: string | null;
+}
+
+export interface ParsedFeatChoiceLike {
+  id: string;
+  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
+  count: number;
+  options: string[] | null;
+  anyOf?: string[];
+  amount?: number | null;
+  level?: number | null;
+  linkedTo?: string | null;
+  distinct?: boolean;
+  note?: string | null;
+}
+
+export interface ParsedFeatLike {
+  choices: ParsedFeatChoiceLike[];
+}
+
+export interface BackgroundFeatLike {
+  name: string;
+  parsed: ParsedFeatLike;
+}
+
+export interface BackgroundDetailLike {
+  proficiencies?: {
+    feats?: BackgroundFeatLike[];
+  } | null;
+}
+
+export interface BackgroundFeatChoiceEntry {
+  featName: string;
+  feat: ParsedFeatLike;
+  choice: ParsedFeatChoiceLike;
+  key: string;
+}
+
+export interface RaceChoices {
+  hasChosenSize: boolean;
+  skillChoice: { count: number; from: string[] | null } | null;
+  toolChoice: { count: number; from: string[] | null } | null;
+  languageChoice: { count: number; from: string[] | null } | null;
+  hasFeatChoice: boolean;
+}
+
+function wordOrNumberToInt(value: string): number | null {
+  const lowered = value.trim().toLowerCase();
+  const numeric = Number.parseInt(lowered, 10);
+  if (Number.isFinite(numeric)) return numeric;
+  const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+  return words[lowered] ?? null;
+}
+
+export function inferRulesetFromLabel(text: string | null | undefined): Ruleset {
+  const value = String(text ?? "");
+  if (/\[(?:2024|5\.5e)\]|\((?:2024|5\.5e)\)/i.test(value)) return "5.5e";
+  return "5e";
+}
+
+export function matchesRulesetLabel(text: string | null | undefined, ruleset: Ruleset | null): boolean {
+  if (!ruleset) return true;
+  return inferRulesetFromLabel(text) === ruleset;
+}
+
+export function matchesRuleset(value: RuleTaggedRecord, ruleset: Ruleset | null): boolean {
+  if (!ruleset) return true;
+  if (value.ruleset) return value.ruleset === ruleset;
+  return matchesRulesetLabel(value.name, ruleset);
+}
+
+function parseRaceChoices5e(traits: { name: string; text: string }[], allSkills: string[]): RaceChoices {
+  let skillChoice: RaceChoices["skillChoice"] = null;
+  let toolChoice: RaceChoices["toolChoice"] = null;
+  let languageChoice: RaceChoices["languageChoice"] = null;
+
+  for (const t of traits) {
+    const text = t.text;
+    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
+    if (skillListMatch) {
+      const from = skillListMatch[1]
+        .split(/,\s*|\s+or\s+/i)
+        .map((s) => s.trim())
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+        .filter((s) => allSkills.includes(s));
+      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
+    } else if (
+      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
+      /one skill of your choice/i.test(text)
+    ) {
+      if (!skillChoice) skillChoice = { count: 1, from: null };
+    }
+
+    if (/one tool proficiency of your choice/i.test(text)) {
+      if (!toolChoice) toolChoice = { count: 1, from: null };
+    }
+
+    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
+    if (langListMatch) {
+      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
+      const from = langListMatch[2]
+        .split(/[,\n\t]+/)
+        .map((s) => s.trim()).filter(Boolean)
+        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
+    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
+      if (!languageChoice) languageChoice = { count: 1, from: null };
+    }
+  }
+
+  return { hasChosenSize: false, skillChoice, toolChoice, languageChoice, hasFeatChoice: false };
+}
+
+function parseRaceChoices55e(traits: { name: string; text: string }[], allSkills: string[]): RaceChoices {
+  let hasChosenSize = false;
+  let skillChoice: RaceChoices["skillChoice"] = null;
+  let toolChoice: RaceChoices["toolChoice"] = null;
+  let languageChoice: RaceChoices["languageChoice"] = null;
+  let hasFeatChoice = false;
+
+  for (const t of traits) {
+    const text = t.text;
+    if (/^size$/i.test(t.name) && /chosen when you select/i.test(text)) hasChosenSize = true;
+    if (/origin feat of your choice/i.test(text)) hasFeatChoice = true;
+
+    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
+    if (skillListMatch) {
+      const from = skillListMatch[1]
+        .split(/,\s*|\s+or\s+/i)
+        .map((s) => s.trim())
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+        .filter((s) => allSkills.includes(s));
+      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
+    } else if (
+      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
+      /one skill of your choice/i.test(text)
+    ) {
+      if (!skillChoice) skillChoice = { count: 1, from: null };
+    }
+
+    if (/one tool proficiency of your choice/i.test(text)) {
+      if (!toolChoice) toolChoice = { count: 1, from: null };
+    }
+
+    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
+    if (langListMatch) {
+      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
+      const from = langListMatch[2]
+        .split(/[,\n\t]+/)
+        .map((s) => s.trim()).filter(Boolean)
+        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
+    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
+      if (!languageChoice) languageChoice = { count: 1, from: null };
+    }
+  }
+
+  return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
+}
+
+export function parseRaceChoicesByRuleset(
+  ruleset: Ruleset,
+  traits: { name: string; text: string }[],
+  allSkills: string[],
+): RaceChoices {
+  return ruleset === "5.5e" ? parseRaceChoices55e(traits, allSkills) : parseRaceChoices5e(traits, allSkills);
+}
+
+export function getBackgroundFeatChoices(bgDetail: BackgroundDetailLike | null): BackgroundFeatChoiceEntry[] {
+  const feats = bgDetail?.proficiencies?.feats ?? [];
+  return feats.flatMap((feat) =>
+    feat.parsed.choices
+      .filter((choice) => choice.type === "proficiency" || choice.type === "weapon_mastery")
+      .map((choice) => ({
+        featName: feat.name,
+        feat: feat.parsed,
+        choice,
+        key: `bg:${feat.name}:${choice.id}`,
+      }))
+  );
+}
+
+export function getBackgroundFeatChoicesByRuleset(ruleset: Ruleset, bgDetail: BackgroundDetailLike | null): BackgroundFeatChoiceEntry[] {
+  return ruleset === "5.5e" ? getBackgroundFeatChoices(bgDetail) : [];
+}

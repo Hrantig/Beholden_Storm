@@ -64,6 +64,55 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rows.map(rowToPlayer));
   });
 
+  // Player-facing party view — HP is obfuscated (percent only, no raw values).
+  app.get("/api/campaigns/:campaignId/party", memberOrAdmin(db), (req, res) => {
+    const campaignId = requireParam(req, res, "campaignId");
+    if (!campaignId) return;
+
+    const rows = db.prepare(`
+      SELECT p.id, p.user_id, p.player_name, p.character_name, p.class, p.species,
+             p.level, p.hp_max, p.hp_current, p.ac, p.speed,
+             p.str, p.dex, p.con, p.int, p.wis, p.cha,
+             p.color, p.image_url, p.overrides_json, p.conditions_json,
+             uc.character_data_json
+      FROM players p
+      LEFT JOIN character_campaigns cc ON cc.player_id = p.id
+      LEFT JOIN user_characters uc ON uc.id = cc.character_id
+      WHERE p.campaign_id = ?
+    `).all(campaignId) as Record<string, unknown>[];
+
+    const party = rows.map((p) => {
+      const overrides = JSON.parse(String(p.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxBonus":0}')) as
+        { tempHp: number; acBonus: number; hpMaxBonus: number };
+      const effectiveHpMax = Math.max(1, Number(p.hp_max) + (overrides.hpMaxBonus ?? 0));
+      const hpPercent = Math.max(0, Math.min(100, Math.round((Number(p.hp_current) / effectiveHpMax) * 100)));
+      return {
+        id: p.id,
+        userId: p.user_id,
+        playerName: p.player_name,
+        characterName: p.character_name,
+        className: p.class,
+        species: p.species,
+        level: Number(p.level),
+        hpPercent,
+        ac: Number(p.ac) + (overrides.acBonus ?? 0),
+        speed: p.speed != null ? Number(p.speed) : null,
+        strScore: p.str != null ? Number(p.str) : null,
+        dexScore: p.dex != null ? Number(p.dex) : null,
+        conScore: p.con != null ? Number(p.con) : null,
+        intScore: p.int != null ? Number(p.int) : null,
+        wisScore: p.wis != null ? Number(p.wis) : null,
+        chaScore: p.cha != null ? Number(p.cha) : null,
+        color: p.color ?? null,
+        imageUrl: p.image_url ?? null,
+        conditions: JSON.parse(String(p.conditions_json || "[]")),
+        characterData: p.character_data_json ? JSON.parse(String(p.character_data_json)) : null,
+      };
+    });
+
+    res.json(party);
+  });
+
   app.post("/api/campaigns/:campaignId/players", dmOrAdmin(db), (req, res) => {
     const campaignId = requireParam(req, res, "campaignId");
     if (!campaignId) return;

@@ -13,6 +13,9 @@ type ItemFull = {
   rarity: string | null; type: string | null;
   attunement: boolean; magic: boolean;
   weight: number | null;
+  value?: number | null;
+  ac?: number | null;
+  stealthDisadvantage?: boolean;
   dmg1: string | null; dmg2: string | null; dmgType: string | null;
   properties: string[];
   modifiers: Array<{ category: string; text: string }>;
@@ -55,6 +58,12 @@ function rarityColor(rarity: string | null): string {
     case "artifact":  return "#e6cc80";
     default:          return C.muted;
   }
+}
+
+function hasStealthDisadvantage(item: { stealthDisadvantage?: boolean; text?: string | string[] | null }): boolean {
+  if (item.stealthDisadvantage) return true;
+  const text = Array.isArray(item.text) ? item.text.join("\n") : String(item.text ?? "");
+  return /disadvantage on stealth/i.test(text);
 }
 
 function Tag({ label, color }: { label: string; color: string }) {
@@ -107,7 +116,7 @@ export function ItemDetailPanel(props: { itemId: string }) {
 
   const dmgLabel = item ? fmtDamage(item.dmg1, item.dmg2, item.dmgType) : null;
   const propertyLabels = item ? (item.properties ?? []).map((p) => PROPERTY_LABELS[p] ?? p) : [];
-  const hasWeaponStats = dmgLabel || propertyLabels.length > 0 || (item?.weight ?? null) !== null;
+  const hasWeaponStats = dmgLabel || propertyLabels.length > 0 || (item?.weight ?? null) !== null || (item?.value ?? null) !== null || (item?.ac ?? null) !== null || hasStealthDisadvantage(item ?? {});
   const hasModifiers = (item?.modifiers ?? []).length > 0;
 
   return (
@@ -126,6 +135,7 @@ export function ItemDetailPanel(props: { itemId: string }) {
             {item.magic && <Tag label="Magic" color="#a335ee" />}
             {item.attunement && <Tag label="Attunement" color={C.accentHl} />}
             {item.rarity && <Tag label={titleCase(item.rarity)} color={rarityColor(item.rarity)} />}
+            {hasStealthDisadvantage(item) && <Tag label="D" color="#f87171" />}
           </div>
 
           {/* Weapon stats row */}
@@ -135,9 +145,12 @@ export function ItemDetailPanel(props: { itemId: string }) {
               {propertyLabels.map((p) => (
                 <StatChip key={p} label={p} color="#94a3b8" />
               ))}
+              {item.ac != null && <StatChip label={`AC ${item.ac}`} color="#a78bfa" />}
+              {hasStealthDisadvantage(item) && <StatChip label="Stealth D" color="#f87171" />}
               {item.weight != null && (
                 <StatChip label={`${item.weight} lb`} color="#64748b" />
               )}
+              {item.value != null && <StatChip label={`${item.value} gp`} color="#64748b" />}
             </div>
           )}
 

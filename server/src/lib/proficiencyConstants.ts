@@ -42,6 +42,10 @@ export const ALL_TOOLS = [
   "Land Vehicles", "Water Vehicles", "Sea Vehicles",
 ];
 
+export const ABILITY_SCORE_NAMES = [
+  "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma",
+];
+
 export const ALL_LANGUAGES = [
   "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
   "Halfling", "Orcish", "Orc",
@@ -70,7 +74,18 @@ export interface StructuredBgProficiencies {
   tools: ProficiencyChoice;
   languages: ProficiencyChoice;
   feats: Array<{ name: string; parsed: ParsedFeat }>;
-  abilityScores: string[];   // the 3 ability scores player can choose from
+  featChoice: number;        // number of origin feats the player must choose (0 = none)
+  abilityScores: string[];   // the ability scores player can choose from
+}
+
+export type Ruleset = "5e" | "5.5e";
+
+export interface StructuredRaceChoices {
+  hasChosenSize: boolean;
+  skillChoice: { count: number; from: string[] | null } | null;
+  toolChoice: { count: number; from: string[] | null } | null;
+  languageChoice: { count: number; from: string[] | null } | null;
+  hasFeatChoice: boolean;
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -117,6 +132,24 @@ function detectChooseN(text: string): number {
     }
   }
   return 0;
+}
+
+function wordOrNumberToInt(value: string): number | null {
+  const lowered = value.trim().toLowerCase();
+  const numeric = Number.parseInt(lowered, 10);
+  if (Number.isFinite(numeric)) return numeric;
+  const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+  return words[lowered] ?? null;
+}
+
+function extractLabeledLine(text: string, labelPattern: RegExp): string | null {
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(new RegExp(`${labelPattern.source}\\s*:\\s*(.+)$`, "i"));
+    if (match?.[1]) return match[1].trim();
+  }
+  return null;
 }
 
 /** Parse a tool or language trait using BOTH the trait name and text. */
@@ -181,8 +214,8 @@ function parseLangTrait(traitName: string, traitText: string): ProficiencyChoice
 
 // ── Main entry ───────────────────────────────────────────────────────────────
 
-/** Parse a background XML object into fully structured proficiencies. */
-export function parseBackgroundProficiencies(bg: {
+/** Parse a 2024 / 5.5e background XML object into structured proficiencies. */
+export function parseBackgroundProficiencies55e(bg: {
   proficiency?: unknown;
   trait?: unknown;
 }): StructuredBgProficiencies {
@@ -204,7 +237,12 @@ export function parseBackgroundProficiencies(bg: {
   // Language trait
   const langTrait = traits.find(t => /language/i.test(t.name));
 
-  // Feats — "Feat: X" in trait name
+  // Skill trait — used when <proficiency> field is empty (e.g. Custom Background)
+  const skillTrait = fixedSkills.length === 0
+    ? traits.find(t => /skill/i.test(t.name))
+    : null;
+
+  // Feats — "Feat: X" in trait name (specific named feat)
   const feats: Array<{ name: string; parsed: ParsedFeat }> = [];
   for (const t of traits) {
     const m = t.name.match(/^Feat:\s*(.+)$/i);
@@ -217,17 +255,35 @@ export function parseBackgroundProficiencies(bg: {
     }
   }
 
-  // Ability scores — "Ability Scores: Str, Dex, Con" in trait name
+  // Feat choice — "Choose a Feat" / "Choose Feat" / "Choose an Origin Feat" in trait name
+  const featChoice = traits.some(t =>
+    /choose\s+(?:an?\s+)?(?:origin\s+)?feat/i.test(t.name) && !t.name.match(/^Feat:\s*/)
+  ) ? 1 : 0;
+
+  // Ability scores — "Ability Scores: Str, Dex, Con" OR "Choose Abilities" in trait name
   const abilityScores: string[] = [];
   for (const t of traits) {
     const m = t.name.match(/^Ability Scores?:\s*(.+)$/i);
     if (m?.[1]) {
       m[1].split(",").map(s => s.trim()).filter(Boolean).forEach(s => abilityScores.push(s));
+    } else if (/choose\s+abilit/i.test(t.name) || /^Abilit(?:y|ies)\s*Scores?$/i.test(t.name)) {
+      // Detect ability names from text; fall back to all six
+      const found = findNamesIn(t.text, ABILITY_SCORE_NAMES);
+      const toAdd = found.length >= 3 ? found : ABILITY_SCORE_NAMES;
+      toAdd.forEach(s => { if (!abilityScores.includes(s)) abilityScores.push(s); });
     }
   }
 
+  // Build skills choice from trait when proficiency field is empty
+  let skills: ProficiencyChoice = { fixed: fixedSkills, choose: 0, from: null };
+  if (skillTrait) {
+    const chooseN = detectChooseN(skillTrait.name) || detectChooseN(skillTrait.text) || 2;
+    const listInText = findNamesIn(skillTrait.text, ALL_SKILLS);
+    skills = { fixed: [], choose: chooseN, from: listInText.length >= chooseN ? listInText : null };
+  }
+
   return {
-    skills: { fixed: fixedSkills, choose: 0, from: null },
+    skills,
     tools: toolTrait
       ? parseToolTrait(toolTrait.name, toolTrait.text)
       : { fixed: [], choose: 0, from: null },
@@ -235,6 +291,170 @@ export function parseBackgroundProficiencies(bg: {
       ? parseLangTrait(langTrait.name, langTrait.text)
       : { fixed: [], choose: 0, from: null },
     feats,
+    featChoice,
     abilityScores,
   };
+}
+
+/** Parse a 2014 / 5e background XML object into structured proficiencies. */
+export function parseBackgroundProficiencies5e(bg: {
+  proficiency?: unknown;
+  trait?: unknown;
+}): StructuredBgProficiencies {
+  const profText = typeof bg.proficiency === "string" ? bg.proficiency : "";
+  const fixedSkills = profText.split(",").map(s => s.trim()).filter(Boolean);
+
+  const rawTraits = Array.isArray(bg.trait) ? bg.trait : bg.trait ? [bg.trait] : [];
+  const traits: { name: string; text: string }[] = (rawTraits as any[]).map(t => ({
+    name: (typeof t?.name === "string" ? t.name : String(t?.name ?? "")).trim(),
+    text: (typeof t?.text === "string" ? t.text : String(t?.text ?? "")).trim(),
+  }));
+
+  const descriptionTrait = traits.find(t => /^description$/i.test(t.name));
+  const toolTrait = traits.find(t =>
+    /tool|instrument|kit|vehicle|gaming|music/i.test(t.name)
+  );
+  const langTrait = traits.find(t => /language/i.test(t.name));
+  const skillTrait = fixedSkills.length === 0
+    ? traits.find(t => /skill/i.test(t.name))
+    : null;
+
+  const describedToolText = !toolTrait && descriptionTrait
+    ? extractLabeledLine(descriptionTrait.text, /Tool Proficiencies?/i)
+    : null;
+  const describedLanguageText = !langTrait && descriptionTrait
+    ? extractLabeledLine(descriptionTrait.text, /Languages?/i)
+    : null;
+
+  let skills: ProficiencyChoice = { fixed: fixedSkills, choose: 0, from: null };
+  if (skillTrait) {
+    const chooseN = detectChooseN(skillTrait.name) || detectChooseN(skillTrait.text) || 2;
+    const listInText = findNamesIn(skillTrait.text, ALL_SKILLS);
+    skills = { fixed: [], choose: chooseN, from: listInText.length >= chooseN ? listInText : null };
+  }
+
+  return {
+    skills,
+    tools: toolTrait
+      ? parseToolTrait(toolTrait.name, toolTrait.text)
+      : describedToolText
+        ? parseToolTrait("Tool Proficiencies", describedToolText)
+        : { fixed: [], choose: 0, from: null },
+    languages: langTrait
+      ? parseLangTrait(langTrait.name, langTrait.text)
+      : describedLanguageText
+        ? parseLangTrait("Languages", describedLanguageText)
+        : { fixed: [], choose: 0, from: null },
+    feats: [],
+    featChoice: 0,
+    abilityScores: [],
+  };
+}
+
+/** Parse a background XML object into fully structured proficiencies. */
+export function parseBackgroundProficiencies(bg: {
+  proficiency?: unknown;
+  trait?: unknown;
+  ruleset?: Ruleset | null;
+}): StructuredBgProficiencies {
+  return bg.ruleset === "5.5e"
+    ? parseBackgroundProficiencies55e(bg)
+    : parseBackgroundProficiencies5e(bg);
+}
+
+export function parseRaceChoices5e(traits: { name: string; text: string }[]): StructuredRaceChoices {
+  let skillChoice: StructuredRaceChoices["skillChoice"] = null;
+  let toolChoice: StructuredRaceChoices["toolChoice"] = null;
+  let languageChoice: StructuredRaceChoices["languageChoice"] = null;
+
+  for (const t of traits) {
+    const text = t.text;
+
+    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
+    if (skillListMatch) {
+      const from = (skillListMatch[1] ?? "")
+        .split(/,\s*|\s+or\s+/i)
+        .map((s) => s.trim())
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+        .filter((s) => ALL_SKILLS.includes(s));
+      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
+    } else if (
+      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
+      /one skill of your choice/i.test(text)
+    ) {
+      if (!skillChoice) skillChoice = { count: 1, from: null };
+    }
+
+    if (/one tool proficiency of your choice/i.test(text)) {
+      if (!toolChoice) toolChoice = { count: 1, from: null };
+    }
+
+    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
+    if (langListMatch) {
+      const count = wordOrNumberToInt(langListMatch[1] ?? "") ?? 1;
+      const from = (langListMatch[2] ?? "")
+        .split(/[,\n\t]+/)
+        .map((s) => s.trim()).filter(Boolean)
+        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
+    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
+      if (!languageChoice) languageChoice = { count: 1, from: null };
+    }
+  }
+
+  return { hasChosenSize: false, skillChoice, toolChoice, languageChoice, hasFeatChoice: false };
+}
+
+export function parseRaceChoices55e(traits: { name: string; text: string }[]): StructuredRaceChoices {
+  let hasChosenSize = false;
+  let skillChoice: StructuredRaceChoices["skillChoice"] = null;
+  let toolChoice: StructuredRaceChoices["toolChoice"] = null;
+  let languageChoice: StructuredRaceChoices["languageChoice"] = null;
+  let hasFeatChoice = false;
+
+  for (const t of traits) {
+    const text = t.text;
+    if (/^size$/i.test(t.name) && /chosen when you select/i.test(text)) hasChosenSize = true;
+    if (/origin feat of your choice/i.test(text)) hasFeatChoice = true;
+
+    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
+    if (skillListMatch) {
+      const from = (skillListMatch[1] ?? "")
+        .split(/,\s*|\s+or\s+/i)
+        .map((s) => s.trim())
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+        .filter((s) => ALL_SKILLS.includes(s));
+      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
+    } else if (
+      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
+      /one skill of your choice/i.test(text)
+    ) {
+      if (!skillChoice) skillChoice = { count: 1, from: null };
+    }
+
+    if (/one tool proficiency of your choice/i.test(text)) {
+      if (!toolChoice) toolChoice = { count: 1, from: null };
+    }
+
+    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
+    if (langListMatch) {
+      const count = wordOrNumberToInt(langListMatch[1] ?? "") ?? 1;
+      const from = (langListMatch[2] ?? "")
+        .split(/[,\n\t]+/)
+        .map((s) => s.trim()).filter(Boolean)
+        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
+    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
+      if (!languageChoice) languageChoice = { count: 1, from: null };
+    }
+  }
+
+  return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
+}
+
+export function parseRaceChoicesByRuleset(
+  ruleset: Ruleset,
+  traits: { name: string; text: string }[],
+): StructuredRaceChoices {
+  return ruleset === "5.5e" ? parseRaceChoices55e(traits) : parseRaceChoices5e(traits);
 }

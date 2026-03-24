@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, jsonInit } from "@/services/api";
 import { C, withAlpha } from "@/lib/theme";
 import { titleCase } from "@/lib/format/titleCase";
-import { IconPlayer, IconShield, IconSpeed, IconHeart, IconInitiative, IconConditions, IconAttack, IconHeal, IconConditionByKey } from "@/icons";
+import { IconPlayer, IconShield, IconSpeed, IconHeart, IconInitiative, IconConditions, IconAttack, IconHeal, IconInspiration, IconConditionByKey } from "@/icons";
 import { rollDiceExpr, hasDiceTerm } from "@/lib/dice";
 import { useWs } from "@/services/ws";
 import { Select } from "@/ui/Select";
@@ -39,21 +39,27 @@ export interface InventoryItem {
   name: string;
   quantity: number;
   equipped: boolean;
-  equipState?: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand";
+  equipState?: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand" | "worn";
   notes?: string;
   source?: "compendium" | "custom";
   itemId?: string;
   rarity?: string | null;
   type?: string | null;
   attunement?: boolean;
+  attuned?: boolean;
   magic?: boolean;
+  silvered?: boolean;
   weight?: number | null;
   value?: number | null;
+  ac?: number | null;
+  stealthDisadvantage?: boolean;
   dmg1?: string | null;
   dmg2?: string | null;
   dmgType?: string | null;
   properties?: string[];
   description?: string;
+  chargesMax?: number | null;
+  charges?: number | null;
 }
 
 interface InventoryPickerPayload {
@@ -64,9 +70,13 @@ interface InventoryPickerPayload {
   rarity?: string | null;
   type?: string | null;
   attunement?: boolean;
+  attuned?: boolean;
   magic?: boolean;
+  silvered?: boolean;
   weight?: number | null;
   value?: number | null;
+  ac?: number | null;
+  stealthDisadvantage?: boolean;
   dmg1?: string | null;
   dmg2?: string | null;
   dmgType?: string | null;
@@ -83,12 +93,24 @@ interface CompendiumItemDetail {
   magic: boolean;
   weight: number | null;
   value: number | null;
+  ac: number | null;
+  stealthDisadvantage?: boolean;
   dmg1: string | null;
   dmg2: string | null;
   dmgType: string | null;
   properties: string[];
   modifiers?: Array<{ category?: string; text?: string }>;
   text: string | string[];
+}
+
+interface ItemSummaryRow {
+  id: string;
+  name: string;
+  rarity: string | null;
+  type: string | null;
+  typeKey: string | null;
+  attunement: boolean;
+  magic: boolean;
 }
 
 interface CharacterData {
@@ -98,16 +120,24 @@ interface CharacterData {
   subclass?: string | null;
   abilityMethod?: string;
   hd?: number | null;
+  hitDiceCurrent?: number | null;
+  xp?: number;
   chosenOptionals?: string[];
   chosenSkills?: string[];
   chosenCantrips?: string[];
   chosenSpells?: string[];
   chosenInvocations?: string[];
   classFeatures?: ClassFeatureEntry[];
+  resources?: ResourceCounter[];
   proficiencies?: ProficiencyMap;
   inventory?: InventoryItem[];
   playerNotesList?: PlayerNote[];
+  usedSpellSlots?: Record<string, number>;
+  preparedSpells?: string[];
 }
+
+/** Total XP required to reach each level (index = level). Index 0 unused. */
+const XP_TO_LEVEL = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 260000, 300000, 355000];
 
 interface ConditionInstance {
   key: string;
@@ -174,9 +204,10 @@ interface Character {
   characterData: CharacterData | null;
   campaigns: CharacterCampaign[];
   conditions?: ConditionInstance[];
-  overrides?: { tempHp: number; acBonus: number; hpMaxBonus: number };
+  overrides?: { tempHp: number; acBonus: number; hpMaxBonus: number; inspiration?: boolean };
   deathSaves?: { success: number; fail: number };
   sharedNotes?: string;
+  campaignSharedNotes?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +227,32 @@ interface ClassFeatureEntry {
   id: string;
   name: string;
   text: string;
+}
+
+interface ResourceCounter {
+  key: string;
+  name: string;
+  current: number;
+  max: number;
+  reset: string;
+}
+
+interface ClassCounterDef {
+  name: string;
+  value: number;
+  reset: string;
+}
+
+interface ClassRestDetail {
+  id: string;
+  name: string;
+  hd: number | null;
+  slotsReset?: string | null;
+  autolevels: Array<{
+    level: number;
+    slots: number[] | null;
+    counters: ClassCounterDef[];
+  }>;
 }
 
 const ABILITY_LABELS: Record<AbilKey, string> = {
@@ -295,13 +352,73 @@ function formatItemProperties(properties: string[] | null | undefined): string {
     .join(", ");
 }
 
-function getEquipState(item: InventoryItem): "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand" {
+function isArmorItem(item: InventoryItem): boolean {
+  return /\barmor\b/i.test(item.type ?? "") && !isShieldOrTorch(item);
+}
+
+function hasStealthDisadvantage(item: { stealthDisadvantage?: boolean; description?: string | null }): boolean {
+  if (item.stealthDisadvantage) return true;
+  return /disadvantage on stealth/i.test(String(item.description ?? ""));
+}
+
+function normalizeInventoryItemLookupName(name: string): string {
+  return String(name ?? "")
+    .replace(/\s+\[(?:2024|5\.5e|5e)\]\s*$/i, "")
+    .replace(/\s+\((?:2024|5\.5e|5e)\)\s*$/i, "")
+    .trim()
+    .toLowerCase();
+}
+
+function hasClassFeatureNamed(charData: CharacterData | null | undefined, pattern: RegExp): boolean {
+  return Boolean(charData?.classFeatures?.some((feature) => pattern.test(feature.name)));
+}
+
+function addsAbilityModToOffhandDamage(item: InventoryItem, charData: CharacterData | null | undefined): boolean {
+  if (hasClassFeatureNamed(charData, /two-weapon fighting/i)) return true;
+  if (isRangedWeapon(item) && hasClassFeatureNamed(charData, /crossbow expert/i)) return true;
+  return false;
+}
+
+function isShieldItem(item: InventoryItem): boolean {
+  const type = String(item.type ?? "").toLowerCase();
+  const name = String(item.name ?? "").toLowerCase();
+  return type.includes("shield") || (name.includes("shield") && !name.includes("torch"));
+}
+
+type EquipState = "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand" | "worn";
+
+function getEquipState(item: InventoryItem): EquipState {
   if (item.equipState) return item.equipState;
-  return item.equipped ? "mainhand-1h" : "backpack";
+  if (item.equipped) return isArmorItem(item) ? "worn" : "mainhand-1h";
+  return "backpack";
 }
 
 function isWeaponItem(item: InventoryItem): boolean {
-  return Boolean(item.dmg1) || /weapon/i.test(item.type ?? "");
+  return Boolean(item.dmg1) || /weapon/i.test(item.type ?? "") || /\bstaff\b/i.test(item.type ?? "");
+}
+
+interface ParsedItemSpell { name: string; cost: number }
+
+function parseItemSpells(text: string): ParsedItemSpell[] {
+  const results: ParsedItemSpell[] = [];
+  const lines = text.split('\n');
+  let inTable = false;
+  for (const line of lines) {
+    const t = line.trim();
+    if (/spell\s*\|.*charge/i.test(t)) { inTable = true; continue; }
+    if (inTable) {
+      const m = t.match(/^(.+?)\s*\|\s*(\d+)/);
+      if (m) results.push({ name: m[1].trim(), cost: parseInt(m[2], 10) });
+      else if (t && !t.includes('|')) inTable = false;
+    }
+  }
+  return results;
+}
+
+function parseChargesMax(text: string): number | null {
+  const m = text.match(/has (\d+) charges?/i);
+  if (m) return parseInt(m[1], 10);
+  return null;
 }
 
 function hasItemProperty(item: InventoryItem, code: string): boolean {
@@ -338,6 +455,17 @@ function isRangedWeapon(item: InventoryItem): boolean {
   return /ranged/i.test(item.type ?? "");
 }
 
+function isStaffLikeWeapon(item: InventoryItem): boolean {
+  const type = String(item.type ?? "").toLowerCase();
+  const name = String(item.name ?? "").toLowerCase();
+  return type.includes("staff") || name.includes("staff");
+}
+
+function defaultWeaponDamageDice(item: InventoryItem, state: "mainhand-1h" | "mainhand-2h" | "offhand"): string | null {
+  if (isStaffLikeWeapon(item)) return state === "mainhand-2h" ? "1d8" : "1d6";
+  return null;
+}
+
 function weaponAbilityMod(item: InventoryItem, char: Character): number {
   const strMod = mod(char.strScore);
   const dexMod = mod(char.dexScore);
@@ -347,8 +475,8 @@ function weaponAbilityMod(item: InventoryItem, char: Character): number {
 }
 
 function weaponDamageDice(item: InventoryItem, state: "mainhand-1h" | "mainhand-2h" | "offhand"): string | null {
-  if (state === "mainhand-2h") return item.dmg2 ?? item.dmg1 ?? null;
-  return item.dmg1 ?? item.dmg2 ?? null;
+  if (state === "mainhand-2h") return item.dmg2 ?? item.dmg1 ?? defaultWeaponDamageDice(item, state);
+  return item.dmg1 ?? item.dmg2 ?? defaultWeaponDamageDice(item, state);
 }
 
 function totalInventoryWeight(items: InventoryItem[]): number {
@@ -379,6 +507,57 @@ function normalizeClassFeatures(charData: CharacterData | null | undefined): Cla
   }));
 }
 
+function normalizeResourceKey(name: string): string {
+  return String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function collectClassResources(classDetail: ClassRestDetail | null, level: number): ResourceCounter[] {
+  if (!classDetail) return [];
+  const latest = new Map<string, ResourceCounter>();
+  for (const autolevel of classDetail.autolevels) {
+    if (autolevel.level > level) continue;
+    for (const counter of autolevel.counters ?? []) {
+      const max = Math.max(0, Math.floor(Number(counter.value) || 0));
+      const name = String(counter.name ?? "").trim();
+      if (!name || max <= 0) continue;
+      const key = normalizeResourceKey(name);
+      latest.set(key, {
+        key,
+        name,
+        current: max,
+        max,
+        reset: String(counter.reset ?? "L").trim().toUpperCase() || "L",
+      });
+    }
+  }
+  return Array.from(latest.values());
+}
+
+function mergeResourceState(saved: ResourceCounter[] | undefined, derived: ResourceCounter[]): ResourceCounter[] {
+  const savedList = Array.isArray(saved) ? saved : [];
+  const savedByKey = new Map(savedList.map((resource) => [resource.key || normalizeResourceKey(resource.name), resource]));
+  const merged = derived.map((resource) => {
+    const existing = savedByKey.get(resource.key);
+    return {
+      ...resource,
+      current: Math.max(0, Math.min(resource.max, Math.floor(Number(existing?.current ?? resource.current) || 0))),
+    };
+  });
+  const derivedKeys = new Set(merged.map((resource) => resource.key));
+  const extras = savedList.filter((resource) => !derivedKeys.has(resource.key || normalizeResourceKey(resource.name)));
+  return [...merged, ...extras];
+}
+
+function shouldResetOnRest(resetCode: string | undefined, restType: "short" | "long"): boolean {
+  const code = String(resetCode ?? "").trim().toUpperCase();
+  if (restType === "short") return code === "S";
+  return code === "S" || code === "L";
+}
+
 function hasWeaponProficiency(item: InventoryItem, prof: ProficiencyMap | undefined): boolean {
   const names = (prof?.weapons ?? []).map((w) => w.name.toLowerCase());
   const itemName = item.name.replace(/\s+\[2024\]\s*$/i, "").toLowerCase();
@@ -396,6 +575,7 @@ export function CharacterView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [char, setChar] = useState<Character | null>(null);
+  const [classDetail, setClassDetail] = useState<ClassRestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hpAmount, setHpAmount] = useState("");
@@ -406,6 +586,8 @@ export function CharacterView() {
   const hpInputRef = useRef<HTMLInputElement>(null);
   const [condPickerOpen, setCondPickerOpen] = useState(false);
   const [condSaving, setCondSaving] = useState(false);
+  const [xpPopupOpen, setXpPopupOpen] = useState(false);
+  const [xpInput, setXpInput] = useState("");
   const [dsSaving, setDsSaving] = useState(false);
   const [expandedNoteIds, setExpandedNoteIds] = useState<string[]>([]);
   const [expandedClassFeatureIds, setExpandedClassFeatureIds] = useState<string[]>([]);
@@ -420,6 +602,19 @@ export function CharacterView() {
   }, [id]);
 
   useEffect(() => { fetchChar(); }, [fetchChar]);
+
+  useEffect(() => {
+    const classId = char?.characterData?.classId;
+    if (!classId) {
+      setClassDetail(null);
+      return;
+    }
+    let alive = true;
+    api<ClassRestDetail>(`/api/compendium/classes/${classId}`)
+      .then((detail) => { if (alive) setClassDetail(detail); })
+      .catch(() => { if (alive) setClassDetail(null); });
+    return () => { alive = false; };
+  }, [char?.characterData?.classId]);
 
   // Re-fetch whenever the DM changes something in any campaign this character is in
   useWs(useCallback((msg) => {
@@ -441,6 +636,10 @@ export function CharacterView() {
   const prof = char.characterData?.proficiencies;
   const pb = profBonus(char.level);
   const hd = char.characterData?.hd ?? null;
+  const hitDieSize = hd ?? classDetail?.hd ?? null;
+  const hitDiceMax = Math.max(0, char.level);
+  const hitDiceCurrent = Math.max(0, Math.min(hitDiceMax, Math.floor(Number(char.characterData?.hitDiceCurrent ?? hitDiceMax) || 0)));
+  const classResources = mergeResourceState(char.characterData?.resources, collectClassResources(classDetail, char.level));
   const classFeaturesList = normalizeClassFeatures(char.characterData);
 
   const scores: Record<AbilKey, number | null> = {
@@ -451,7 +650,21 @@ export function CharacterView() {
   const accentColor = char.color ?? C.accentHl;
   const overrides = char.overrides ?? { tempHp: 0, acBonus: 0, hpMaxBonus: 0 };
   const effectiveHpMax = Math.max(1, char.hpMax + (overrides.hpMaxBonus ?? 0));
-  const effectiveAc = char.ac + (overrides.acBonus ?? 0);
+  const xpEarned = char.characterData?.xp ?? 0;
+  const xpNeeded = XP_TO_LEVEL[char.level + 1] ?? 0;
+  const inventory = char.characterData?.inventory ?? [];
+  const shieldBonus = inventory.some((it) => getEquipState(it) === "offhand" && isShieldItem(it)) ? 2 : 0;
+  const wornArmor = inventory.find((it) => getEquipState(it) === "worn" && isArmorItem(it) && (it.ac ?? 0) > 0);
+  const stealthDisadvantage = Boolean(wornArmor && hasStealthDisadvantage(wornArmor));
+  const dexMod = mod(char.dexScore);
+  const wornArmorAc = (() => {
+    if (!wornArmor || !wornArmor.ac) return null;
+    const t = String(wornArmor.type ?? "").toLowerCase();
+    if (t.includes("heavy")) return wornArmor.ac;
+    if (t.includes("medium")) return wornArmor.ac + Math.min(2, dexMod);
+    return wornArmor.ac + dexMod; // light armor
+  })();
+  const effectiveAc = (wornArmorAc ?? char.ac) + (overrides.acBonus ?? 0) + shieldBonus;
   const tempHp = overrides.tempHp ?? 0;
   const hpPct = effectiveHpMax > 0 ? Math.max(0, Math.min(1, char.hpCurrent / effectiveHpMax)) : 0;
   const tempPct = effectiveHpMax > 0 ? Math.min(1 - hpPct, tempHp / effectiveHpMax) : 0;
@@ -502,6 +715,104 @@ export function CharacterView() {
     return explicit;
   }
 
+  async function saveXp(value: number) {
+    if (!char) return;
+    const updated: CharacterData = { ...(char.characterData ?? {}), xp: value };
+    await saveCharacterData(updated);
+    setXpPopupOpen(false);
+  }
+
+  async function saveHitDiceCurrent(nextValue: number) {
+    const next = Math.max(0, Math.min(hitDiceMax, Math.floor(nextValue)));
+    await saveCharacterData({ ...(char.characterData ?? {}), hitDiceCurrent: next });
+  }
+
+  async function saveResources(nextResources: ResourceCounter[]) {
+    await saveCharacterData({ ...(char.characterData ?? {}), resources: nextResources });
+  }
+
+  async function saveUsedSpellSlots(next: Record<string, number>) {
+    await saveCharacterData({ ...(char.characterData ?? {}), usedSpellSlots: next });
+  }
+
+  async function savePreparedSpells(next: string[]) {
+    await saveCharacterData({ ...(char.characterData ?? {}), preparedSpells: next });
+  }
+
+  async function handleItemChargeChange(itemId: string, charges: number) {
+    const nextInventory = inventory.map((it) => it.id === itemId ? { ...it, charges } : it);
+    await saveCharacterData({ ...(char.characterData ?? {}), inventory: nextInventory });
+  }
+
+  async function changeResourceCurrent(key: string, delta: number) {
+    const nextResources = classResources.map((resource) =>
+      resource.key !== key
+        ? resource
+        : { ...resource, current: Math.max(0, Math.min(resource.max, resource.current + delta)) }
+    );
+    await saveResources(nextResources);
+  }
+
+  async function handleShortRest() {
+    const nextResources = classResources.map((resource) =>
+      shouldResetOnRest(resource.reset, "short")
+        ? { ...resource, current: resource.max }
+        : resource
+    );
+    // Warlocks reset spell slots on short rest
+    const slotsReset = classDetail?.slotsReset ?? "L";
+    if (/S/i.test(slotsReset)) {
+      await saveCharacterData({ ...(char.characterData ?? {}), resources: nextResources, usedSpellSlots: {} });
+    } else {
+      await saveResources(nextResources);
+    }
+  }
+
+  async function handleLongRest() {
+    const nextResources = classResources.map((resource) =>
+      shouldResetOnRest(resource.reset, "long")
+        ? { ...resource, current: resource.max }
+        : resource
+    );
+    const recoveredHitDice = hitDiceMax > 0 ? Math.max(1, Math.floor(hitDiceMax / 2)) : 0;
+    const nextHitDice = Math.max(0, Math.min(hitDiceMax, hitDiceCurrent + recoveredHitDice));
+    // Reset spell slots on long rest (unless Warlock which uses short rest — checked via slotsReset)
+    const slotsReset = classDetail?.slotsReset ?? "L";
+    const nextUsedSpellSlots = /S/i.test(slotsReset) ? (char.characterData?.usedSpellSlots ?? {}) : {};
+
+    await api(`/api/me/characters/${char.id}`, jsonInit("PUT", {
+      hpCurrent: effectiveHpMax,
+      characterData: {
+        ...(char.characterData ?? {}),
+        hitDiceCurrent: nextHitDice,
+        resources: nextResources,
+        usedSpellSlots: nextUsedSpellSlots,
+      },
+    }));
+
+    const nextDeathSaves = { success: 0, fail: 0 };
+    await api(`/api/me/characters/${char.id}/deathSaves`, jsonInit("PATCH", nextDeathSaves));
+
+    setChar((prev) => prev ? {
+      ...prev,
+      hpCurrent: effectiveHpMax,
+      deathSaves: nextDeathSaves,
+      characterData: {
+        ...prev.characterData,
+        hitDiceCurrent: nextHitDice,
+        resources: nextResources,
+        usedSpellSlots: nextUsedSpellSlots,
+      },
+    } : prev);
+  }
+
+  async function handleToggleInspiration() {
+    if (!char) return;
+    const next = !(overrides.inspiration ?? false);
+    await api(`/api/me/characters/${char.id}/inspiration`, jsonInit("PATCH", { inspiration: next }));
+    setChar((prev) => prev ? { ...prev, overrides: { ...prev.overrides!, inspiration: next } } : prev);
+  }
+
   function handleApplyHp(explicit: "damage" | "heal") {
     const kind = resolveKind(explicit);
     if (hasDiceTerm(hpAmount)) {
@@ -548,10 +859,21 @@ export function CharacterView() {
   }
 
   const playerNotesList: PlayerNote[] = char.characterData?.playerNotesList ?? [];
+  // Player-owned shared notes (editable)
   const sharedNotesList: PlayerNote[] = (() => {
     if (!char.sharedNotes) return [];
     try { return JSON.parse(char.sharedNotes) as PlayerNote[]; } catch { return []; }
   })();
+  // Campaign-level notes from DM — merged into the editable list, player version wins on ID clash
+  const campaignNotesList: PlayerNote[] = (() => {
+    if (!char.campaignSharedNotes) return [];
+    try { return JSON.parse(char.campaignSharedNotes) as PlayerNote[]; } catch { return []; }
+  })();
+  const playerNoteIds = new Set(sharedNotesList.map((n) => n.id));
+  const allSharedNotes: PlayerNote[] = [
+    ...campaignNotesList.filter((n) => !playerNoteIds.has(n.id)),
+    ...sharedNotesList,
+  ];
 
   async function savePlayerNotesList(list: PlayerNote[]) {
     await saveCharacterData({ playerNotesList: list });
@@ -565,15 +887,18 @@ export function CharacterView() {
   }
 
   function saveSharedNotesList(list: PlayerNote[]) {
+    // list = the full allSharedNotes after an edit/delete.
+    // Persist only player-owned notes; separate out any campaign notes that were edited.
     const val = JSON.stringify(list);
     void api(`/api/me/characters/${char!.id}/sharedNotes`, jsonInit("PATCH", { sharedNotes: val }));
-    setChar((prev) => prev ? { ...prev, sharedNotes: val } : prev);
+    // Also wipe local campaignSharedNotes so newly-saved player copies win in dedup
+    setChar((prev) => prev ? { ...prev, sharedNotes: val, campaignSharedNotes: "[]" } : prev);
   }
 
   function handleNoteSave(title: string, text: string) {
     if (!noteDrawer) return;
     const { scope, note } = noteDrawer;
-    const list = scope === "player" ? playerNotesList : sharedNotesList;
+    const list = scope === "player" ? playerNotesList : allSharedNotes;
     const updated = note
       ? list.map((n) => n.id === note.id ? { ...n, title, text } : n)
       : [...list, { id: uid(), title, text }];
@@ -583,7 +908,7 @@ export function CharacterView() {
   }
 
   function handleNoteDelete(scope: "player" | "shared", id: string) {
-    const list = scope === "player" ? playerNotesList : sharedNotesList;
+    const list = scope === "player" ? playerNotesList : allSharedNotes;
     const updated = list.filter((n) => n.id !== id);
     if (scope === "player") void savePlayerNotesList(updated);
     else saveSharedNotesList(updated);
@@ -634,21 +959,87 @@ export function CharacterView() {
               <div style={{ fontSize: 11, color: "rgba(160,180,220,0.45)", marginBottom: 3 }}>Player: {char.playerName}</div>
             )}
             {char.campaigns.length > 0 && (
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                 {char.campaigns.map((c) => (
                   <span key={c.id} style={{
                     fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 600,
                     background: `${accentColor}18`, border: `1px solid ${accentColor}44`, color: accentColor,
                   }}>{c.campaignName}</span>
                 ))}
+                {xpNeeded > 0 && (
+                  <div style={{ position: "relative", marginLeft: "auto" }}>
+                    <button
+                      onClick={() => { setXpInput(String(xpEarned)); setXpPopupOpen((o) => !o); }}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer", padding: "2px 4px",
+                        fontSize: 11, fontWeight: 700, color: "#fff", borderRadius: 6,
+                        display: "flex", alignItems: "center", gap: 3,
+                      }}
+                    >
+                      {xpEarned.toLocaleString()} / {xpNeeded.toLocaleString()} xp
+                    </button>
+                    {xpPopupOpen && (
+                      <div style={{
+                        position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
+                        background: "#1e2030", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10,
+                        padding: "12px 14px", minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                        display: "flex", flexDirection: "column", gap: 8,
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 2 }}>Edit XP</div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            autoFocus
+                            type="number"
+                            min={0}
+                            value={xpInput}
+                            onChange={(e) => setXpInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") { const v = parseInt(xpInput, 10); if (!isNaN(v) && v >= 0) saveXp(v); }
+                              if (e.key === "Escape") setXpPopupOpen(false);
+                            }}
+                            style={{
+                              flex: 1, padding: "6px 8px", borderRadius: 6, fontSize: 13, fontWeight: 700,
+                              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.07)",
+                              color: C.text, outline: "none", textAlign: "center",
+                            }}
+                          />
+                          <button
+                            onClick={() => { const v = parseInt(xpInput, 10); if (!isNaN(v) && v >= 0) saveXp(v); }}
+                            style={{
+                              padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700,
+                              background: accentColor, border: "none", color: "#fff",
+                            }}
+                          >Save</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          {[50, 100, 200, 300].map((amt) => (
+                            <button key={amt} onClick={() => { const v = xpEarned + amt; setXpInput(String(v)); saveXp(v); }} style={{
+                              flex: 1, padding: "4px 0", borderRadius: 5, cursor: "pointer", fontSize: 10, fontWeight: 700,
+                              background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted,
+                            }}>+{amt}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
-          <button onClick={() => navigate(`/characters/${char.id}/edit`)} style={{
-            padding: "7px 16px", borderRadius: 8, cursor: "pointer",
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.16)",
-            color: C.muted, fontWeight: 600, fontSize: 13, flexShrink: 0,
-          }}>✎ Edit</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            {xpEarned >= xpNeeded && xpNeeded > 0 && (
+              <button onClick={() => navigate(`/characters/${char.id}/levelup`)} style={{
+                padding: "7px 14px", borderRadius: 8, cursor: "pointer",
+                background: `${accentColor}22`, border: `1px solid ${accentColor}88`,
+                color: accentColor, fontWeight: 700, fontSize: 12,
+              }}>⬆ Level Up</button>
+            )}
+            <button onClick={() => navigate(`/characters/${char.id}/edit`)} style={{
+              padding: "7px 11px", borderRadius: 8, cursor: "pointer",
+              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.16)",
+              color: C.muted, fontWeight: 600, fontSize: 15,
+            }}>✎</button>
+          </div>
         </div>
 
         {/* HP bar */}
@@ -680,13 +1071,18 @@ export function CharacterView() {
         `}</style>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 8px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)" }}>
+            {/* Inspiration hex */}
+            <HexBtn variant="inspiration" active={overrides.inspiration ?? false} title="Toggle Heroic Inspiration" disabled={false} onClick={handleToggleInspiration}>
+              <IconInspiration size={22} />
+            </HexBtn>
+
             {/* Damage hex */}
             <HexBtn variant="damage" title="Apply damage (Enter)" disabled={hpSaving} onClick={() => handleApplyHp("damage")}>
               <IconAttack size={22} />
             </HexBtn>
 
             {/* Amount input */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flex: 1, minWidth: 0 }}>
               <input
                 ref={hpInputRef}
                 value={hpAmount}
@@ -705,7 +1101,7 @@ export function CharacterView() {
                 placeholder="1d6+2 / +10"
                 inputMode="text"
                 style={{
-                  width: 120, textAlign: "center",
+                  width: "100%", textAlign: "center",
                   padding: "10px 12px", borderRadius: 12,
                   border: `1px solid ${hpError ? C.red + "88" : "rgba(255,255,255,0.1)"}`,
                   background: "rgba(255,255,255,0.05)",
@@ -739,20 +1135,6 @@ export function CharacterView() {
               {hpError ?? "Saving…"}
             </div>
           )}
-        </div>
-
-        {/* Mini stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginBottom: 14 }}>
-          <MiniStat
-            label="Armor Class"
-            value={effectiveAc !== char.ac ? `${effectiveAc} (${fmtMod(overrides.acBonus)})` : String(effectiveAc)}
-            accent={accentColor} icon={<IconShield size={11} />}
-          />
-          <MiniStat label="Speed" value={`${char.speed} ft`} icon={<IconSpeed size={11} />} />
-          <MiniStat label="Initiative" value={fmtMod(mod(char.dexScore))} accent={accentColor} icon={<IconInitiative size={11} />} />
-          <MiniStat label="Prof. Bonus" value={`+${pb}`} accent={accentColor} />
-          <MiniStat label="Passive Perc." value={String(passivePerc)} />
-          <MiniStat label="Passive Inv." value={String(passiveInv)} />
         </div>
 
         {/* Death Saving Throws — only when at 0 HP */}
@@ -993,15 +1375,17 @@ export function CharacterView() {
           {/* Skills */}
           <Panel>
             <PanelTitle color={accentColor}>Skills</PanelTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 18, rowGap: 2 }}>
               {ALL_SKILLS.map(({ name, abil }) => {
                 const isProfSkill = prof ? isProficientIn(prof.skills, name) : false;
                 const bonus = mod(scores[abil]) + (isProfSkill ? pb : 0);
                 const src = prof?.skills.find((s) => s.name.toLowerCase() === name.toLowerCase())?.source;
+                const showStealthDisadvantage = name === "Stealth" && stealthDisadvantage;
                 return (
                   <div key={name} style={{
                     display: "flex", alignItems: "center", gap: 6,
                     padding: "3px 4px", borderRadius: 4,
+                    minWidth: 0,
                   }}>
                     <ProfDot filled={isProfSkill} color={C.green} />
                     <span style={{
@@ -1013,12 +1397,35 @@ export function CharacterView() {
                     <span style={{
                       fontSize: 12, color: isProfSkill ? C.text : C.muted,
                       flex: 1, fontWeight: isProfSkill ? 600 : 400,
+                      display: "flex", alignItems: "center", gap: 6, minWidth: 0,
                     }}>
-                      {name}
+                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                      {showStealthDisadvantage && (
+                        <span
+                          title="Disadvantage on Stealth checks from equipped armor"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: 18,
+                            height: 18,
+                            borderRadius: 999,
+                            border: "1px solid rgba(248,113,113,0.55)",
+                            background: "rgba(248,113,113,0.14)",
+                            color: "#f87171",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            lineHeight: 1,
+                            flexShrink: 0,
+                          }}
+                        >
+                          D
+                        </span>
+                      )}
                     </span>
                     <span style={{
                       fontSize: 13, fontWeight: 700, minWidth: 26, textAlign: "right",
-                      color: isProfSkill ? C.green : C.text,
+                      color: showStealthDisadvantage ? "#f87171" : isProfSkill ? C.green : C.text,
                     }}>
                       {isProfSkill && src
                         ? <Tooltip text={src}>{fmtMod(bonus)}</Tooltip>
@@ -1075,6 +1482,22 @@ export function CharacterView() {
         {/* ── COL 2: Actions + Spells & Invocations ────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
+          {/* Combat Stats */}
+          <Panel>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+              <MiniStat
+                label="Armor Class"
+                value={String(effectiveAc)}
+                accent={accentColor} icon={<IconShield size={11} />}
+              />
+              <MiniStat label="Speed" value={`${char.speed} ft`} icon={<IconSpeed size={11} />} />
+              <MiniStat label="Initiative" value={fmtMod(mod(char.dexScore))} accent={accentColor} icon={<IconInitiative size={11} />} />
+              <MiniStat label="Prof. Bonus" value={`+${pb}`} accent={accentColor} />
+              <MiniStat label="Passive Perc." value={String(passivePerc)} />
+              <MiniStat label="Passive Inv." value={String(passiveInv)} />
+            </div>
+          </Panel>
+
           {/* Actions */}
           {(() => {
             const inventory: InventoryItem[] = ((char.characterData?.inventory ?? []) as InventoryItem[]).map((item) => ({
@@ -1098,15 +1521,18 @@ export function CharacterView() {
                     const attackState = state === "mainhand-2h" ? "mainhand-2h" : state === "offhand" ? "offhand" : "mainhand-1h";
                     const dmg = weaponDamageDice(it, attackState);
                     const ability = weaponAbilityMod(it, char);
-                    const proficient = attackState !== "offhand" && hasWeaponProficiency(it, prof);
+                    const proficient = hasWeaponProficiency(it, prof);
                     const toHit = ability + (proficient ? pb : 0);
+                    const damageAbility = attackState === "offhand" && !addsAbilityModToOffhandDamage(it, char.characterData)
+                      ? 0
+                      : ability;
                     const damageType = formatItemDamageType(it.dmgType);
                     const props = formatItemProperties(it.properties);
                     const isReach = hasItemProperty(it, "R");
                     const rangeLabel = isRangedWeapon(it)
                       ? (it.properties?.find((p) => /^\d/.test(p)) ?? "Range")
                       : `${isReach ? "10" : "5"} ft.`;
-                    const dmgText = dmg ? `${dmg}${ability >= 0 ? "+" : ""}${ability}${damageType ? ` ${damageType}` : ""}` : "—";
+                    const dmgText = dmg ? `${dmg}${damageAbility === 0 ? "" : `${damageAbility >= 0 ? "+" : ""}${damageAbility}`}${damageType ? ` ${damageType}` : ""}` : "—";
                     const modeLabel = attackState === "mainhand-2h" ? "2H" : attackState === "offhand" ? "Offhand" : null;
                     return (
                       <div key={`${it.id}:${attackState}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0", borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
@@ -1152,50 +1578,48 @@ export function CharacterView() {
             );
           })()}
 
-          {/* Spells & Invocations */}
-          {prof && (prof.spells.length > 0 || prof.invocations.length > 0) && (
+          {/* Item Spells */}
+          <ItemSpellsPanel
+            items={inventory}
+            pb={pb}
+            intScore={char.intScore}
+            wisScore={char.wisScore}
+            chaScore={char.chaScore}
+            accentColor={accentColor}
+            onChargeChange={handleItemChargeChange}
+          />
+          {/* Known / Prepared spells — rich table with inline slots */}
+          {prof && prof.spells.length > 0 && (
+            <RichSpellsPanel
+              spells={prof.spells}
+              pb={pb}
+              intScore={char.intScore}
+              wisScore={char.wisScore}
+              chaScore={char.chaScore}
+              accentColor={accentColor}
+              classDetail={classDetail}
+              charLevel={char.level}
+              usedSpellSlots={char.characterData?.usedSpellSlots ?? {}}
+              preparedSpells={char.characterData?.preparedSpells ?? []}
+              onSlotsChange={saveUsedSpellSlots}
+              onPreparedChange={savePreparedSpells}
+            />
+          )}
+
+          {/* Invocations — keep as pills */}
+          {prof && prof.invocations.length > 0 && (
             <Panel>
-              <PanelTitle color="#a78bfa">Spells &amp; Invocations</PanelTitle>
-              {prof.spells.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
-                    Known / Prepared
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {prof.spells.map((sp, i) => (
-                      <Tooltip key={i} text={sp.source}>
-                        <span style={{
-                          fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 6, cursor: "default",
-                          background: "rgba(167,139,250,0.14)", border: "1px solid rgba(167,139,250,0.35)",
-                          color: "#a78bfa",
-                        }}>
-                          {sp.name}
-                        </span>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {prof.invocations.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
-                    Eldritch Invocations
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {prof.invocations.map((inv, i) => (
-                      <Tooltip key={i} text={inv.source}>
-                        <span style={{
-                          fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 6, cursor: "default",
-                          background: "rgba(251,146,60,0.14)", border: "1px solid rgba(251,146,60,0.35)",
-                          color: "#fb923c",
-                        }}>
-                          {inv.name}
-                        </span>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <PanelTitle color="#a78bfa">Eldritch Invocations</PanelTitle>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {prof.invocations.map((inv, i) => (
+                  <Tooltip key={i} text={inv.source}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 6, cursor: "default",
+                      background: "rgba(251,146,60,0.14)", border: "1px solid rgba(251,146,60,0.35)", color: "#fb923c",
+                    }}>{inv.name}</span>
+                  </Tooltip>
+                ))}
+              </div>
             </Panel>
           )}
 
@@ -1215,6 +1639,125 @@ export function CharacterView() {
 
         {/* ── COL 4: Everything Else ───────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          <Panel>
+            <PanelTitle color={accentColor}>Recovery</PanelTitle>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: classResources.length > 0 ? "minmax(0,1fr) auto auto" : "minmax(0,1fr) auto",
+                gap: 10,
+                alignItems: "center",
+              }}>
+                <div style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
+                    Hit Dice
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 19, fontWeight: 900, color: C.text }}>
+                        {hitDiceCurrent} / {hitDiceMax}
+                      </div>
+                      {hitDieSize != null && (
+                        <div style={{ fontSize: 11, color: C.muted }}>
+                          d{hitDieSize} pool
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => void saveHitDiceCurrent(hitDiceCurrent - 1)}
+                        disabled={hitDiceCurrent <= 0}
+                        style={miniPillBtn(hitDiceCurrent > 0)}
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void saveHitDiceCurrent(hitDiceCurrent + 1)}
+                        disabled={hitDiceCurrent >= hitDiceMax}
+                        style={miniPillBtn(hitDiceCurrent < hitDiceMax)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void handleShortRest()}
+                  style={restBtnStyle("#60a5fa")}
+                >
+                  Short Rest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleLongRest()}
+                  style={restBtnStyle("#34d399")}
+                >
+                  Long Rest
+                </button>
+              </div>
+
+              {classResources.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+                    Resources
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {classResources.map((resource) => (
+                      <div
+                        key={resource.key}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "minmax(0,1fr) auto auto auto",
+                          gap: 8,
+                          alignItems: "center",
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{resource.name}</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>
+                            {resource.reset === "S" ? "Resets on Short Rest" : resource.reset === "L" ? "Resets on Long Rest" : `Reset ${resource.reset}`}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void changeResourceCurrent(resource.key, -1)}
+                          disabled={resource.current <= 0}
+                          style={miniPillBtn(resource.current > 0)}
+                        >
+                          -
+                        </button>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: C.text, minWidth: 52, textAlign: "center" }}>
+                          {resource.current} / {resource.max}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void changeResourceCurrent(resource.key, 1)}
+                          disabled={resource.current >= resource.max}
+                          style={miniPillBtn(resource.current < resource.max)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Panel>
 
           {/* Player Notes */}
           <Panel>
@@ -1268,23 +1811,22 @@ export function CharacterView() {
                 +
               </button>
             }>Shared Notes</PanelTitle>
-            {sharedNotesList.length ? (
+            {allSharedNotes.length ? (
               <DraggableList
-                items={sharedNotesList}
+                items={allSharedNotes}
                 expandedIds={expandedNoteIds}
                 onSelect={(id) => toggleNoteExpanded(id)}
                 onReorder={(ids) => {
-                  const byId = Object.fromEntries(sharedNotesList.map((n) => [n.id, n]));
+                  const byId = Object.fromEntries(allSharedNotes.map((n) => [n.id, n]));
                   saveSharedNotesList(ids.map((id) => byId[id]).filter(Boolean));
                 }}
                 renderItem={(it) => {
-                  const note = sharedNotesList.find((n) => n.id === it.id)!;
+                  const note = allSharedNotes.find((n) => n.id === it.id)!;
                   return (
                     <NoteItem
                       note={note}
                       expanded={expandedNoteIds.includes(it.id)}
                       accentColor={C.green}
-                      hideTitle
                       onToggle={() => toggleNoteExpanded(it.id)}
                       onEdit={() => setNoteDrawer({ scope: "shared", note })}
                       onDelete={() => handleNoteDelete("shared", it.id)}
@@ -1379,7 +1921,53 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
   const [newQty, setNewQty] = useState(1);
   const [newNotes, setNewNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [itemIndex, setItemIndex] = useState<ItemSummaryRow[]>([]);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [expandedDetail, setExpandedDetail] = useState<CompendiumItemDetail | null>(null);
+  const [expandedBusy, setExpandedBusy] = useState(false);
+  const [itemEditMode, setItemEditMode] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api<ItemSummaryRow[]>("/api/compendium/items")
+      .then((rows) => { if (alive) setItemIndex(rows ?? []); })
+      .catch(() => { if (alive) setItemIndex([]); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!expandedItemId) {
+      setExpandedDetail(null);
+      setExpandedBusy(false);
+      setItemEditMode(false);
+      return;
+    }
+    const inventoryItem = items.find((it) => it.id === expandedItemId);
+    if (!inventoryItem) {
+      setExpandedDetail(null);
+      setExpandedBusy(false);
+      return;
+    }
+    const normalizedName = normalizeInventoryItemLookupName(inventoryItem.name);
+    const matchedSummary = inventoryItem.itemId
+      ? itemIndex.find((row) => row.id === inventoryItem.itemId) ?? null
+      : itemIndex.find((row) => normalizeInventoryItemLookupName(row.name) === normalizedName) ?? null;
+
+    if (!matchedSummary) {
+      setExpandedDetail(null);
+      setExpandedBusy(false);
+      return;
+    }
+
+    let alive = true;
+    setExpandedBusy(true);
+    api<CompendiumItemDetail>(`/api/compendium/items/${matchedSummary.id}`)
+      .then((detail) => { if (alive) setExpandedDetail(detail); })
+      .catch(() => { if (alive) setExpandedDetail(null); })
+      .finally(() => { if (alive) setExpandedBusy(false); });
+    return () => { alive = false; };
+  }, [expandedItemId, itemIndex, items]);
 
   async function persist(updated: InventoryItem[]) {
     setSaving(true);
@@ -1405,20 +1993,32 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
       rarity: next.rarity ?? null,
       type: next.type ?? null,
       attunement: next.attunement ?? false,
+      attuned: next.attuned ?? false,
       magic: next.magic ?? false,
+      silvered: next.silvered ?? false,
       weight: next.weight ?? null,
       value: next.value ?? null,
+      ac: next.ac ?? null,
+      stealthDisadvantage: next.stealthDisadvantage ?? false,
       dmg1: next.dmg1 ?? null,
       dmg2: next.dmg2 ?? null,
       dmgType: next.dmgType ?? null,
       properties: next.properties ?? [],
       description: next.description?.trim() || undefined,
+      chargesMax: (() => {
+        const desc = next.description?.trim() ?? "";
+        return desc ? (parseChargesMax(desc) ?? null) : null;
+      })(),
+      charges: (() => {
+        const desc = next.description?.trim() ?? "";
+        return desc ? (parseChargesMax(desc) ?? null) : null;
+      })(),
     };
     await persist([...items, item]);
     setPickerOpen(false);
   }
 
-  async function setEquipStateFor(id: string, state: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand") {
+  async function setEquipStateFor(id: string, state: EquipState) {
     const updated = items.map((it) => {
       if (it.id === id) return { ...it, equipped: state !== "backpack", equipState: state };
       const currentState = getEquipState(it);
@@ -1434,6 +2034,9 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
         return { ...it, equipped: false, equipState: "backpack" as const };
       }
       if (state === "offhand" && currentState === "offhand") {
+        return { ...it, equipped: false, equipState: "backpack" as const };
+      }
+      if (state === "worn" && currentState === "worn") {
         return { ...it, equipped: false, equipState: "backpack" as const };
       }
       return { ...it, equipped: currentState !== "backpack", equipState: currentState };
@@ -1463,6 +2066,13 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
     await setEquipStateFor(id, state === "offhand" ? "backpack" : "offhand");
   }
 
+  async function toggleWorn(id: string) {
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+    const state = getEquipState(item);
+    await setEquipStateFor(id, state === "worn" ? "backpack" : "worn");
+  }
+
   async function removeItem(id: string) {
     await persist(items.filter((it) => it.id !== id));
   }
@@ -1476,6 +2086,16 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
     await persist(updated);
   }
 
+  function toggleExpandedItem(id: string) {
+    setExpandedItemId((current) => current === id ? null : id);
+    setItemEditMode(false);
+  }
+
+  async function saveItemEdits(id: string, patch: Partial<InventoryItem>) {
+    const updated = items.map((it) => it.id === id ? { ...it, ...patch } : it);
+    await persist(updated);
+  }
+
   const equipped = items.filter((it) => getEquipState(it) !== "backpack");
   const backpack = items.filter((it) => getEquipState(it) === "backpack");
   const actionItems = equipped.filter((it) => isWeaponItem(it));
@@ -1484,6 +2104,10 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
   const strScore = Math.max(0, char.strScore ?? 0);
   const carryCapacity = strScore * 15;
   const overCapacity = carryCapacity > 0 && carriedWeight > carryCapacity;
+  const selectedItem = expandedItemId ? items.find((it) => it.id === expandedItemId) ?? null : null;
+  const otherAttunedCount = selectedItem
+    ? items.filter((it) => it.id !== selectedItem.id && it.attuned).length
+    : items.filter((it) => it.attuned).length;
 
   return (
     <Panel>
@@ -1513,29 +2137,33 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
         </div>
       </div>
 
-      {/* Equipped */}
       {equipped.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           <div style={subLabelStyle}>Equipped</div>
           {equipped.map((it) => (
             <ItemRow key={it.id} item={it} accentColor={accentColor}
               charData={charData}
+              expanded={expandedItemId === it.id}
+              onToggleExpanded={toggleExpandedItem}
               onCycleMain={cycleMainHand}
               onToggleOffhand={toggleOffhand}
+              onToggleWorn={toggleWorn}
               onRemove={removeItem} onQty={changeQty} />
           ))}
         </div>
       )}
 
-      {/* Backpack */}
       {backpack.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           <div style={subLabelStyle}>{equipped.length > 0 ? "Backpack" : "Items"}</div>
           {backpack.map((it) => (
             <ItemRow key={it.id} item={it} accentColor={accentColor}
               charData={charData}
+              expanded={expandedItemId === it.id}
+              onToggleExpanded={toggleExpandedItem}
               onCycleMain={cycleMainHand}
               onToggleOffhand={toggleOffhand}
+              onToggleWorn={toggleWorn}
               onRemove={removeItem} onQty={changeQty} />
           ))}
         </div>
@@ -1585,21 +2213,45 @@ function InventoryPanel({ char, charData, accentColor, onSave }: {
         onClose={() => setPickerOpen(false)}
         onAdd={addItem}
       />
+      {selectedItem ? (
+        <InventoryItemDrawer
+          item={selectedItem}
+          detail={expandedDetail}
+          busy={expandedBusy}
+          accentColor={accentColor}
+          otherAttunedCount={otherAttunedCount}
+          editMode={itemEditMode}
+          onStartEdit={() => setItemEditMode(true)}
+          onCancelEdit={() => setItemEditMode(false)}
+          onClose={() => setExpandedItemId(null)}
+          onSave={async (patch) => {
+            await saveItemEdits(selectedItem.id, patch);
+            setItemEditMode(false);
+          }}
+          onChargesChange={async (charges) => {
+            await saveItemEdits(selectedItem.id, { charges });
+          }}
+        />
+      ) : null}
     </Panel>
   );
 }
 
-function ItemRow({ item, accentColor, charData, onCycleMain, onToggleOffhand, onRemove, onQty }: {
+function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCycleMain, onToggleOffhand, onToggleWorn, onRemove, onQty }: {
   item: InventoryItem;
   accentColor: string;
   charData: CharacterData | null;
+  expanded: boolean;
+  onToggleExpanded: (id: string) => void;
   onCycleMain: (id: string) => void;
   onToggleOffhand: (id: string) => void;
+  onToggleWorn: (id: string) => void;
   onRemove: (id: string) => void;
   onQty: (id: string, delta: number) => void;
 }) {
   const state = getEquipState(item);
   const isWeapon = isWeaponItem(item);
+  const isArmor = isArmorItem(item);
   const offhandAllowed = canEquipOffhand(item, charData);
   const mainActive = state === "mainhand-1h" || state === "mainhand-2h";
   const mainLabel = state === "mainhand-2h" ? "2H" : "1H";
@@ -1608,6 +2260,7 @@ function ItemRow({ item, accentColor, charData, onCycleMain, onToggleOffhand, on
     state === "mainhand-2h" ? "Main Hand (2H)"
       : state === "mainhand-1h" ? "Main Hand (1H)"
       : state === "offhand" ? "Offhand"
+      : state === "worn" ? "Equipped"
       : null;
   const meta = [
     item.rarity ? titleCase(item.rarity) : null,
@@ -1615,92 +2268,508 @@ function ItemRow({ item, accentColor, charData, onCycleMain, onToggleOffhand, on
     item.attunement ? "Attunement" : null,
     item.magic ? "Magic" : null,
   ].filter(Boolean).join(" • ");
+
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      padding: "4px 2px",
-      borderBottom: "1px solid rgba(255,255,255,0.05)",
-    }}>
-      {isWeapon ? (
-        <button
-          onClick={() => onCycleMain(item.id)}
-          title="Cycle main hand"
-          style={inventoryEquipBtn(mainActive, accentColor)}
-        >
-          {mainLabel}
-        </button>
-      ) : offhandAllowed ? (
-        <button
-          onClick={() => onToggleOffhand(item.id)}
-          title={state === "offhand" ? "Unequip offhand" : "Equip to offhand"}
-          style={inventoryEquipBtn(state === "offhand", "#94a3b8")}
-        >
-          OH
-        </button>
-      ) : (
-        <div style={{ width: 30, flexShrink: 0 }} />
-      )}
+    <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "4px 2px",
+      }}>
+        {isWeapon ? (
+          <button
+            onClick={() => onCycleMain(item.id)}
+            title="Cycle main hand"
+            style={inventoryEquipBtn(mainActive, accentColor)}
+          >
+            {mainLabel}
+          </button>
+        ) : isArmor ? (
+          <button
+            onClick={() => onToggleWorn(item.id)}
+            title={state === "worn" ? "Unequip armor" : "Equip armor"}
+            style={inventoryEquipBtn(state === "worn", accentColor)}
+          >
+            EQ
+          </button>
+        ) : offhandAllowed ? (
+          <button
+            onClick={() => onToggleOffhand(item.id)}
+            title={state === "offhand" ? "Unequip offhand" : "Equip to offhand"}
+            style={inventoryEquipBtn(state === "offhand", "#94a3b8")}
+          >
+            OH
+          </button>
+        ) : (
+          <div style={{ width: 30, flexShrink: 0 }} />
+        )}
 
-      {isWeapon && offhandAllowed ? (
-        <button
-          onClick={() => onToggleOffhand(item.id)}
-          title={state === "offhand" ? "Unequip offhand" : "Equip to offhand"}
-          style={inventoryEquipBtn(state === "offhand", "#94a3b8")}
-        >
-          OH
-        </button>
-      ) : null}
+        {isWeapon && offhandAllowed ? (
+          <button
+            onClick={() => onToggleOffhand(item.id)}
+            title={state === "offhand" ? "Unequip offhand" : "Equip to offhand"}
+            style={inventoryEquipBtn(state === "offhand", "#94a3b8")}
+          >
+            OH
+          </button>
+        ) : null}
 
-      {/* Name + notes */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: C.text, fontWeight: equipped ? 600 : 400 }}>
-          {item.name}
+        <button
+          type="button"
+          onClick={() => onToggleExpanded(item.id)}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: expanded ? "rgba(255,255,255,0.05)" : "transparent",
+            border: expanded ? `1px solid ${accentColor}33` : "1px solid transparent",
+            borderRadius: 8,
+            padding: "6px 8px",
+            textAlign: "left",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ fontSize: 13, color: C.text, fontWeight: equipped ? 600 : 400, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {item.name}
+            {item.attuned && (
+              <span
+                title="Currently attuned"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  border: "1px solid rgba(56,189,248,0.55)",
+                  background: "rgba(56,189,248,0.14)",
+                  color: "#38bdf8",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                }}
+              >
+                A
+              </span>
+            )}
+            {hasStealthDisadvantage(item) && (
+              <span
+                title="Disadvantage on Stealth checks"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  border: "1px solid rgba(248,113,113,0.55)",
+                  background: "rgba(248,113,113,0.14)",
+                  color: "#f87171",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                }}
+              >
+                D
+              </span>
+            )}
+          </div>
+          {meta && (
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{meta}</div>
+          )}
+          {stateLabel && (
+            <div style={{ fontSize: 10, color: accentColor, marginTop: 2, fontWeight: 700 }}>
+              {stateLabel}
+            </div>
+          )}
+          {item.notes && (
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{item.notes}</div>
+          )}
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {item.quantity > 1 && (
+            <button onClick={() => onQty(item.id, -1)} style={stepperBtn}>−</button>
+          )}
+          {item.quantity > 1 && (
+            <span style={{ fontSize: 12, color: C.muted, minWidth: 20, textAlign: "center" }}>
+              ×{item.quantity}
+            </span>
+          )}
+          <button onClick={() => onQty(item.id, +1)} style={stepperBtn}>+</button>
         </div>
-        {meta && (
-          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
-            {[
-              item.rarity ? titleCase(item.rarity) : null,
-              item.type ?? null,
-              item.attunement ? "Attunement" : null,
-              item.magic ? "Magic" : null,
-            ].filter(Boolean).join(" • ")}
-          </div>
-        )}
-        {stateLabel && (
-          <div style={{ fontSize: 10, color: accentColor, marginTop: 2, fontWeight: 700 }}>
-            {stateLabel}
-          </div>
-        )}
-        {item.notes && (
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{item.notes}</div>
-        )}
-      </div>
 
-      {/* Quantity stepper */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-        {item.quantity > 1 && (
-          <button onClick={() => onQty(item.id, -1)} style={stepperBtn}>−</button>
-        )}
-        {item.quantity > 1 && (
-          <span style={{ fontSize: 12, color: C.muted, minWidth: 20, textAlign: "center" }}>
-            ×{item.quantity}
-          </span>
-        )}
-        <button onClick={() => onQty(item.id, +1)} style={stepperBtn}>+</button>
-      </div>
-
-      {/* Remove */}
-      <button
-        onClick={() => onRemove(item.id)}
-        title="Remove"
-        style={{
-          background: "transparent", border: "none",
-          color: "rgba(255,255,255,0.22)", cursor: "pointer",
-          fontSize: 15, padding: "0 2px", lineHeight: 1, flexShrink: 0,
+        <button
+          onClick={() => onRemove(item.id)}
+          title="Remove"
+          style={{
+            background: "transparent", border: "none",
+            color: "rgba(255,255,255,0.22)", cursor: "pointer",
+            fontSize: 15, padding: "0 2px", lineHeight: 1, flexShrink: 0,
         }}>
-        ×
-      </button>
+          ×
+        </button>
+      </div>
     </div>
+  );
+}
+
+function InventoryItemDrawer(props: {
+  item: InventoryItem;
+  detail: CompendiumItemDetail | null;
+  busy: boolean;
+  accentColor: string;
+  otherAttunedCount: number;
+  editMode: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onClose: () => void;
+  onSave: (patch: Partial<InventoryItem>) => Promise<void>;
+  onChargesChange: (charges: number) => void | Promise<void>;
+}) {
+  const merged = {
+    name: props.item.name,
+    rarity: props.item.rarity ?? props.detail?.rarity ?? "",
+    type: props.item.type ?? props.detail?.type ?? "",
+    attunement: props.item.attunement ?? props.detail?.attunement ?? false,
+    attuned: props.item.attuned ?? false,
+    magic: props.item.magic ?? props.detail?.magic ?? false,
+    silvered: props.item.silvered ?? false,
+    weight: props.item.weight ?? props.detail?.weight ?? null,
+    value: props.item.value ?? props.detail?.value ?? null,
+    ac: props.item.ac ?? props.detail?.ac ?? null,
+    stealthDisadvantage: props.item.stealthDisadvantage ?? props.detail?.stealthDisadvantage ?? false,
+    dmg1: props.item.dmg1 ?? props.detail?.dmg1 ?? "",
+    dmg2: props.item.dmg2 ?? props.detail?.dmg2 ?? "",
+    dmgType: props.item.dmgType ?? props.detail?.dmgType ?? "",
+    properties: props.item.properties?.length ? props.item.properties : (props.detail?.properties ?? []),
+    description: props.item.description ?? (props.detail ? (Array.isArray(props.detail.text) ? props.detail.text.join("\n\n") : props.detail.text ?? "") : ""),
+  };
+  const kindItem: InventoryItem = {
+    ...props.item,
+    type: merged.type || null,
+    dmg1: merged.dmg1 || null,
+    dmg2: merged.dmg2 || null,
+    ac: merged.ac,
+    properties: merged.properties,
+  };
+  const isWeaponLike = isWeaponItem(kindItem);
+  const isRangedWeaponLike = isWeaponLike && isRangedWeapon(kindItem);
+  const isMeleeWeaponLike = isWeaponLike && !isRangedWeaponLike;
+  const isArmorLike = isArmorItem(kindItem) || isShieldItem(kindItem);
+  const [draft, setDraft] = useState(merged);
+
+  useEffect(() => {
+    setDraft(merged);
+  }, [
+    props.item.id,
+    merged.name,
+    merged.rarity,
+    merged.type,
+    merged.attunement,
+    merged.attuned,
+    merged.magic,
+    merged.silvered,
+    merged.weight,
+    merged.value,
+    merged.ac,
+    merged.stealthDisadvantage,
+    merged.dmg1,
+    merged.dmg2,
+    merged.dmgType,
+    merged.description,
+    merged.properties.join("|"),
+  ]);
+
+  const hasAnyDetails = Boolean(
+    draft.rarity ||
+    draft.type ||
+    draft.description ||
+    draft.weight != null ||
+    draft.value != null ||
+    (isArmorLike && draft.ac != null) ||
+    (isWeaponLike && draft.dmg1) ||
+    (isWeaponLike && draft.dmg2) ||
+    (isWeaponLike && draft.dmgType) ||
+    (isWeaponLike && draft.properties.length > 0) ||
+    draft.stealthDisadvantage ||
+    draft.attunement ||
+    draft.attuned ||
+    draft.magic ||
+    (isMeleeWeaponLike && draft.silvered) ||
+    (props.item.chargesMax ?? 0) > 0
+  );
+  const canEnableAttuned = draft.attuned || props.otherAttunedCount < 3;
+
+  async function handleSave() {
+    await props.onSave({
+      name: draft.name.trim() || props.item.name,
+      rarity: draft.rarity.trim() || null,
+      type: props.item.type ?? props.detail?.type ?? null,
+      attunement: Boolean(draft.attunement),
+      attuned: draft.attunement && canEnableAttuned ? Boolean(draft.attuned) : false,
+      magic: Boolean(draft.magic),
+      silvered: isMeleeWeaponLike ? Boolean(draft.silvered) : false,
+      weight: draft.weight == null || Number.isNaN(draft.weight) ? null : draft.weight,
+      value: draft.value == null || Number.isNaN(draft.value) ? null : draft.value,
+      ac: isArmorLike && draft.ac != null && !Number.isNaN(draft.ac) ? draft.ac : null,
+      stealthDisadvantage: isArmorLike ? Boolean(draft.stealthDisadvantage) : false,
+      dmg1: isWeaponLike ? (draft.dmg1.trim() || null) : null,
+      dmg2: isWeaponLike ? (draft.dmg2.trim() || null) : null,
+      dmgType: isWeaponLike ? (draft.dmgType.trim() || null) : null,
+      properties: isWeaponLike ? draft.properties.map((p) => p.trim()).filter(Boolean) : [],
+      description: draft.description.trim() || undefined,
+      source: "custom",
+    });
+  }
+
+  return (
+    <>
+      <div onClick={props.onClose} style={{ position: "fixed", inset: 0, zIndex: 900, background: "rgba(0,0,0,0.45)" }} />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 901,
+        width: "min(520px, 92vw)",
+        background: "#0e1220",
+        borderLeft: "1px solid rgba(255,255,255,0.12)",
+        display: "flex", flexDirection: "column",
+        boxShadow: "-8px 0 30px rgba(0,0,0,0.5)",
+      }}>
+        <div style={{
+          padding: "18px 20px 14px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 8,
+        }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 900, fontSize: 20, color: C.text }}>{props.item.name}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+              Player-owned copy. Edits here affect only this character.
+            </div>
+          </div>
+          <button type="button" onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
+            Close
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {props.editMode ? (
+            <>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Title</div>
+                <input
+                  value={draft.name}
+                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                  placeholder="Item name"
+                  style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Rarity</div>
+                  <Select value={draft.rarity} onChange={(e) => setDraft((d) => ({ ...d, rarity: e.target.value }))} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                    <option value="">None</option>
+                    <option value="common">Common</option>
+                    <option value="uncommon">Uncommon</option>
+                    <option value="rare">Rare</option>
+                    <option value="very rare">Very Rare</option>
+                    <option value="legendary">Legendary</option>
+                    <option value="artifact">Artifact</option>
+                  </Select>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Weight</div>
+                  <input type="number" value={draft.weight ?? ""} onChange={(e) => setDraft((d) => ({ ...d, weight: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="Weight" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Value</div>
+                  <input type="number" value={draft.value ?? ""} onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="Value" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                {isWeaponLike && (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage 1</div>
+                      <input value={draft.dmg1} onChange={(e) => setDraft((d) => ({ ...d, dmg1: e.target.value }))} placeholder="Damage 1" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage 2</div>
+                      <input value={draft.dmg2} onChange={(e) => setDraft((d) => ({ ...d, dmg2: e.target.value }))} placeholder="Damage 2" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage Type</div>
+                      <input value={draft.dmgType} onChange={(e) => setDraft((d) => ({ ...d, dmgType: e.target.value }))} placeholder="Damage Type" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Properties</div>
+                      <input value={draft.properties.join(", ")} onChange={(e) => setDraft((d) => ({ ...d, properties: e.target.value.split(",").map((p) => p.trim()).filter(Boolean) }))} placeholder="Properties" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                    </div>
+                  </>
+                )}
+                {isArmorLike && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Armor Class</div>
+                    <input type="number" value={draft.ac ?? ""} onChange={(e) => setDraft((d) => ({ ...d, ac: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="AC" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Max Charges</div>
+                  <input type="number" min={0} value={props.item.chargesMax ?? ""} onChange={async (e) => {
+                    const v = e.target.value === "" ? null : Number(e.target.value);
+                    await props.onSave({ chargesMax: v, charges: v ?? null });
+                  }} placeholder="0" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                <label style={inventoryCheckboxLabel}>
+                  <input type="checkbox" checked={draft.magic} onChange={(e) => setDraft((d) => ({ ...d, magic: e.target.checked }))} />
+                  Magic
+                </label>
+                {draft.attunement && (
+                  <label style={inventoryCheckboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={draft.attuned}
+                      disabled={!draft.attuned && !canEnableAttuned}
+                      onChange={(e) => setDraft((d) => ({ ...d, attuned: e.target.checked }))}
+                    />
+                    Attuned
+                  </label>
+                )}
+                {isMeleeWeaponLike && (
+                  <label style={inventoryCheckboxLabel}>
+                    <input type="checkbox" checked={draft.silvered} onChange={(e) => setDraft((d) => ({ ...d, silvered: e.target.checked }))} />
+                    Silvered
+                  </label>
+                )}
+                {isArmorLike && (
+                  <label style={inventoryCheckboxLabel}>
+                    <input type="checkbox" checked={draft.stealthDisadvantage} onChange={(e) => setDraft((d) => ({ ...d, stealthDisadvantage: e.target.checked }))} />
+                    Stealth D
+                  </label>
+                )}
+              </div>
+              {draft.attunement && !canEnableAttuned && (
+                <div style={{ fontSize: 11, color: C.red }}>
+                  You can have no more than 3 attuned items at a time.
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Text</div>
+                <textarea
+                  value={draft.description}
+                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                  placeholder="Description"
+                  rows={12}
+                  style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", minHeight: 240, fontFamily: "inherit", lineHeight: 1.5 }}
+                />
+              </div>
+            </>
+          ) : props.busy ? (
+            <div style={{ color: C.muted, padding: "8px 2px" }}>Loading...</div>
+          ) : hasAnyDetails ? (
+            <>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {draft.magic && <InventoryTag label="Magic" color="#a78bfa" />}
+                {draft.attunement && !draft.attuned && <InventoryTag label="Requires Attunement" color={props.accentColor} />}
+                {draft.attuned && <InventoryTag label="Attuned" color={props.accentColor} />}
+                {isMeleeWeaponLike && draft.silvered && <InventoryTag label="Silvered" color="#cbd5e1" />}
+                {draft.rarity && <InventoryTag label={titleCase(draft.rarity)} color={inventoryRarityColor(draft.rarity)} />}
+                {draft.type && <InventoryTag label={draft.type} color={C.muted} />}
+                {isArmorLike && draft.stealthDisadvantage && <InventoryTag label="D" color="#f87171" />}
+              </div>
+              {((isWeaponLike && (draft.dmg1 || draft.dmg2 || draft.dmgType || draft.properties.length > 0)) || draft.weight != null || draft.value != null || (isArmorLike && (draft.ac != null || draft.stealthDisadvantage))) && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
+                  {isArmorLike && draft.ac != null && <InventoryStat label="Armor Class" value={String(draft.ac)} />}
+                  {isWeaponLike && draft.dmg1 && <InventoryStat label="One-Handed Damage" value={draft.dmg1} />}
+                  {isWeaponLike && draft.dmg2 && <InventoryStat label="Two-Handed Damage" value={draft.dmg2} />}
+                  {isWeaponLike && draft.dmgType && <InventoryStat label="Damage Type" value={formatItemDamageType(draft.dmgType) ?? draft.dmgType} />}
+                  {draft.weight != null && <InventoryStat label="Weight" value={`${draft.weight} lb`} />}
+                  {draft.value != null && <InventoryStat label="Value" value={`${draft.value} gp`} />}
+                  {isWeaponLike && draft.properties.length > 0 && <InventoryStat label="Properties" value={formatItemProperties(draft.properties)} />}
+                  {isArmorLike && draft.stealthDisadvantage && <InventoryStat label="Stealth" value="D" />}
+                </div>
+              )}
+              {/* Charge boxes */}
+              {(props.item.chargesMax ?? 0) > 0 && !props.editMode && (() => {
+                const max = props.item.chargesMax!;
+                const cur = props.item.charges ?? max;
+                return (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Charges</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                      {Array.from({ length: max }).map((_, i) => {
+                        const filled = i < cur;
+                        return (
+                          <button
+                            key={i}
+                            title={filled ? "Expend charge" : "Regain charge"}
+                            onClick={() => props.onChargesChange(filled ? cur - 1 : i + 1)}
+                            style={{
+                              width: 24, height: 24, borderRadius: 4,
+                              border: `2px solid ${filled ? props.accentColor : "rgba(255,255,255,0.2)"}`,
+                              background: filled ? `${props.accentColor}33` : "transparent",
+                              cursor: "pointer", padding: 0,
+                            }}
+                          />
+                        );
+                      })}
+                      <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>{cur} / {max}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Item spells */}
+              {(() => {
+                const spells = parseItemSpells(draft.description ?? "");
+                if (!spells.length) return null;
+                return (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Spells</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {spells.map((sp) => (
+                        <div key={sp.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
+                          <span style={{ fontSize: 13, color: "#c4b5fd", fontWeight: 600 }}>{sp.name}</span>
+                          <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{sp.cost} {sp.cost === 1 ? "Charge" : "Charges"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div style={{ ...inventoryPickerDetailStyle, minHeight: 180 }}>
+                {draft.description || <span style={{ color: C.muted }}>No description.</span>}
+              </div>
+            </>
+          ) : (
+            <div style={{
+              border: `1px solid ${C.panelBorder}`,
+              borderRadius: 12,
+              padding: 14,
+              color: C.muted,
+              minHeight: 96,
+              display: "flex",
+              alignItems: "center",
+            }}>
+              No details yet. Use Edit to add player-specific notes or item data.
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          {props.editMode ? (
+            <>
+              <button type="button" onClick={props.onCancelEdit} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontSize: 13 }}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => { void handleSave(); }} style={{ background: `${props.accentColor}22`, border: `1px solid ${props.accentColor}55`, borderRadius: 8, color: props.accentColor, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+                Save
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={props.onStartEdit} style={{ background: `${props.accentColor}22`, border: `1px solid ${props.accentColor}55`, borderRadius: 8, color: props.accentColor, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+              Edit
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1981,7 +3050,7 @@ function InventoryItemPickerModal(props: {
                 if (!detail) return;
                 props.onAdd({
                   source: "compendium",
-                  name: detail.name,
+          name: detail.name,
                   quantity: qty,
                   itemId: detail.id,
                   rarity: detail.rarity,
@@ -1990,6 +3059,8 @@ function InventoryItemPickerModal(props: {
                   magic: detail.magic,
                   weight: detail.weight,
                   value: detail.value,
+                  ac: detail.ac,
+                  stealthDisadvantage: detail.stealthDisadvantage,
                   dmg1: detail.dmg1,
                   dmg2: detail.dmg2,
                   dmgType: detail.dmgType,
@@ -2054,6 +3125,7 @@ function InventoryItemPickerModal(props: {
                 {detail.attunement && <InventoryTag label="Attunement" color={props.accentColor} />}
                 {detail.rarity && <InventoryTag label={titleCase(detail.rarity)} color={inventoryRarityColor(detail.rarity)} />}
                 {detail.type && <InventoryTag label={detail.type} color={C.muted} />}
+                {hasStealthDisadvantage(detail) && <InventoryTag label="D" color="#f87171" />}
               </div>
               {(detail.dmg1 || detail.dmg2 || detail.dmgType || detail.weight != null || detail.value != null || detail.properties.length > 0) && (
                 <div style={{
@@ -2066,6 +3138,7 @@ function InventoryItemPickerModal(props: {
                   {detail.dmgType && <InventoryStat label="Damage Type" value={formatItemDamageType(detail.dmgType) ?? detail.dmgType} />}
                   {detail.weight != null && <InventoryStat label="Weight" value={`${detail.weight} lb`} />}
                   {detail.value != null && <InventoryStat label="Value" value={`${detail.value} gp`} />}
+                  {hasStealthDisadvantage(detail) && <InventoryStat label="Stealth" value="D" />}
                   {detail.properties.length > 0 && <InventoryStat label="Properties" value={formatItemProperties(detail.properties)} />}
                 </div>
               )}
@@ -2205,14 +3278,15 @@ function ProfDot({ filled, color }: { filled: boolean; color: string }) {
   );
 }
 
-function HexBtn({ variant, title, disabled, onClick, children }: {
-  variant: "damage" | "heal" | "conditions";
+function HexBtn({ variant, active, title, disabled, onClick, children }: {
+  variant: "damage" | "heal" | "conditions" | "inspiration";
+  active?: boolean;
   title: string;
   disabled: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
-  const bg = variant === "damage" ? C.red : variant === "heal" ? C.green : "#f59e0b";
+  const bg = variant === "damage" ? C.red : variant === "heal" ? C.green : variant === "inspiration" ? (active ? "#a855f7" : "#4b2d6b") : "#f59e0b";
   return (
     <button
       type="button"
@@ -2226,9 +3300,9 @@ function HexBtn({ variant, title, disabled, onClick, children }: {
         border: "2px solid rgba(255,255,255,0.1)",
         background: bg, color: "#fff",
         clipPath: "polygon(25% 4%, 75% 4%, 98% 50%, 75% 96%, 25% 96%, 2% 50%)",
-        boxShadow: disabled ? "none" : "0 2px 0 0 rgba(0,0,0,0.3)",
+        boxShadow: disabled ? "none" : active ? "0 0 12px 4px rgba(168,85,247,0.6), 0 2px 0 0 rgba(0,0,0,0.3)" : "0 2px 0 0 rgba(0,0,0,0.3)",
         animation: disabled ? "none" : "playerHexPulse 2.2s ease-in-out infinite",
-        opacity: disabled ? 0.4 : 1,
+        opacity: disabled ? 0.4 : variant === "inspiration" && !active ? 0.55 : 1,
         transition: "transform 80ms ease, opacity 150ms ease",
         userSelect: "none",
       }}
@@ -2259,6 +3333,779 @@ function MiniStat({ label, value, accent, icon }: { label: string; value: string
         {value}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SpellSlotsPanel
+// ---------------------------------------------------------------------------
+
+function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, accentColor }: {
+  classDetail: ClassRestDetail | null;
+  level: number;
+  usedSpellSlots: Record<string, number>;
+  onSave: (next: Record<string, number>) => Promise<void>;
+  accentColor: string;
+}) {
+  const slots = classDetail?.autolevels.find((al) => al.level === level)?.slots ?? null;
+  if (!slots) return null;
+
+  // slots[0] = cantrips, slots[1] = L1, ... slots[9] = L9
+  const spellLevels = slots
+    .map((count, i) => ({ level: i, count }))
+    .filter(({ level: l, count }) => l > 0 && count > 0);
+
+  if (!spellLevels.length) return null;
+
+  async function toggleSlot(spellLevel: number, slotIndex: number) {
+    const key = String(spellLevel);
+    const used = usedSpellSlots[key] ?? 0;
+    const max = slots![spellLevel] ?? 0;
+    // If clicking a "used" slot (i < used) → restore it; clicking "available" slot → expend it
+    const next = slotIndex < used ? slotIndex : Math.min(max, slotIndex + 1);
+    await onSave({ ...usedSpellSlots, [key]: next });
+  }
+
+  async function longRest() {
+    await onSave({});
+  }
+
+  return (
+    <Panel>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <PanelTitle color="#a78bfa" style={{ margin: 0 }}>Spell Slots</PanelTitle>
+        <button onClick={longRest} style={{
+          fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+          background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa",
+        }}>Long Rest</button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {spellLevels.map(({ level: sl, count }) => {
+          const used = usedSpellSlots[String(sl)] ?? 0;
+          const remaining = count - used;
+          const ordinals = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+          return (
+            <div key={sl} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, minWidth: 30 }}>{ordinals[sl]}</div>
+              <div style={{ display: "flex", gap: 5, flex: 1 }}>
+                {Array.from({ length: count }).map((_, i) => {
+                  const filled = i >= used; // filled = available, empty = expended
+                  return (
+                    <button
+                      key={i}
+                      title={filled ? "Expend slot" : "Restore slot"}
+                      onClick={() => toggleSlot(sl, i)}
+                      style={{
+                        width: 22, height: 22, borderRadius: 4, padding: 0, cursor: "pointer",
+                        border: `2px solid ${filled ? accentColor : "rgba(255,255,255,0.15)"}`,
+                        background: filled ? `${accentColor}33` : "transparent",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, minWidth: 36, textAlign: "right" }}>
+                {remaining}/{count}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RichSpellsPanel
+// ---------------------------------------------------------------------------
+
+function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange }: {
+  spells: { name: string; source: string }[];
+  pb: number;
+  intScore: number | null;
+  wisScore: number | null;
+  chaScore: number | null;
+  accentColor: string;
+  classDetail: ClassRestDetail | null;
+  charLevel: number;
+  usedSpellSlots: Record<string, number>;
+  preparedSpells: string[];
+  onSlotsChange: (next: Record<string, number>) => Promise<void>;
+  onPreparedChange: (next: string[]) => Promise<void>;
+}) {
+  const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
+  const [selectedSpell, setSelectedSpell] = React.useState<FetchedSpellDetail | null>(null);
+
+  const entries = React.useMemo(() => spells.map((sp) => ({
+    rawName: sp.name,
+    source: sp.source,
+    searchName: sp.name.replace(/\s*\[.+\]$/, "").trim(),
+    key: sp.name.toLowerCase().replace(/[^a-z0-9]/g, ""),
+  })), [spells]);
+
+  const entryKeysStr = entries.map((e) => e.key).join(",");
+  React.useEffect(() => {
+    for (const e of entries) {
+      if (details[e.key]) continue;
+      api<{ id: string; name: string; level: number | null }[]>(
+        `/api/spells/search?q=${encodeURIComponent(e.searchName)}&limit=5`
+      ).then((results) => {
+        const match =
+          results.find((r) => r.name.replace(/\s*\[.+\]$/, "").toLowerCase() === e.searchName.toLowerCase())
+          ?? results[0];
+        if (!match) return;
+        return api<FetchedSpellDetail>(`/api/spells/${match.id}`).then((detail) => {
+          const textStr = Array.isArray(detail.text) ? detail.text.join("\n") : String(detail.text ?? "");
+          setDetails((prev) => ({
+            ...prev,
+            [e.key]: { ...detail, damage: parseSpellDamage(textStr), save: parseSpellSave(textStr) },
+          }));
+        });
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryKeysStr]);
+
+  const intMod = Math.floor(((intScore ?? 10) - 10) / 2);
+  const wisMod = Math.floor(((wisScore ?? 10) - 10) / 2);
+  const chaMod = Math.floor(((chaScore ?? 10) - 10) / 2);
+  const spellMod = Math.max(intMod, wisMod, chaMod);
+  const spellAbilLabel = spellMod === chaMod ? "CHA" : spellMod === wisMod ? "WIS" : "INT";
+  const saveDc = 8 + pb + spellMod;
+  const spellAtk = pb + spellMod;
+
+  // Spell slots for current level
+  const levelSlots = classDetail?.autolevels.find((al) => al.level === charLevel)?.slots ?? null;
+  const maxSpellSlotLevel = highestAvailableSlotLevel(levelSlots);
+
+  // Group by spell level
+  const groups = new Map<number, typeof entries>();
+  for (const e of entries) {
+    const level = details[e.key]?.level ?? -1;
+    if (!groups.has(level)) groups.set(level, []);
+    groups.get(level)!.push(e);
+  }
+
+  function togglePrepared(key: string) {
+    const next = preparedSpells.includes(key)
+      ? preparedSpells.filter((k) => k !== key)
+      : [...preparedSpells, key];
+    void onPreparedChange(next);
+  }
+
+  function toggleSlot(spellLevel: number, slotIndex: number) {
+    const key = String(spellLevel);
+    const used = usedSpellSlots[key] ?? 0;
+    // clicking below used line restores; clicking at/above expends
+    const next = slotIndex < used ? slotIndex : slotIndex + 1;
+    void onSlotsChange({ ...usedSpellSlots, [key]: next });
+  }
+
+  function spellUsesSave(d: FetchedSpellDetail | undefined): boolean {
+    if (!d) return false;
+    const txt = Array.isArray(d.text) ? d.text.join(" ") : String(d.text ?? "");
+    return /saving throw/i.test(txt);
+  }
+  function spellUsesAttack(d: FetchedSpellDetail | undefined): boolean {
+    if (!d) return false;
+    const txt = Array.isArray(d.text) ? d.text.join(" ") : String(d.text ?? "");
+    return /spell attack|ranged spell attack|melee spell attack/i.test(txt);
+  }
+
+  const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+
+  return (
+    <Panel>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <PanelTitle color="#a78bfa" style={{ margin: 0 }}>Spells</PanelTitle>
+        <div style={{ display: "flex", gap: 6 }}>
+          {([
+            { label: "ABILITY", value: spellAbilLabel, highlight: true },
+            { label: "SAVE DC",  value: String(saveDc),     highlight: false },
+            { label: "ATK BONUS", value: `+${spellAtk}`,   highlight: false },
+          ] as const).map(({ label, value, highlight }) => (
+            <div key={label} style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              padding: "6px 12px", borderRadius: 8,
+              background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.18)",
+              minWidth: 56,
+            }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
+              <span style={{ fontSize: 15, fontWeight: 900, color: highlight ? accentColor : C.text }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupEntries]) => {
+        const maxSlots = (levelSlots && level > 0) ? (levelSlots[level] ?? 0) : 0;
+        const usedCount = usedSpellSlots[String(level)] ?? 0;
+        const remaining = maxSlots - usedCount;
+
+        return (
+          <div key={level} style={{ marginBottom: 18 }}>
+            {/* Level header with inline slots */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              paddingBottom: 5, borderBottom: "1px solid rgba(239,68,68,0.25)", marginBottom: 8,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#ef4444", textTransform: "uppercase", letterSpacing: 1 }}>
+                {level === -1 ? "Loading…" : level === 0 ? "Cantrips" : (LEVEL_LABELS[level] ?? `Level ${level}`)}
+              </div>
+              {maxSlots > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ fontSize: 10, color: C.muted, marginRight: 3 }}>slots {remaining}/{maxSlots}</span>
+                  {Array.from({ length: maxSlots }).map((_, i) => {
+                    const filled = i >= usedCount;
+                    return (
+                      <button
+                        key={i}
+                        title={filled ? "Expend slot" : "Regain slot"}
+                        onClick={() => toggleSlot(level, i)}
+                        style={{
+                          width: 18, height: 18, borderRadius: "50%", padding: 0, cursor: "pointer",
+                          border: `2px solid ${filled ? accentColor : "rgba(255,255,255,0.2)"}`,
+                          background: filled ? accentColor : "transparent",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Column headers */}
+            <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto auto auto", gap: "0 8px", marginBottom: 4 }}>
+              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>PREP</div>
+              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>NAME</div>
+              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>TIME</div>
+              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>HIT / DC</div>
+              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>EFFECT</div>
+            </div>
+
+            {groupEntries.map((e, i) => {
+              const d = details[e.key];
+              const scaledDamage = d ? getScaledSpellDamage(d, charLevel, maxSpellSlotLevel) : null;
+              const dmgColor = scaledDamage ? (DMG_COLORS[scaledDamage.type] ?? C.text) : null;
+              const conc = d ? Boolean(d.concentration) : false;
+              const usesSave = spellUsesSave(d);
+              const usesAtk = spellUsesAttack(d);
+              const isCantrip = level === 0;
+              const isPrepared = isCantrip || preparedSpells.includes(e.key);
+              return (
+                <div key={i} style={{
+                  display: "grid",
+                  gridTemplateColumns: "24px 1fr auto auto auto",
+                  alignItems: "start", gap: "0 8px",
+                  padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  cursor: d ? "pointer" : "default",
+                }}
+                  onClick={(ev) => {
+                    if ((ev.target as HTMLElement).closest("button")) return;
+                    if (d) setSelectedSpell(d);
+                  }}
+                >
+                  {/* Prepared radio */}
+                  <button
+                    onClick={() => !isCantrip && togglePrepared(e.key)}
+                    title={isCantrip ? "Cantrip (always prepared)" : isPrepared ? "Mark unprepared" : "Mark prepared"}
+                    style={{
+                      width: 20, height: 20, borderRadius: "50%", padding: 0,
+                      cursor: isCantrip ? "default" : "pointer", marginTop: 3,
+                      border: `2px solid ${isPrepared ? accentColor : "rgba(255,255,255,0.25)"}`,
+                      background: isPrepared ? accentColor : "transparent",
+                      flexShrink: 0,
+                    }}
+                  />
+
+                  {/* Name + meta */}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: isPrepared ? C.text : C.muted }}>
+                      {e.searchName}
+                      {conc && <span title="Concentration" style={{ marginLeft: 5, fontSize: 10, color: "#60a5fa" }}>◆</span>}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.muted }}>
+                      {[d ? `${d.level === 0 ? "Cantrip" : ORDINALS[d.level ?? 0]} ${d.school ?? ""}`.trim() : null, d?.components].filter(Boolean).join("  (") + (d?.components ? ")" : "")}
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <div style={{ fontSize: 11, color: C.muted, paddingTop: 3, textAlign: "center", minWidth: 28 }}>
+                    {d ? abbrevTime(d.time ?? "—") : ""}
+                  </div>
+
+                  {/* HIT / SAVE */}
+                  {d && (usesSave || usesAtk) ? (
+                    <div style={{ textAlign: "center", paddingTop: 1 }}>
+                      <div style={{ fontSize: 9, color: C.muted, fontWeight: 700 }}>
+                        {usesSave ? (d.save ?? "SAVE") : "ATK"}
+                      </div>
+                      <div style={{ fontWeight: 900, fontSize: 15, color: accentColor, lineHeight: 1.2 }}>
+                        {usesSave ? saveDc : `+${spellAtk}`}
+                      </div>
+                    </div>
+                  ) : <div />}
+
+                  {/* Effect */}
+                  {scaledDamage ? (
+                    <div style={{
+                      padding: "4px 7px", borderRadius: 6, border: `1px solid ${dmgColor}55`,
+                      background: `${dmgColor}15`, textAlign: "center", whiteSpace: "nowrap",
+                    }}>
+                      <span style={{ fontWeight: 800, fontSize: 13, color: C.text }}>{scaledDamage.dice}</span>
+                      <span style={{ fontSize: 12, marginLeft: 3 }}>{DMG_EMOJI[scaledDamage.type] ?? "◆"}</span>
+                    </div>
+                  ) : <div />}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+      {selectedSpell && (
+        <SpellDrawer spell={selectedSpell} accentColor={accentColor} onClose={() => setSelectedSpell(null)} charLevel={charLevel} maxSlotLevel={maxSpellSlotLevel} />
+      )}
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ItemSpellsPanel
+// ---------------------------------------------------------------------------
+
+interface FetchedSpellDetail {
+  id: string;
+  name: string;
+  level: number | null;
+  school: string | null;
+  time: string | null;
+  range: string | null;
+  components: string | null;
+  duration: string | null;
+  concentration: number | boolean;
+  ritual: number | boolean;
+  classes: string | null;
+  text: string | string[];
+  damage: { dice: string; type: string } | null;
+  save: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// SpellDrawer
+// ---------------------------------------------------------------------------
+
+function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
+  spell: FetchedSpellDetail;
+  accentColor: string;
+  onClose: () => void;
+  charLevel?: number;
+  maxSlotLevel?: number;
+}) {
+  const ORDINALS = ["Cantrip", "1st level", "2nd level", "3rd level", "4th level", "5th level", "6th level", "7th level", "8th level", "9th level"];
+  const textArr = Array.isArray(spell.text) ? spell.text : [String(spell.text ?? "")];
+  const isConc = Boolean(spell.concentration);
+  const isRitual = Boolean(spell.ritual);
+  const levelLabel = spell.level === 0 ? "Cantrip" : `${ORDINALS[spell.level ?? 0] ?? `Level ${spell.level}`} spell`;
+  const scaledDamage = getScaledSpellDamage(spell, charLevel ?? 1, maxSlotLevel ?? Math.max(1, spell.level ?? 1));
+  const dmgColor = scaledDamage ? (DMG_COLORS[scaledDamage.type] ?? C.text) : null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(0,0,0,0.45)",
+        }}
+      />
+      {/* Drawer */}
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 201,
+        width: "min(420px, 92vw)",
+        background: "#111827",
+        borderLeft: "1px solid rgba(255,255,255,0.1)",
+        boxShadow: "-12px 0 40px rgba(0,0,0,0.5)",
+        display: "flex", flexDirection: "column",
+        overflowY: "auto",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px 20px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          position: "sticky", top: 0,
+          background: "#111827", zIndex: 1,
+        }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: C.text, lineHeight: 1.2 }}>
+                {spell.name}
+              </h2>
+              <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+                {levelLabel}{spell.school ? ` · ${spell.school}` : ""}
+                {isRitual && <span style={{ marginLeft: 6, color: "#60a5fa", fontStyle: "normal", fontWeight: 700 }}>ritual</span>}
+                {isConc && <span style={{ marginLeft: 6, color: "#60a5fa", fontStyle: "normal", fontWeight: 700 }}>concentration</span>}
+              </div>
+            </div>
+            <button onClick={onClose} style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: C.muted, fontSize: 22, lineHeight: 1, padding: "2px 4px", flexShrink: 0,
+            }}>×</button>
+          </div>
+        </div>
+
+        {/* Stat bar */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 1, background: "rgba(255,255,255,0.05)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+        }}>
+          {[
+            { label: "Casting Time", value: spell.time ?? "—" },
+            { label: "Range",        value: (spell.range ?? "—").replace(/ feet?/i, " ft.") },
+            { label: "Duration",     value: spell.duration ?? "—" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ padding: "10px 12px", background: "#111827", textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Components + damage summary */}
+        <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap" }}>
+          {spell.components && (
+            <span style={{ fontSize: 12, color: C.muted }}>{spell.components}</span>
+          )}
+          {scaledDamage && (
+            <div style={{
+              marginLeft: "auto", padding: "4px 10px", borderRadius: 6,
+              border: `1px solid ${dmgColor}55`, background: `${dmgColor}15`,
+              display: "flex", alignItems: "center", gap: 5,
+            }}>
+              <span style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{scaledDamage.dice}</span>
+              <span style={{ fontSize: 13 }}>{DMG_EMOJI[scaledDamage.type] ?? "◆"}</span>
+              <span style={{ fontSize: 11, color: dmgColor, fontWeight: 700, textTransform: "capitalize" }}>{scaledDamage.type}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Description */}
+        <div style={{ padding: "16px 20px 32px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {textArr.filter(Boolean).map((para, i) => (
+            <p key={i} style={{ margin: 0, fontSize: 13, color: "rgba(200,210,230,0.85)", lineHeight: 1.65 }}>
+              {para}
+            </p>
+          ))}
+          {spell.classes && (
+            <p style={{ margin: "8px 0 0", fontSize: 11, color: C.muted, fontStyle: "italic" }}>
+              Classes: {spell.classes}
+            </p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function parseSpellDamage(text: string): { dice: string; type: string } | null {
+  const m = text.match(/(\d+d\d+(?:\s*\+\s*\d+)?)\s+(fire|cold|lightning|acid|poison|necrotic|radiant|thunder|psychic|force|bludgeoning|piercing|slashing)\s+damage/i);
+  if (!m) return null;
+  return { dice: m[1].replace(/\s+/g, ""), type: m[2].toLowerCase() };
+}
+
+function parseDiceExpression(expr: string): { count: number; sides: number; bonus: number } | null {
+  const match = String(expr ?? "").trim().match(/^(\d+)d(\d+)(?:\s*\+\s*(\d+))?$/i);
+  if (!match) return null;
+  return {
+    count: parseInt(match[1], 10),
+    sides: parseInt(match[2], 10),
+    bonus: parseInt(match[3] ?? "0", 10),
+  };
+}
+
+function formatDiceExpression(parsed: { count: number; sides: number; bonus: number }): string {
+  return `${parsed.count}d${parsed.sides}${parsed.bonus > 0 ? `+${parsed.bonus}` : ""}`;
+}
+
+function addScaledDice(baseExpr: string, incrementExpr: string, times: number): string {
+  if (times <= 0) return baseExpr.replace(/\s+/g, "");
+  const base = parseDiceExpression(baseExpr);
+  const inc = parseDiceExpression(incrementExpr);
+  if (!base || !inc || base.sides !== inc.sides) return baseExpr.replace(/\s+/g, "");
+  return formatDiceExpression({
+    count: base.count + (inc.count * times),
+    sides: base.sides,
+    bonus: base.bonus + (inc.bonus * times),
+  });
+}
+
+function highestAvailableSlotLevel(levelSlots: number[] | null | undefined): number {
+  if (!levelSlots) return 0;
+  for (let i = levelSlots.length - 1; i >= 1; i -= 1) {
+    if ((levelSlots[i] ?? 0) > 0) return i;
+  }
+  return 0;
+}
+
+function getScaledSpellDamage(detail: FetchedSpellDetail, charLevel: number, maxSlotLevel: number): { dice: string; type: string } | null {
+  const text = Array.isArray(detail.text) ? detail.text.join("\n") : String(detail.text ?? "");
+  const base = parseSpellDamage(text);
+  if (!base) return null;
+
+  if ((detail.level ?? 0) === 0) {
+    const tierBoosts = (charLevel >= 5 ? 1 : 0) + (charLevel >= 11 ? 1 : 0) + (charLevel >= 17 ? 1 : 0);
+    const cantripBoost = text.match(/damage increases by (\d+d\d+(?:\s*\+\s*\d+)?)/i);
+    if (cantripBoost && tierBoosts > 0) {
+      return { ...base, dice: addScaledDice(base.dice, cantripBoost[1], tierBoosts) };
+    }
+    return base;
+  }
+
+  const baseLevel = Math.max(1, detail.level ?? 1);
+  const castLevel = Math.max(baseLevel, maxSlotLevel);
+
+  if (/^magic missile$/i.test(detail.name.trim())) {
+    const darts = 3 + Math.max(0, castLevel - 1);
+    return { dice: `${darts}d4+${darts}`, type: "force" };
+  }
+
+  const higherLevelBoost = text.match(/damage increases by (\d+d\d+(?:\s*\+\s*\d+)?) for each slot level above (\d+)(?:st|nd|rd|th)/i);
+  if (higherLevelBoost) {
+    const threshold = parseInt(higherLevelBoost[2], 10);
+    const times = Math.max(0, castLevel - threshold);
+    if (times > 0) {
+      return { ...base, dice: addScaledDice(base.dice, higherLevelBoost[1], times) };
+    }
+  }
+
+  return base;
+}
+
+function parseSpellSave(text: string): string | null {
+  const m = text.match(/(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma|STR|DEX|CON|INT|WIS|CHA)\s+saving\s+throw/i);
+  if (!m) return null;
+  const map: Record<string, string> = { strength: "STR", dexterity: "DEX", constitution: "CON", intelligence: "INT", wisdom: "WIS", charisma: "CHA" };
+  return map[m[1].toLowerCase()] ?? m[1].toUpperCase().slice(0, 3);
+}
+
+function abbrevTime(t: string): string {
+  return t
+    .replace(/1 action/i, "1A").replace(/1 bonus action/i, "1BA")
+    .replace(/1 reaction/i, "1R").replace(/1 minute/i, "1 min");
+}
+
+const DMG_COLORS: Record<string, string> = {
+  fire: "#f97316", cold: "#60a5fa", lightning: "#facc15", acid: "#a3e635",
+  poison: "#86efac", necrotic: "#818cf8", radiant: "#fde68a", thunder: "#7dd3fc",
+  psychic: "#e879f9", force: "#a78bfa", bludgeoning: "#94a3b8", piercing: "#94a3b8", slashing: "#f87171",
+};
+const DMG_EMOJI: Record<string, string> = {
+  fire: "🔥", cold: "❄️", lightning: "⚡", acid: "🧪", poison: "☠️",
+  necrotic: "💀", radiant: "✨", thunder: "💥", psychic: "🔮", force: "◆",
+};
+const LEVEL_LABELS: Record<number, string> = {
+  0: "Cantrip", 1: "1st Level", 2: "2nd Level", 3: "3rd Level", 4: "4th Level",
+  5: "5th Level", 6: "6th Level", 7: "7th Level", 8: "8th Level", 9: "9th Level",
+};
+
+function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accentColor, onChargeChange }: {
+  items: InventoryItem[];
+  pb: number;
+  intScore: number | null;
+  wisScore: number | null;
+  chaScore: number | null;
+  accentColor: string;
+  onChargeChange: (itemId: string, charges: number) => void;
+}) {
+  const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
+  const [selectedSpell, setSelectedSpell] = React.useState<FetchedSpellDetail | null>(null);
+
+  const itemsWithSpells = React.useMemo(() =>
+    items
+      .filter((it) => getEquipState(it) !== "backpack")
+      .map((it) => ({ item: it, spells: parseItemSpells(it.description ?? "") }))
+      .filter(({ spells }) => spells.length > 0),
+  [items]);
+
+  const allKeys = React.useMemo(() =>
+    itemsWithSpells.flatMap(({ spells }) => spells.map((sp) => ({
+      spellName: sp.name,
+      key: sp.name.toLowerCase().replace(/[^a-z0-9]/g, ""),
+    }))),
+  [itemsWithSpells]);
+
+  const keysStr = allKeys.map((e) => e.key).join(",");
+  React.useEffect(() => {
+    for (const e of allKeys) {
+      if (details[e.key]) continue;
+      api<{ id: string; name: string; level: number | null }[]>(
+        `/api/spells/search?q=${encodeURIComponent(e.spellName)}&limit=5`
+      ).then((results) => {
+        const match = results.find((r) => r.name.replace(/\s*\[.+\]$/, "").toLowerCase() === e.spellName.toLowerCase()) ?? results[0];
+        if (!match) return;
+        return api<FetchedSpellDetail>(`/api/spells/${match.id}`).then((detail) => {
+          const textStr = Array.isArray(detail.text) ? detail.text.join("\n") : String(detail.text ?? "");
+          setDetails((prev) => ({ ...prev, [e.key]: { ...detail, damage: parseSpellDamage(textStr), save: parseSpellSave(textStr) } }));
+        });
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keysStr]);
+
+  if (!itemsWithSpells.length) return null;
+
+  const spellMod = Math.max(
+    Math.floor(((intScore ?? 10) - 10) / 2),
+    Math.floor(((wisScore ?? 10) - 10) / 2),
+    Math.floor(((chaScore ?? 10) - 10) / 2),
+  );
+  const saveDc = 8 + pb + spellMod;
+  const spellAtk = pb + spellMod;
+  const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+
+  return (
+    <>
+      {itemsWithSpells.map(({ item, spells }) => {
+        const chargesMax = item.chargesMax ?? 0;
+        const charges = item.charges ?? chargesMax;
+
+        // Group spells by level
+        const groups = new Map<number, ParsedItemSpell[]>();
+        for (const sp of spells) {
+          const key = sp.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const level = details[key]?.level ?? -1;
+          if (!groups.has(level)) groups.set(level, []);
+          groups.get(level)!.push(sp);
+        }
+
+        return (
+          <Panel key={item.id}>
+            {/* Header: item name + charge circles */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <PanelTitle color="#a78bfa" style={{ margin: 0 }}>
+                {item.name.replace(/\s*\[.+\]$/, "")}
+              </PanelTitle>
+              {chargesMax > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ fontSize: 10, color: C.muted, marginRight: 3 }}>
+                    charges {charges}/{chargesMax}
+                  </span>
+                  {Array.from({ length: chargesMax }).map((_, i) => {
+                    const filled = i < charges;
+                    return (
+                      <button
+                        key={i}
+                        title={filled ? "Use charge" : "Recover charge"}
+                        onClick={() => onChargeChange(item.id, i < charges ? i : i + 1)}
+                        style={{
+                          width: 16, height: 16, borderRadius: "50%", padding: 0, cursor: "pointer",
+                          border: `2px solid ${filled ? "#ef4444" : "rgba(255,255,255,0.2)"}`,
+                          background: filled ? "#ef4444" : "transparent",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupSpells]) => (
+              <div key={level} style={{ marginBottom: 14 }}>
+                {/* Level header */}
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: "#ef4444", textTransform: "uppercase",
+                  letterSpacing: 1, paddingBottom: 5, borderBottom: "1px solid rgba(239,68,68,0.25)", marginBottom: 8,
+                }}>
+                  {level === -1 ? "Loading…" : level === 0 ? "Cantrips" : `${ORDINALS[level] ?? `Level ${level}`} Level`}
+                </div>
+
+                {/* Column headers */}
+                <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto auto auto", gap: "0 8px", marginBottom: 4 }}>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>CST</div>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>NAME</div>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>TIME</div>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>HIT / DC</div>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>EFFECT</div>
+                </div>
+
+                {groupSpells.map((sp, i) => {
+                  const key = sp.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                  const d = details[key];
+                  const dmgColor = d?.damage ? (DMG_COLORS[d.damage.type] ?? C.text) : null;
+                  const conc = d ? Boolean(d.concentration) : false;
+                  const txt = d ? (Array.isArray(d.text) ? d.text.join(" ") : String(d.text ?? "")) : "";
+                  const usesSave = /saving throw/i.test(txt);
+                  const usesAtk = /spell attack/i.test(txt);
+                  // Strip verbose material component descriptions: "V, S, M (a ball of guano)" → "V, S, M"
+                  const compactComponents = d?.components ? d.components.replace(/\s*\([^)]*\)/g, "").trim() : null;
+                  return (
+                    <div key={i}
+                      style={{
+                        display: "grid", gridTemplateColumns: "24px 1fr auto auto auto",
+                        alignItems: "start", gap: "0 8px",
+                        padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        cursor: d ? "pointer" : "default",
+                      }}
+                      onClick={() => { if (d) setSelectedSpell(d); }}
+                    >
+                      {/* Cost circle */}
+                      <div title={`${sp.cost} charge${sp.cost !== 1 ? "s" : ""}`} style={{
+                        width: 20, height: 20, borderRadius: "50%", marginTop: 3,
+                        background: "#dc2626", display: "grid", placeItems: "center", flexShrink: 0,
+                      }}>
+                        <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>{sp.cost}</span>
+                      </div>
+
+                      {/* Name + meta */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>
+                          {sp.name}
+                          {conc && <span title="Concentration" style={{ marginLeft: 5, fontSize: 10, color: "#60a5fa" }}>◆</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.muted }}>
+                          {d ? `${d.level === 0 ? "Cantrip" : ORDINALS[d.level ?? 0] ?? ""} ${d.school ?? ""}`.trim() : ""}
+                          {compactComponents ? ` (${compactComponents})` : ""}
+                        </div>
+                      </div>
+
+                      {/* Time */}
+                      <div style={{ fontSize: 11, color: C.muted, paddingTop: 3, textAlign: "center", minWidth: 28 }}>
+                        {d ? abbrevTime(d.time ?? "—") : ""}
+                      </div>
+
+                      {/* HIT / DC */}
+                      {d && (usesSave || usesAtk) ? (
+                        <div style={{ textAlign: "center", paddingTop: 1 }}>
+                          <div style={{ fontSize: 9, color: C.muted, fontWeight: 700 }}>{usesSave ? (d.save ?? "SAVE") : "ATK"}</div>
+                          <div style={{ fontWeight: 900, fontSize: 15, color: accentColor, lineHeight: 1.2 }}>
+                            {usesSave ? saveDc : `+${spellAtk}`}
+                          </div>
+                        </div>
+                      ) : <div />}
+
+                      {/* Effect */}
+                      {d?.damage ? (
+                        <div style={{
+                          padding: "4px 7px", borderRadius: 6, border: `1px solid ${dmgColor}55`,
+                          background: `${dmgColor}15`, textAlign: "center", whiteSpace: "nowrap",
+                        }}>
+                          <span style={{ fontWeight: 800, fontSize: 13, color: C.text }}>{d.damage.dice}</span>
+                          <span style={{ fontSize: 12, marginLeft: 3 }}>{DMG_EMOJI[d.damage.type] ?? "◆"}</span>
+                        </div>
+                      ) : <div />}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </Panel>
+        );
+      })}
+      {selectedSpell && (
+        <SpellDrawer spell={selectedSpell} accentColor={accentColor} onClose={() => setSelectedSpell(null)} />
+      )}
+    </>
   );
 }
 
@@ -2405,6 +4252,38 @@ function toggleFilterPill(active: boolean, accentColor: string): React.CSSProper
   };
 }
 
+function miniPillBtn(enabled: boolean): React.CSSProperties {
+  return {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    border: `1px solid ${enabled ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.08)"}`,
+    background: enabled ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
+    color: enabled ? C.text : C.muted,
+    cursor: enabled ? "pointer" : "default",
+    fontSize: 16,
+    fontWeight: 800,
+    lineHeight: 1,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+}
+
+function restBtnStyle(color: string): React.CSSProperties {
+  return {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: `1px solid ${withAlpha(color, 0.45)}`,
+    background: withAlpha(color, 0.12),
+    color,
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 800,
+    minWidth: 102,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Notes sub-components
 // ---------------------------------------------------------------------------
@@ -2415,8 +4294,8 @@ function NoteItem(props: {
   accentColor: string;
   hideTitle?: boolean;
   onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const { note, expanded, accentColor, hideTitle } = props;
   const preview = (note.text ?? "").trim().split(/\r?\n/).find(Boolean) ?? "";
@@ -2434,18 +4313,22 @@ function NoteItem(props: {
         >
           {label}
         </button>
-        <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit(); }}
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: C.muted, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
-        >
-          Edit
-        </button>
-        <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onDelete(); }}
-          style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: C.red, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
-        >
-          ×
-        </button>
+        {props.onEdit && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit!(); }}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: C.muted, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+          >
+            Edit
+          </button>
+        )}
+        {props.onDelete && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onDelete!(); }}
+            style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: C.red, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+          >
+            ×
+          </button>
+        )}
       </div>
       {expanded && note.text && (
         <div style={{ marginTop: 6, color: C.muted, fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>

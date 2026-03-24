@@ -67,7 +67,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
-          <span style={{ fontSize: "var(--fs-medium)", color: C.muted }}>{user?.name || user?.username}</span>
+          <Link to="/profile" style={{
+            fontSize: "var(--fs-medium)", color: C.muted, textDecoration: "none",
+            padding: "4px 10px", borderRadius: 8, transition: "background 0.15s",
+          }}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            {user?.name || user?.username}
+          </Link>
           <button
             onClick={logout}
             style={{

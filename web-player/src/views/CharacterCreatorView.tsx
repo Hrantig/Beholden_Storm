@@ -1,6 +1,14 @@
 import React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { C, withAlpha } from "@/lib/theme";
+import {
+  getBackgroundFeatChoices,
+  getBackgroundFeatChoicesByRuleset,
+  inferRulesetFromLabel,
+  matchesRuleset,
+  type BackgroundFeatChoiceEntry,
+  type Ruleset,
+} from "@/lib/characterRules";
 import { api, jsonInit } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Select } from "@/ui/Select";
@@ -10,9 +18,9 @@ import { IconPlayer } from "@/icons";
 // API types
 // ---------------------------------------------------------------------------
 
-interface ClassSummary { id: string; name: string; hd: number | null }
+interface ClassSummary { id: string; name: string; hd: number | null; ruleset?: Ruleset | null }
 interface ClassDetail {
-  id: string; name: string; hd: number | null;
+  id: string; name: string; hd: number | null; ruleset?: Ruleset | null;
   numSkills: number;        // how many skill proficiencies to pick
   proficiency: string;      // comma-separated skill options
   slotsReset: string;       // "L" = long rest, "S" = short rest (Warlock)
@@ -34,14 +42,15 @@ interface ItemSummary {
   magic?: boolean;
   attunement?: boolean;
 }
-interface RaceSummary { id: string; name: string; size: string | null; speed: number | null }
+interface RaceSummary { id: string; name: string; size: string | null; speed: number | null; ruleset?: Ruleset | null }
 interface RaceDetail {
-  id: string; name: string; size: string | null; speed: number | null;
+  id: string; name: string; size: string | null; speed: number | null; ruleset?: Ruleset | null;
   resist: string | null;
   vision: { type: string; range: number }[];
+  parsedChoices?: import("@/lib/characterRules").RaceChoices;
   traits: { name: string; text: string; category: string | null; modifier: string[] }[];
 }
-interface BgSummary { id: string; name: string }
+interface BgSummary { id: string; name: string; ruleset?: Ruleset | null }
 interface ProficiencyChoice {
   fixed: string[];
   choose: number;
@@ -83,6 +92,7 @@ interface ParsedFeat {
 }
 interface BackgroundFeat {
   name: string;
+  text?: string;
   parsed: ParsedFeat;
 }
 interface StructuredBgProficiencies {
@@ -90,10 +100,11 @@ interface StructuredBgProficiencies {
   tools: ProficiencyChoice;
   languages: ProficiencyChoice;
   feats: BackgroundFeat[];
+  featChoice: number;
   abilityScores: string[];
 }
 interface BgDetail {
-  id: string; name: string; proficiency: string;
+  id: string; name: string; proficiency: string; ruleset?: Ruleset | null;
   proficiencies?: StructuredBgProficiencies;
   traits: { name: string; text: string }[];
   equipment?: string;
@@ -126,6 +137,9 @@ const ALL_TOOLS = [
   "Dice Set","Dragonchess Set","Playing Card Set","Three-Dragon Ante Set",
   "Bagpipes","Drum","Dulcimer","Flute","Lute","Lyre","Horn","Pan Flute","Shawm","Viol",
   "Land Vehicles","Water Vehicles","Sea Vehicles",
+];
+const MUSICAL_INSTRUMENTS = [
+  "Bagpipes","Drum","Dulcimer","Flute","Lute","Lyre","Horn","Pan Flute","Shawm","Viol",
 ];
 const ALL_SKILLS = [
   "Acrobatics","Animal Handling","Arcana","Athletics","Deception",
@@ -283,6 +297,10 @@ function parseSkillList(proficiency: string): string[] {
   return proficiency.split(/[,;]/).map(s => s.trim()).filter(s => s && !ABILITY_SCORE_NAMES.has(s));
 }
 
+function normalizeChoiceKey(value: string): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 /**
  * Extract the minimum character level from an invocation prerequisite string.
  * e.g. "Prerequisite: Level 7+ Warlock" → 7
@@ -398,27 +416,6 @@ function getWeaponMasteryOptions(items: ItemSummary[]): string[] {
   return [...kinds].sort((a, b) => a.localeCompare(b));
 }
 
-interface BackgroundFeatChoiceEntry {
-  featName: string;
-  feat: ParsedFeat;
-  choice: ParsedFeatChoice;
-  key: string;
-}
-
-function getBackgroundFeatChoices(bgDetail: BgDetail | null): BackgroundFeatChoiceEntry[] {
-  const feats = bgDetail?.proficiencies?.feats ?? [];
-  return feats.flatMap((feat) =>
-    feat.parsed.choices
-      .filter((choice) => choice.type === "proficiency" || choice.type === "weapon_mastery")
-      .map((choice) => ({
-        featName: feat.name,
-        feat: feat.parsed,
-        choice,
-        key: `bg:${feat.name}:${choice.id}`,
-      }))
-  );
-}
-
 function getFeatChoiceOptions(choice: ParsedFeatChoice): string[] {
   if (choice.type === "weapon_mastery") return [...WEAPON_MASTERY_KINDS];
   if (choice.options && choice.options.length > 0) return [...choice.options].sort((a, b) => a.localeCompare(b));
@@ -442,6 +439,114 @@ function classifyFeatSelection(choice: ParsedFeatChoice, value: string): "skill"
   if (ALL_LANGUAGES.includes(value)) return "language";
   if (WEAPON_MASTERY_KIND_SET.has(value)) return "weapon_mastery";
   return null;
+}
+
+interface RaceChoices {
+  hasChosenSize: boolean;
+  skillChoice: { count: number; from: string[] | null } | null;
+  toolChoice: { count: number; from: string[] | null } | null;
+  languageChoice: { count: number; from: string[] | null } | null;
+  hasFeatChoice: boolean;
+}
+
+function parseRaceChoices5e(traits: { name: string; text: string }[]): RaceChoices {
+  let skillChoice: RaceChoices["skillChoice"] = null;
+  let toolChoice: RaceChoices["toolChoice"] = null;
+  let languageChoice: RaceChoices["languageChoice"] = null;
+
+  for (const t of traits) {
+    const text = t.text;
+
+    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
+    if (skillListMatch) {
+      const from = skillListMatch[1]
+        .split(/,\s*|\s+or\s+/i)
+        .map((s) => s.trim())
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+        .filter((s) => ALL_SKILLS.includes(s));
+      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
+    } else if (
+      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
+      /one skill of your choice/i.test(text)
+    ) {
+      if (!skillChoice) skillChoice = { count: 1, from: null };
+    }
+
+    if (/one tool proficiency of your choice/i.test(text)) {
+      if (!toolChoice) toolChoice = { count: 1, from: null };
+    }
+
+    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
+    if (langListMatch) {
+      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
+      const from = langListMatch[2]
+        .split(/[,\n\t]+/)
+        .map((s) => s.trim()).filter(Boolean)
+        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
+    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
+      if (!languageChoice) languageChoice = { count: 1, from: null };
+    }
+  }
+
+  return { hasChosenSize: false, skillChoice, toolChoice, languageChoice, hasFeatChoice: false };
+}
+
+function parseRaceChoices55e(traits: { name: string; text: string }[]): RaceChoices {
+  let hasChosenSize = false;
+  let skillChoice: RaceChoices["skillChoice"] = null;
+  let toolChoice: RaceChoices["toolChoice"] = null;
+  let languageChoice: RaceChoices["languageChoice"] = null;
+  let hasFeatChoice = false;
+
+  for (const t of traits) {
+    const text = t.text;
+
+    // Size choice
+    if (/^size$/i.test(t.name) && /chosen when you select/i.test(text)) hasChosenSize = true;
+
+    // Origin feat
+    if (/origin feat of your choice/i.test(text)) hasFeatChoice = true;
+
+    // Skill: "proficiency in the Insight, Perception, or Survival skill" → limited list
+    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
+    if (skillListMatch) {
+      const from = skillListMatch[1]
+        .split(/,\s*|\s+or\s+/i)
+        .map((s) => s.trim())
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+        .filter((s) => ALL_SKILLS.includes(s));
+      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
+    } else if (
+      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
+      /one skill of your choice/i.test(text)
+    ) {
+      if (!skillChoice) skillChoice = { count: 1, from: null };
+    }
+
+    // Tool choice
+    if (/one tool proficiency of your choice/i.test(text)) {
+      if (!toolChoice) toolChoice = { count: 1, from: null };
+    }
+
+    // Language: "your choice of N of the following standard languages: X, Y, Z"
+    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
+    if (langListMatch) {
+      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
+      const from = langListMatch[2]
+        .split(/[,\n\t]+/)
+        .map((s) => s.trim()).filter(Boolean)
+        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
+    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
+      if (!languageChoice) languageChoice = { count: 1, from: null };
+    }
+  }
+  return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
+}
+
+function parseRaceChoicesByRuleset(ruleset: Ruleset, traits: { name: string; text: string }[]): RaceChoices {
+  return ruleset === "5.5e" ? parseRaceChoices55e(traits) : parseRaceChoices5e(traits);
 }
 
 interface StartingEquipmentOption {
@@ -470,9 +575,46 @@ function parseStartingEquipmentOptions(equipment: string | undefined): StartingE
 function splitEquipmentEntries(text: string): string[] {
   return text
     .replace(/\s+or\s+$/i, "")
+    .replace(/\s+and\s+/gi, ", ")
     .split(/\s*,\s*/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function extractClassStartingEquipment(classDetail: ClassDetail | null): string {
+  if (!classDetail) return "";
+  for (const al of classDetail.autolevels) {
+    if (al.level !== 1) continue;
+    for (const f of al.features) {
+      const match = f.text.match(/Starting Equipment:\s*([^\n]+)/i);
+      if (match?.[1]) return match[1].trim();
+    }
+  }
+  return "";
+}
+
+const STANDARD_55E_LANGUAGES = [
+  "Common Sign Language",
+  "Draconic",
+  "Dwarvish",
+  "Elvish",
+  "Giant",
+  "Gnomish",
+  "Goblin",
+  "Halfling",
+  "Orc",
+];
+
+function getCore55eLanguageChoice(raceDetail: RaceDetail | null, ruleset: Ruleset | null) {
+  if (ruleset !== "5.5e") return null;
+  const hasExplicitLanguageTrait = (raceDetail?.traits ?? []).some((t) => /^languages?$/i.test(t.name));
+  if (hasExplicitLanguageTrait) return null;
+  return {
+    fixed: ["Common"],
+    choose: 2,
+    from: STANDARD_55E_LANGUAGES,
+    source: "Core 5.5e",
+  };
 }
 
 function getBackgroundGrantedToolSelections(form: FormState, bgDetail: BgDetail | null): string[] {
@@ -489,13 +631,11 @@ function getBackgroundGrantedToolSelections(form: FormState, bgDetail: BgDetail 
   return [...granted];
 }
 
-function buildStartingInventory(form: FormState, bgDetail: BgDetail | null): InventoryItemSeed[] {
-  const optionId = form.chosenBgEquipmentOption;
-  const options = parseStartingEquipmentOptions(bgDetail?.equipment);
+function buildEquipmentItems(optionId: string | null, equipmentText: string | undefined, prefix: string, grantedTools: string[]): InventoryItemSeed[] {
+  const options = parseStartingEquipmentOptions(equipmentText);
   const selected = options.find((option) => option.id === optionId);
   if (!selected) return [];
 
-  const grantedTools = getBackgroundGrantedToolSelections(form, bgDetail);
   const items: InventoryItemSeed[] = [];
   let autoId = 1;
 
@@ -503,7 +643,7 @@ function buildStartingInventory(form: FormState, bgDetail: BgDetail | null): Inv
     const trimmed = name.trim();
     if (!trimmed || quantity <= 0) return;
     items.push({
-      id: `bg-eq-${autoId++}`,
+      id: `${prefix}-eq-${autoId++}`,
       name: trimmed,
       quantity,
       equipped: false,
@@ -550,6 +690,22 @@ function buildStartingInventory(form: FormState, bgDetail: BgDetail | null): Inv
   return items;
 }
 
+function buildStartingInventory(form: FormState, bgDetail: BgDetail | null, classDetail: ClassDetail | null): InventoryItemSeed[] {
+  const bgItems = buildEquipmentItems(
+    form.chosenBgEquipmentOption,
+    bgDetail?.equipment,
+    "bg",
+    getBackgroundGrantedToolSelections(form, bgDetail),
+  );
+  const classItems = buildEquipmentItems(
+    form.chosenClassEquipmentOption,
+    extractClassStartingEquipment(classDetail),
+    "class",
+    [],
+  );
+  return [...classItems, ...bgItems];
+}
+
 function getWeaponMasteryChoice(classDetail: ClassDetail | null, level: number): WeaponMasteryChoice | null {
   if (!classDetail) return null;
   for (const al of classDetail.autolevels) {
@@ -564,9 +720,67 @@ function getWeaponMasteryChoice(classDetail: ClassDetail | null, level: number):
   return null;
 }
 
+interface ClassFeatChoice {
+  featureName: string;
+  featGroup: string;
+  options: Array<{ id: string; name: string }>;
+}
+
+function matchesClassFeatGroup(featName: string, featGroup: string): boolean {
+  const normalizedGroup = featGroup.trim().toLowerCase();
+  if (normalizedGroup === "fighting style") return /^fighting style:/i.test(featName);
+  if (normalizedGroup === "origin") return /^origin:/i.test(featName);
+  if (normalizedGroup === "epic boon" || normalizedGroup === "boon") return /^boon of\b/i.test(featName);
+  const escaped = featGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}:`, "i").test(featName) || new RegExp(`\\b${escaped}\\b`, "i").test(featName);
+}
+
+function getClassFeatChoices(
+  classDetail: ClassDetail | null,
+  level: number,
+  featSummaries: Array<{ id: string; name: string; ruleset?: Ruleset | null }>,
+  ruleset: Ruleset | null,
+): ClassFeatChoice[] {
+  if (!classDetail) return [];
+  const choices: ClassFeatChoice[] = [];
+  const seen = new Set<string>();
+  for (const al of classDetail.autolevels) {
+    if (al.level == null || al.level > level) continue;
+    for (const f of al.features) {
+      const match = f.text.match(/gain\s+an?\s+(.+?)\s+feat\s+of\s+your\s+choice/i);
+      const featGroup = match?.[1]?.trim();
+      if (!featGroup) continue;
+      const key = `${al.level}:${f.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const options = featSummaries
+        .filter((feat) => matchesRuleset(feat, ruleset))
+        .filter((feat) => matchesClassFeatGroup(feat.name, featGroup))
+        .map((feat) => ({ id: feat.id, name: feat.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      choices.push({ featureName: f.name, featGroup, options });
+    }
+  }
+  return choices;
+}
+
+function getClassFeatChoiceLabel(featGroup: string): string {
+  if (/^fighting style$/i.test(featGroup)) return "Fighting Style";
+  return `${featGroup} Choice`;
+}
+
+function getClassFeatOptionLabel(optionName: string, featGroup: string): string {
+  let label = optionName.replace(/\s*\[(?:5\.5e|2024)\]\s*$/i, "").trim();
+  if (new RegExp(`^${featGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*`, "i").test(label)) {
+    label = label.replace(new RegExp(`^${featGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*`, "i"), "").trim();
+  }
+  return label;
+}
+
 // ---------------------------------------------------------------------------
 
-function buildProficiencyMap(
+function buildProficiencyMapForRuleset(
+  ruleset: Ruleset,
   form: FormState,
   classDetail: ClassDetail | null,
   raceDetail: RaceDetail | null,
@@ -574,6 +788,53 @@ function buildProficiencyMap(
   classCantrips: SpellSummary[],
   classSpells: SpellSummary[],
   classInvocations: SpellSummary[],
+  raceFeatDetail: BackgroundFeat | null,
+  classFeatDetails: Record<string, BackgroundFeat>,
+): ProficiencyMap {
+  return ruleset === "5.5e"
+    ? buildProficiencyMap55e(form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails)
+    : buildProficiencyMap5e(form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
+}
+
+function buildProficiencyMap5e(
+  form: FormState,
+  classDetail: ClassDetail | null,
+  raceDetail: RaceDetail | null,
+  bgDetail: BgDetail | null,
+  classCantrips: SpellSummary[],
+  classSpells: SpellSummary[],
+  classInvocations: SpellSummary[],
+  raceFeatDetail: BackgroundFeat | null,
+  classFeatDetails: Record<string, BackgroundFeat>,
+): ProficiencyMap {
+  return buildProficiencyMapInternal("5e", form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
+}
+
+function buildProficiencyMap55e(
+  form: FormState,
+  classDetail: ClassDetail | null,
+  raceDetail: RaceDetail | null,
+  bgDetail: BgDetail | null,
+  classCantrips: SpellSummary[],
+  classSpells: SpellSummary[],
+  classInvocations: SpellSummary[],
+  raceFeatDetail: BackgroundFeat | null,
+  classFeatDetails: Record<string, BackgroundFeat>,
+): ProficiencyMap {
+  return buildProficiencyMapInternal("5.5e", form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
+}
+
+function buildProficiencyMapInternal(
+  ruleset: Ruleset,
+  form: FormState,
+  classDetail: ClassDetail | null,
+  raceDetail: RaceDetail | null,
+  bgDetail: BgDetail | null,
+  classCantrips: SpellSummary[],
+  classSpells: SpellSummary[],
+  classInvocations: SpellSummary[],
+  raceFeatDetail: BackgroundFeat | null,
+  classFeatDetails: Record<string, BackgroundFeat>,
 ): ProficiencyMap {
   const className = classDetail?.name ?? "";
   const raceName  = raceDetail?.name  ?? "";
@@ -618,7 +879,7 @@ function buildProficiencyMap(
     }
     // Skill choices made in the Skills step
     form.chosenSkills.forEach(n => skills.push({ name: n, source: className }));
-    const masteryChoice = getWeaponMasteryChoice(classDetail, form.level);
+    const masteryChoice = ruleset === "5.5e" ? getWeaponMasteryChoice(classDetail, form.level) : null;
     if (masteryChoice) {
       form.chosenWeaponMasteries.forEach((name) => masteries.push({ name, source: masteryChoice.source }));
     }
@@ -641,14 +902,35 @@ function buildProficiencyMap(
       grants.skills.forEach(n   => skills.push({ name: n, source: fname }));
       grants.languages.forEach(n => languages.push({ name: n, source: fname }));
     }
+
+    for (const [featureName, feat] of Object.entries(classFeatDetails)) {
+      feat.parsed.grants.skills.forEach((name) => skills.push({ name, source: feat.name }));
+      feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
+      feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
+      feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
+      feat.parsed.grants.weapons.forEach((name) => weapons.push({ name, source: feat.name }));
+      feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
+      for (const choice of feat.parsed.choices) {
+        if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
+        const selected = form.chosenFeatOptions[`classfeat:${featureName}:${choice.id}`] ?? [];
+        for (const name of selected) {
+          const kind = classifyFeatSelection(choice, name);
+          if (kind === "skill") skills.push({ name, source: feat.name });
+          else if (kind === "tool") tools.push({ name, source: feat.name });
+          else if (kind === "language") languages.push({ name, source: feat.name });
+          else if (kind === "weapon_mastery") masteries.push({ name, source: feat.name });
+        }
+      }
+    }
   }
 
   // ── Background ─────────────────────────────────────────────────────────────
   if (bgDetail) {
     const prof = bgDetail.proficiencies;
-    // Skills — always fixed from <proficiency> field
+    // Skills — fixed from <proficiency> field + chosen picks
     const bgSkills = prof ? prof.skills.fixed : splitComma(bgDetail.proficiency);
     bgSkills.forEach(n => skills.push({ name: n, source: bgName }));
+    form.chosenBgSkills.forEach(n => skills.push({ name: n, source: bgName }));
     // Tools — fixed grants + chosen picks
     if (prof) {
       prof.tools.fixed.forEach(n => tools.push({ name: n, source: bgName }));
@@ -663,29 +945,33 @@ function buildProficiencyMap(
         else if (/language/i.test(t.name)) splitComma(t.text).forEach(n => languages.push({ name: n, source: bgName }));
       }
     }
-    for (const feat of prof?.feats ?? []) {
-      feat.parsed.grants.skills.forEach((name) => skills.push({ name, source: feat.name }));
-      feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
-      feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
-      feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
-      feat.parsed.grants.weapons.forEach((name) => weapons.push({ name, source: feat.name }));
-      feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
+    if (ruleset === "5.5e") {
+      for (const feat of prof?.feats ?? []) {
+        feat.parsed.grants.skills.forEach((name) => skills.push({ name, source: feat.name }));
+        feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
+        feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
+        feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
+        feat.parsed.grants.weapons.forEach((name) => weapons.push({ name, source: feat.name }));
+        feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
 
-      for (const choice of feat.parsed.choices) {
-        if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
-        const selected = form.chosenFeatOptions[`bg:${feat.name}:${choice.id}`] ?? [];
-        for (const name of selected) {
-          const kind = classifyFeatSelection(choice, name);
-          if (kind === "skill") skills.push({ name, source: feat.name });
-          else if (kind === "tool") tools.push({ name, source: feat.name });
-          else if (kind === "language") languages.push({ name, source: feat.name });
-          else if (kind === "weapon_mastery") masteries.push({ name, source: feat.name });
+        for (const choice of feat.parsed.choices) {
+          if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
+          const selected = form.chosenFeatOptions[`bg:${feat.name}:${choice.id}`] ?? [];
+          for (const name of selected) {
+            const kind = classifyFeatSelection(choice, name);
+            if (kind === "skill") skills.push({ name, source: feat.name });
+            else if (kind === "tool") tools.push({ name, source: feat.name });
+            else if (kind === "language") languages.push({ name, source: feat.name });
+            else if (kind === "weapon_mastery") masteries.push({ name, source: feat.name });
+          }
         }
       }
     }
   }
 
   // ── Species ────────────────────────────────────────────────────────────────
+  const core55eLanguageChoice = getCore55eLanguageChoice(raceDetail, ruleset);
+
   if (raceDetail) {
     for (const t of raceDetail.traits) {
       // Modifiers like "language:Common" or "tool:Thieves' Tools"
@@ -705,6 +991,38 @@ function buildProficiencyMap(
         });
       }
     }
+    // Chosen race skills/languages/tools (e.g. Human Skillful, Elf Keen Senses, Warforged Specialized Design)
+    form.chosenRaceSkills.forEach(n => skills.push({ name: n, source: raceName }));
+    if (!core55eLanguageChoice) {
+      form.chosenRaceLanguages.forEach(n => languages.push({ name: n, source: raceName }));
+    }
+    form.chosenRaceTools.forEach(n => tools.push({ name: n, source: raceName }));
+    // Race feat grants (e.g. Human Versatile origin feat)
+    if (ruleset === "5.5e" && raceFeatDetail) {
+      const rg = raceFeatDetail.parsed.grants;
+      rg.skills.forEach(n => skills.push({ name: n, source: raceFeatDetail.name }));
+      rg.tools.forEach(n => tools.push({ name: n, source: raceFeatDetail.name }));
+      rg.languages.forEach(n => languages.push({ name: n, source: raceFeatDetail.name }));
+      rg.armor.forEach(n => armor.push({ name: n, source: raceFeatDetail.name }));
+      rg.weapons.forEach(n => weapons.push({ name: n, source: raceFeatDetail.name }));
+      rg.savingThrows.forEach(n => saves.push({ name: n, source: raceFeatDetail.name }));
+      for (const choice of raceFeatDetail.parsed.choices) {
+        if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
+        const selected = form.chosenFeatOptions[`race:${raceFeatDetail.name}:${choice.id}`] ?? [];
+        for (const name of selected) {
+          const kind = classifyFeatSelection(choice, name);
+          if (kind === "skill") skills.push({ name, source: raceFeatDetail.name });
+          else if (kind === "tool") tools.push({ name, source: raceFeatDetail.name });
+          else if (kind === "language") languages.push({ name, source: raceFeatDetail.name });
+          else if (kind === "weapon_mastery") masteries.push({ name, source: raceFeatDetail.name });
+        }
+      }
+    }
+  }
+
+  if (core55eLanguageChoice) {
+    core55eLanguageChoice.fixed.forEach((name) => languages.push({ name, source: core55eLanguageChoice.source }));
+    form.chosenRaceLanguages.forEach((name) => languages.push({ name, source: core55eLanguageChoice.source }));
   }
 
   // ── Spells ─────────────────────────────────────────────────────────────────
@@ -760,15 +1078,26 @@ type AbilityMethod = "standard" | "pointbuy" | "manual";
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 interface FormState {
+  ruleset?: Ruleset | null;
   classId: string;
   raceId: string;
   bgId: string;
   level: number;
   subclass: string;
   chosenOptionals: string[];
-  // Background tool / language / ability choices (Step 3)
+  chosenClassFeatIds: Record<string, string>;
+  // Species choices (Step 1)
+  chosenRaceSkills: string[];
+  chosenRaceLanguages: string[];
+  chosenRaceTools: string[];
+  chosenRaceFeatId: string | null;
+  chosenRaceSize: string | null;
+  // Background tool / language / ability / skill / feat choices (Step 3)
+  chosenBgSkills: string[];
+  chosenBgOriginFeatId: string | null;
   chosenBgTools: string[];
   chosenBgLanguages: string[];
+  chosenClassEquipmentOption: string | null;
   chosenBgEquipmentOption: string | null;
   chosenFeatOptions: Record<string, string[]>;
   bgAbilityMode: "split" | "even";
@@ -805,9 +1134,12 @@ const DEFAULT_SCORES = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 function initForm(user: { name?: string } | null, params: URLSearchParams): FormState {
   const preselectedCampaign = params.get("campaign");
   return {
+    ruleset: null,
     classId: "", raceId: "", bgId: "",
-    level: 1, subclass: "", chosenOptionals: [],
-    chosenBgTools: [], chosenBgLanguages: [], chosenBgEquipmentOption: null, chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {},
+    level: 1, subclass: "", chosenOptionals: [], chosenClassFeatIds: {},
+    chosenRaceSkills: [], chosenRaceLanguages: [], chosenRaceTools: [], chosenRaceFeatId: null, chosenRaceSize: null,
+    chosenBgSkills: [], chosenBgOriginFeatId: null,
+    chosenBgTools: [], chosenBgLanguages: [], chosenClassEquipmentOption: null, chosenBgEquipmentOption: null, chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {},
     chosenSkills: [], chosenWeaponMasteries: [], chosenCantrips: [], chosenSpells: [], chosenInvocations: [],
     abilityMethod: "standard",
     standardAssign: { str: -1, dex: -1, con: -1, int: -1, wis: -1, cha: -1 },
@@ -847,7 +1179,7 @@ function getPrimaryAbilityKeys(classDetail: ClassDetail | null): string[] {
     if (al.level !== 1) continue;
     for (const f of al.features) {
       const m = f.text.match(/Primary Ability:\s*([^\n]+)/i);
-      if (m) return abilityNamesToKeys(m[1].split(/,|\s+and\s+/i).map((s) => s.trim()).filter(Boolean));
+      if (m) return abilityNamesToKeys(m[1].split(/,|\s+and\s+|\s+or\s+/i).map((s) => s.trim()).filter(Boolean));
     }
   }
   return [];
@@ -964,6 +1296,11 @@ export function CharacterCreatorView() {
   const [classDetail, setClassDetail] = React.useState<ClassDetail | null>(null);
   const [races, setRaces] = React.useState<RaceSummary[]>([]);
   const [raceDetail, setRaceDetail] = React.useState<RaceDetail | null>(null);
+  const [featSummaries, setFeatSummaries] = React.useState<{ id: string; name: string; ruleset?: Ruleset | null }[]>([]);
+  const [raceFeatDetail, setRaceFeatDetail] = React.useState<BackgroundFeat | null>(null);
+  const [classFeatDetails, setClassFeatDetails] = React.useState<Record<string, BackgroundFeat>>({});
+  const [raceFeatSearch, setRaceFeatSearch] = React.useState("");
+  const [bgOriginFeatSearch, setBgOriginFeatSearch] = React.useState("");
   const [bgs, setBgs] = React.useState<BgSummary[]>([]);
   const [bgDetail, setBgDetail] = React.useState<BgDetail | null>(null);
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
@@ -985,12 +1322,23 @@ export function CharacterCreatorView() {
   const [classSearch, setClassSearch] = React.useState("");
   const [raceSearch, setRaceSearch] = React.useState("");
   const [bgSearch, setBgSearch] = React.useState("");
+  const selectedClassSummary = React.useMemo(
+    () => classes.find((c) => c.id === form.classId) ?? null,
+    [classes, form.classId]
+  );
+  const selectedRuleset: Ruleset | null = React.useMemo(() => {
+    const explicit = classDetail?.ruleset ?? selectedClassSummary?.ruleset ?? form.ruleset ?? null;
+    if (explicit) return explicit;
+    const label = classDetail?.name ?? selectedClassSummary?.name ?? null;
+    return label ? inferRulesetFromLabel(label) : null;
+  }, [classDetail?.name, classDetail?.ruleset, selectedClassSummary?.name, selectedClassSummary?.ruleset, form.ruleset]);
 
   // Load compendium lists on mount
   React.useEffect(() => {
     api<ClassSummary[]>("/api/compendium/classes").then(setClasses).catch(() => {});
     api<RaceSummary[]>("/api/compendium/races").then(setRaces).catch(() => {});
     api<BgSummary[]>("/api/compendium/backgrounds").then(setBgs).catch(() => {});
+    api<{ id: string; name: string; ruleset?: Ruleset | null }[]>("/api/compendium/feats").then(setFeatSummaries).catch(() => {});
     api<Campaign[]>("/api/campaigns").then(setCampaigns).catch(() => {});
     api<ItemSummary[]>("/api/compendium/items").then(setItems).catch(() => {});
   }, []);
@@ -1003,13 +1351,21 @@ export function CharacterCreatorView() {
         const cd = ch.characterData ?? {};
         setForm((f) => ({
           ...f,
+          ruleset: cd.ruleset ?? null,
           classId: cd.classId ?? "",
           raceId: cd.raceId ?? "",
           bgId: cd.bgId ?? "",
           level: ch.level ?? 1,
           subclass: cd.subclass ?? "",
           chosenOptionals: cd.chosenOptionals ?? [],
+          chosenClassFeatIds: cd.chosenClassFeatIds ?? {},
+          chosenRaceSkills: cd.chosenRaceSkills ?? [],
+          chosenRaceLanguages: cd.chosenRaceLanguages ?? [],
+          chosenRaceTools: cd.chosenRaceTools ?? [],
+          chosenRaceFeatId: cd.chosenRaceFeatId ?? null,
+          chosenRaceSize: cd.chosenRaceSize ?? null,
           chosenSkills: cd.chosenSkills ?? [],
+          chosenClassEquipmentOption: cd.chosenClassEquipmentOption ?? null,
           chosenBgEquipmentOption: cd.chosenBgEquipmentOption ?? null,
           chosenFeatOptions: cd.chosenFeatOptions ?? {},
           chosenWeaponMasteries: cd.chosenWeaponMasteries ?? [],
@@ -1045,7 +1401,14 @@ export function CharacterCreatorView() {
 
   // Load class detail when selected
   React.useEffect(() => {
-    if (!form.classId) { setClassDetail(null); return; }
+    if (!form.classId) { setClassDetail(null); setClassFeatDetails({}); return; }
+    setForm((f) => ({
+      ...f,
+      chosenClassFeatIds: {},
+      chosenClassEquipmentOption: null,
+      chosenFeatOptions: Object.fromEntries(Object.entries(f.chosenFeatOptions).filter(([k]) => !k.startsWith("classfeat:"))),
+    }));
+    setClassFeatDetails({});
     api<ClassDetail>(`/api/compendium/classes/${form.classId}`).then(setClassDetail).catch(() => {});
   }, [form.classId]);
 
@@ -1078,11 +1441,46 @@ export function CharacterCreatorView() {
     });
   }, [form.level, classInvocations]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load race detail when selected
+  // Load race detail when selected — also reset race choices
   React.useEffect(() => {
-    if (!form.raceId) { setRaceDetail(null); return; }
+    if (!form.raceId) { setRaceDetail(null); setRaceFeatDetail(null); return; }
+    setForm(f => ({
+      ...f,
+      chosenRaceSkills: [], chosenRaceLanguages: [], chosenRaceTools: [], chosenRaceFeatId: null, chosenRaceSize: null,
+      chosenFeatOptions: Object.fromEntries(Object.entries(f.chosenFeatOptions).filter(([k]) => !k.startsWith("race:"))),
+    }));
+    setRaceFeatDetail(null);
     api<RaceDetail>(`/api/compendium/races/${form.raceId}`).then(setRaceDetail).catch(() => {});
-  }, [form.raceId]);
+  }, [form.raceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch race feat detail when chosenRaceFeatId changes
+  React.useEffect(() => {
+    if (!form.chosenRaceFeatId) { setRaceFeatDetail(null); return; }
+    api<{ name: string; text?: string; parsed: ParsedFeat }>(`/api/compendium/feats/${encodeURIComponent(form.chosenRaceFeatId)}`)
+      .then((f) => setRaceFeatDetail({ name: f.name, text: f.text, parsed: f.parsed }))
+      .catch(() => {});
+  }, [form.chosenRaceFeatId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    const entries = Object.entries(form.chosenClassFeatIds).filter(([, featId]) => Boolean(featId));
+    if (entries.length === 0) {
+      setClassFeatDetails({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      entries.map(async ([featureName, featId]) => {
+        const detail = await api<{ name: string; text?: string; parsed: ParsedFeat }>(`/api/compendium/feats/${encodeURIComponent(featId)}`);
+        return [featureName, { name: detail.name, text: detail.text, parsed: detail.parsed }] as const;
+      })
+    )
+      .then((pairs) => {
+        if (cancelled) return;
+        setClassFeatDetails(Object.fromEntries(pairs));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [form.chosenClassFeatIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load bg detail when selected
   React.useEffect(() => {
@@ -1130,13 +1528,18 @@ export function CharacterCreatorView() {
             });
           }
         }
-        return form.chosenOptionals
+        const selectedOptionals = form.chosenOptionals
           .map((name) => featureByName.get(name) ?? { id: name, name, text: "" })
           .filter(Boolean);
+        const selectedClassFeats = Object.entries(form.chosenClassFeatIds)
+          .map(([featureName]) => classFeatDetails[featureName])
+          .filter(Boolean)
+          .map((feat) => ({ id: feat.name, name: feat.name, text: feat.text?.trim() ?? "" }));
+        return [...selectedOptionals, ...selectedClassFeats];
       })();
       const startingInventory = isEditing
         ? undefined
-        : buildStartingInventory(form, bgDetail);
+        : buildStartingInventory(form, bgDetail, classDetail);
       const body = {
         name: form.characterName.trim(),
         playerName: optionalText(form.playerName),
@@ -1151,6 +1554,7 @@ export function CharacterCreatorView() {
         intScore: scores.int, wisScore: scores.wis, chaScore: scores.cha,
         color: form.color,
         characterData: {
+          ruleset: selectedRuleset,
           classId: form.classId, raceId: form.raceId, bgId: form.bgId,
           subclass: form.subclass || null, abilityMethod: form.abilityMethod,
           alignment: optionalText(form.alignment),
@@ -1162,8 +1566,15 @@ export function CharacterCreatorView() {
           gender: optionalText(form.gender),
           hd: classDetail?.hd ?? null,
           chosenOptionals: form.chosenOptionals,
+          chosenClassFeatIds: form.chosenClassFeatIds,
           classFeatures,
+          chosenRaceSkills: form.chosenRaceSkills,
+          chosenRaceLanguages: form.chosenRaceLanguages,
+          chosenRaceTools: form.chosenRaceTools,
+          chosenRaceFeatId: form.chosenRaceFeatId,
+          chosenRaceSize: form.chosenRaceSize,
           chosenSkills: form.chosenSkills,
+          chosenClassEquipmentOption: form.chosenClassEquipmentOption,
           chosenBgEquipmentOption: form.chosenBgEquipmentOption,
           chosenFeatOptions: form.chosenFeatOptions,
           chosenWeaponMasteries: form.chosenWeaponMasteries,
@@ -1171,9 +1582,10 @@ export function CharacterCreatorView() {
           chosenSpells: form.chosenSpells,
           chosenInvocations: form.chosenInvocations,
           ...(startingInventory ? { inventory: startingInventory } : {}),
-          proficiencies: buildProficiencyMap(
+          proficiencies: buildProficiencyMapForRuleset(
+            selectedRuleset ?? "5e",
             form, classDetail, raceDetail, bgDetail,
-            classCantrips, classSpells, classInvocations
+            classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails
           ),
         },
       };
@@ -1219,7 +1631,7 @@ export function CharacterCreatorView() {
 
   // ── Step renderers ──────────────────────────────────────────────────────────
 
-  function renderStep() {
+  function renderStep(): { main: React.ReactNode; side: React.ReactNode } {
     switch (step) {
       case 1: return StepClass();
       case 2: return StepSpecies();
@@ -1231,16 +1643,67 @@ export function CharacterCreatorView() {
       case 8: return StepDerivedStats();
       case 9: return StepIdentity();
       case 10: return StepCampaigns();
+      default: return { main: null, side: null };
     }
   }
 
+  function SideSummaryCard() {
+    const scores = resolvedScores(form);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {(classDetail || raceDetail || bgDetail) && (
+          <div style={detailBoxStyle}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.accentHl, marginBottom: 10 }}>Character Summary</div>
+            {classDetail && (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Class </span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{classDetail.name}</span>
+                {classDetail.hd && <span style={{ color: C.muted, fontSize: 11, marginLeft: 6 }}>d{classDetail.hd}</span>}
+              </div>
+            )}
+            {raceDetail && (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Species </span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{raceDetail.name}</span>
+                {raceDetail.speed && <span style={{ color: C.muted, fontSize: 11, marginLeft: 6 }}>{raceDetail.speed} ft</span>}
+              </div>
+            )}
+            {bgDetail && (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Background </span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{bgDetail.name}</span>
+              </div>
+            )}
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Level </span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{form.level}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4 }}>
+              {ABILITY_KEYS.map(k => {
+                const score = scores[k] ?? 10;
+                const mod = abilityMod(score);
+                return (
+                  <div key={k} style={{ textAlign: "center", padding: "5px 4px", borderRadius: 6, background: "rgba(255,255,255,0.04)" }}>
+                    <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{ABILITY_LABELS[k]}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{score}</div>
+                    <div style={{ color: C.muted, fontSize: 11 }}>{mod >= 0 ? "+" : ""}{mod}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Step 1: Class
-  function StepClass() {
+  function StepClass(): { main: React.ReactNode; side: React.ReactNode } {
     const filtered = classSearch
       ? classes.filter((c) => c.name.toLowerCase().includes(classSearch.toLowerCase()))
       : classes;
 
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Choose a Class</h2>
 
@@ -1264,7 +1727,26 @@ export function CharacterCreatorView() {
                 {filtered.map((c) => {
                   const sel = form.classId === c.id;
                   return (
-                    <button type="button" key={c.id} onClick={() => set("classId", c.id)} style={{
+                    <button type="button" key={c.id} onClick={() => setForm((f) => ({
+                      ...f,
+                      classId: c.id,
+                      ruleset: inferRulesetFromLabel(c.name),
+                      raceId: "",
+                      bgId: "",
+                      chosenRaceSkills: [],
+                      chosenRaceLanguages: [],
+                      chosenRaceTools: [],
+                      chosenRaceFeatId: null,
+                      chosenRaceSize: null,
+                      chosenBgSkills: [],
+                      chosenBgOriginFeatId: null,
+                      chosenBgTools: [],
+                      chosenBgLanguages: [],
+                      chosenBgEquipmentOption: null,
+                      chosenFeatOptions: {},
+                      bgAbilityMode: "split",
+                      bgAbilityBonuses: {},
+                    }))} style={{
                       padding: "10px 13px", borderRadius: 8, textAlign: "left",
                       border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                       background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
@@ -1283,93 +1765,93 @@ export function CharacterCreatorView() {
           )
         }
 
-        {classDetail && (() => {
-          // Scan ALL level-1 features (including optional) for core traits block
-          let primaryAbility = "";
-          let savesText = "";
-          const allL1Features = classDetail.autolevels
-            .filter((al) => al.level === 1)
-            .flatMap((al) => al.features);
-          for (const f of allL1Features) {
-            const fullText = f.text;
-            if (!primaryAbility) {
-              const m = fullText.match(/Primary Ability:\s*([^\n]+)/i);
-              if (m) primaryAbility = m[1].trim();
-            }
-            if (!savesText) {
-              const m = fullText.match(/Saving Throw Proficiencies?:\s*([^\n.]+)/i);
-              if (m) savesText = m[1].trim();
-            }
-            if (primaryAbility && savesText) break;
-          }
-          return (
-            <div style={detailBoxStyle}>
-              {/* Name */}
-              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: C.accentHl }}>
-                {classDetail.name}
-              </div>
-
-              {/* Description */}
-              {classDetail.description && (
-                <div style={{ color: C.muted, fontSize: "var(--fs-small)", lineHeight: 1.65, marginBottom: 14 }}>
-                  {classDetail.description.slice(0, 320)}{classDetail.description.length > 320 ? "…" : ""}
-                </div>
-              )}
-
-              {/* Key stats row */}
-              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                {primaryAbility && (
-                  <div>
-                    <div style={statLabelStyle}>Primary Ability</div>
-                    <div style={statValueStyle}>{primaryAbility}</div>
-                  </div>
-                )}
-                {classDetail.hd && (
-                  <div>
-                    <div style={statLabelStyle}>Hit Die</div>
-                    <div style={statValueStyle}>D{classDetail.hd}</div>
-                  </div>
-                )}
-                {savesText && (
-                  <div>
-                    <div style={statLabelStyle}>Saves</div>
-                    <div style={statValueStyle}>{savesText}</div>
-                  </div>
-                )}
-                {classDetail.armor && (
-                  <div>
-                    <div style={statLabelStyle}>Armor</div>
-                    <div style={{ ...statValueStyle, fontSize: 12 }}>{classDetail.armor}</div>
-                  </div>
-                )}
-                {classDetail.weapons && (
-                  <div>
-                    <div style={statLabelStyle}>Weapons</div>
-                    <div style={{ ...statValueStyle, fontSize: 12 }}>{classDetail.weapons}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-
         <NavButtons step={step} onBack={() => {}} onNext={() => setStep(2)}
           nextDisabled={!form.classId} />
       </div>
     );
+
+    const side = classDetail ? (
+      <div style={detailBoxStyle}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: C.accentHl, marginBottom: 12 }}>{classDetail.name}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+          {classDetail.hd && (
+            <div><div style={statLabelStyle}>Hit Die</div><div style={statValueStyle}>d{classDetail.hd}</div></div>
+          )}
+          {(() => {
+            const keys = getPrimaryAbilityKeys(classDetail);
+            return keys.length > 0 ? (
+              <div><div style={statLabelStyle}>Primary</div><div style={statValueStyle}>{keys.map(k => ABILITY_LABELS[k]).join(" / ")}</div></div>
+            ) : null;
+          })()}
+          {classDetail.slotsReset && (
+            <div><div style={statLabelStyle}>Spell Reset</div><div style={statValueStyle}>{classDetail.slotsReset === "L" ? "Long Rest" : classDetail.slotsReset === "S" ? "Short Rest" : classDetail.slotsReset}</div></div>
+          )}
+        </div>
+        {classDetail.armor && (
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Armor </span>
+            <span style={{ fontSize: 12 }}>{classDetail.armor}</span>
+          </div>
+        )}
+        {classDetail.weapons && (
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Weapons </span>
+            <span style={{ fontSize: 12 }}>{classDetail.weapons}</span>
+          </div>
+        )}
+        {classDetail.numSkills > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Skills </span>
+            <span style={{ fontSize: 12 }}>Choose {classDetail.numSkills} from: {parseSkillList(classDetail.proficiency).join(", ")}</span>
+          </div>
+        )}
+        {classDetail.description && (
+          <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.6, marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
+            {classDetail.description.slice(0, 500)}{classDetail.description.length > 500 ? "…" : ""}
+          </div>
+        )}
+      </div>
+    ) : (
+      <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a class to see its details.</div>
+    );
+
+    return { main, side };
   }
 
   // Step 2: Species
-  function StepSpecies() {
+  function StepSpecies(): { main: React.ReactNode; side: React.ReactNode } {
+    const availableRaces = races.filter((r) => matchesRuleset(r, selectedRuleset));
     const filtered = raceSearch
-      ? races.filter((r) => r.name.toLowerCase().includes(raceSearch.toLowerCase()))
-      : races;
+      ? availableRaces.filter((r) => r.name.toLowerCase().includes(raceSearch.toLowerCase()))
+      : availableRaces;
 
-    return (
+    function toggleRacePick<K extends "chosenRaceSkills" | "chosenRaceLanguages" | "chosenRaceTools">(
+      key: K, item: string, max: number,
+    ) {
+      setForm(f => {
+        const cur = f[key] as string[];
+        const sel = cur.includes(item);
+        return {
+          ...f,
+          [key]: sel ? cur.filter(x => x !== item) : cur.length < max ? [...cur, item] : cur,
+        };
+      });
+    }
+
+    const raceChoices = raceDetail
+      ? (raceDetail.parsedChoices ?? parseRaceChoicesByRuleset(selectedRuleset ?? "5e", raceDetail.traits, ALL_SKILLS))
+      : null;
+    const { skillChoice, toolChoice, languageChoice } = raceChoices ?? { skillChoice: null, toolChoice: null, languageChoice: null };
+    const originFeats = featSummaries.filter(f => /\borigin\b/i.test(f.name) && matchesRuleset(f, selectedRuleset));
+    const filteredFeats = raceFeatSearch
+      ? originFeats.filter(f => f.name.toLowerCase().includes(raceFeatSearch.toLowerCase()))
+      : originFeats;
+
+    const main = (
       <div>
         <h2 style={headingStyle}>Choose a Species</h2>
 
-        {races.length === 0
+        {availableRaces.length === 0
           ? <p style={{ color: C.muted }}>No species found in compendium.</p>
           : (
             <>
@@ -1408,42 +1890,158 @@ export function CharacterCreatorView() {
           )
         }
 
-        {raceDetail && (
-          <div style={detailBoxStyle}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: C.accentHl }}>{raceDetail.name}</div>
+        {/* Race choices — all interactive picks stay left */}
+        {raceDetail && raceChoices && (raceChoices.hasChosenSize || skillChoice || toolChoice || languageChoice || raceChoices.hasFeatChoice) && (
+          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
 
-            {/* Stats row: size / speed / vision */}
-            <div style={{ display: "flex", gap: 20, marginBottom: 10, flexWrap: "wrap" }}>
-              {raceDetail.size && (
-                <div>
-                  <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Size</div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{raceDetail.size}</div>
+            {raceChoices.hasChosenSize && (
+              <div>
+                <div style={{ ...labelStyle, marginBottom: 8 }}>Size <span style={sourceTagStyle}>{raceDetail.name}</span></div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["Medium", "Small"].map(sz => {
+                    const sel = form.chosenRaceSize === sz;
+                    return (
+                      <button key={sz} type="button" onClick={() => setForm(f => ({ ...f, chosenRaceSize: sz }))}
+                        style={{
+                          padding: "6px 16px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                          border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                          background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                          color: sel ? C.accentHl : C.text, fontWeight: sel ? 700 : 400,
+                        }}>
+                        {sz}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-              {raceDetail.speed && (
-                <div>
-                  <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Speed</div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{raceDetail.speed} ft</div>
-                </div>
-              )}
-              {(raceDetail.vision ?? []).map((v) => (
-                <div key={v.type}>
-                  <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{v.type}</div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{v.range} ft</div>
-                </div>
-              ))}
-            </div>
+              </div>
+            )}
 
-            {/* Traits — skip vision (already shown above) and description */}
-            {raceDetail.traits
-              .filter((t) => t.category !== "description" && !["darkvision","blindsight","truesight","tremorsense"].includes(t.name.toLowerCase().trim()))
-              .slice(0, 5)
-              .map((t) => (
-                <div key={t.name} style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{t.text.replace(/Source:.*$/m, "").trim().slice(0, 140)}{t.text.length > 140 ? "…" : ""}</span>
+            {skillChoice && (
+              <div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ ...labelStyle, margin: 0 }}>Skill Proficiency <span style={sourceTagStyle}>{raceDetail.name}</span></div>
+                  <span style={{ fontSize: 12, color: form.chosenRaceSkills.length >= skillChoice.count ? C.accentHl : C.muted }}>
+                    {form.chosenRaceSkills.length} / {skillChoice.count}
+                  </span>
                 </div>
-              ))}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {(skillChoice.from ?? ALL_SKILLS).map(skill => {
+                    const sel = form.chosenRaceSkills.includes(skill);
+                    const locked = !sel && form.chosenRaceSkills.length >= skillChoice.count;
+                    return (
+                      <button key={skill} type="button" disabled={locked}
+                        onClick={() => toggleRacePick("chosenRaceSkills", skill, skillChoice.count)}
+                        style={{
+                          padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
+                          border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                          background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                          color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                          fontWeight: sel ? 700 : 400,
+                        }}>
+                        {skill}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {toolChoice && (
+              <div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ ...labelStyle, margin: 0 }}>Tool Proficiency <span style={sourceTagStyle}>{raceDetail.name}</span></div>
+                  <span style={{ fontSize: 12, color: form.chosenRaceTools.length >= toolChoice.count ? C.accentHl : C.muted }}>
+                    {form.chosenRaceTools.length} / {toolChoice.count}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 180, overflowY: "auto" }}>
+                  {(toolChoice.from ?? ALL_TOOLS).map(tool => {
+                    const sel = form.chosenRaceTools.includes(tool);
+                    const locked = !sel && form.chosenRaceTools.length >= toolChoice.count;
+                    return (
+                      <button key={tool} type="button" disabled={locked}
+                        onClick={() => toggleRacePick("chosenRaceTools", tool, toolChoice.count)}
+                        style={{
+                          padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
+                          border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                          background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                          color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                          fontWeight: sel ? 700 : 400,
+                        }}>
+                        {tool}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {languageChoice && (
+              <div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ ...labelStyle, margin: 0 }}>Language <span style={sourceTagStyle}>{raceDetail.name}</span></div>
+                  <span style={{ fontSize: 12, color: form.chosenRaceLanguages.length >= languageChoice.count ? C.accentHl : C.muted }}>
+                    {form.chosenRaceLanguages.length} / {languageChoice.count}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {(languageChoice.from ?? ALL_LANGUAGES).map(lang => {
+                    const sel = form.chosenRaceLanguages.includes(lang);
+                    const locked = !sel && form.chosenRaceLanguages.length >= languageChoice.count;
+                    return (
+                      <button key={lang} type="button" disabled={locked}
+                        onClick={() => toggleRacePick("chosenRaceLanguages", lang, languageChoice.count)}
+                        style={{
+                          padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
+                          border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                          background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                          color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                          fontWeight: sel ? 700 : 400,
+                        }}>
+                        {lang}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {raceChoices.hasFeatChoice && (
+              <div>
+                <div style={{ ...labelStyle, marginBottom: 8 }}>Origin Feat <span style={sourceTagStyle}>{raceDetail.name}</span></div>
+                <input
+                  value={raceFeatSearch}
+                  onChange={(e) => setRaceFeatSearch(e.target.value)}
+                  placeholder="Search feats…"
+                  style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+                />
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr",
+                  gap: 5, maxHeight: 240, overflowY: "auto", paddingRight: 4,
+                }}>
+                  {filteredFeats.map(feat => {
+                    const sel = form.chosenRaceFeatId === feat.id;
+                    return (
+                      <button key={feat.id} type="button"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          chosenRaceFeatId: sel ? null : feat.id,
+                          chosenFeatOptions: Object.fromEntries(Object.entries(f.chosenFeatOptions).filter(([k]) => !k.startsWith("race:"))),
+                        }))}
+                        style={{
+                          padding: "8px 12px", borderRadius: 8, textAlign: "left", cursor: "pointer",
+                          border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                          background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
+                          color: sel ? C.accentHl : C.text, fontWeight: sel ? 700 : 400, fontSize: 13,
+                          transition: "border-color 0.12s, background 0.12s",
+                        }}>
+                        {feat.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1451,40 +2049,391 @@ export function CharacterCreatorView() {
           nextDisabled={!form.raceId} />
       </div>
     );
+
+    // Right column: description only (no interactive elements)
+    const side = raceDetail ? (
+      <div style={detailBoxStyle}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: C.accentHl, marginBottom: 10 }}>{raceDetail.name}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
+          {raceDetail.speed != null && <div><div style={statLabelStyle}>Speed</div><div style={statValueStyle}>{raceDetail.speed} ft</div></div>}
+          {raceDetail.size && <div><div style={statLabelStyle}>Size</div><div style={statValueStyle}>{raceDetail.size}</div></div>}
+          {raceDetail.vision.length > 0 && <div><div style={statLabelStyle}>Vision</div><div style={statValueStyle}>{raceDetail.vision.map(v => `${v.type} ${v.range}ft`).join(", ")}</div></div>}
+          {raceDetail.resist && <div><div style={statLabelStyle}>Resist</div><div style={statValueStyle}>{raceDetail.resist}</div></div>}
+        </div>
+        {raceDetail.traits.map(t => (
+          <div key={t.name} style={{ marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>{t.name}. </span>
+            <span style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.5 }}>
+              {t.text.replace(/Source:.*$/m, "").trim()}
+            </span>
+          </div>
+        ))}
+        {/* Feat description when one is selected */}
+        {form.chosenRaceFeatId && raceFeatDetail && (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontWeight: 700, color: C.accentHl, fontSize: 13, marginBottom: 8 }}>{raceFeatDetail.name}</div>
+            {raceFeatDetail.text && (
+              <div style={{ fontSize: 12, color: "rgba(160,180,220,0.75)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {raceFeatDetail.text.replace(/Source:.*$/m, "").trim()}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    ) : (
+      <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a species to see its details.</div>
+    );
+
+    return { main, side };
   }
 
   // Step 3: Background
-  function StepBackground() {
+  function StepBackground(): { main: React.ReactNode; side: React.ReactNode } {
+    const availableBackgrounds = bgs.filter((b) => matchesRuleset(b, selectedRuleset));
     const filtered = bgSearch
-      ? bgs.filter((b) => b.name.toLowerCase().includes(bgSearch.toLowerCase()))
-      : bgs;
+      ? availableBackgrounds.filter((b) => b.name.toLowerCase().includes(bgSearch.toLowerCase()))
+      : availableBackgrounds;
     const equipmentOptions = parseStartingEquipmentOptions(bgDetail?.equipment);
 
-    return (
+    // Interactive bg choices (defined before main so they can be referenced in main JSX)
+    const bgChoicesMain = bgDetail ? (() => {
+      const prof = bgDetail.proficiencies;
+      const tools = prof?.tools ?? { fixed: [], choose: 0, from: null };
+      const equipOptions = parseStartingEquipmentOptions(bgDetail.equipment);
+
+      function toggleBgChoice(item: string, key: "chosenBgTools" | "chosenBgLanguages", max: number) {
+        setForm(f => {
+          const cur = f[key];
+          const next = cur.includes(item) ? cur.filter(x => x !== item) : cur.length < max ? [...cur, item] : cur;
+          return { ...f, [key]: next };
+        });
+      }
+
+      const originFeats = featSummaries.filter(f => /\borigin\b/i.test(f.name) && matchesRuleset(f, selectedRuleset));
+      const filteredBgFeats = bgOriginFeatSearch
+        ? originFeats.filter(f => f.name.toLowerCase().includes(bgOriginFeatSearch.toLowerCase()))
+        : originFeats;
+
+      return (
+        <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Skill proficiency picker (interactive) — for backgrounds with trait-based skill choices */}
+          {prof && prof.skills.choose > 0 && (
+            <div>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Skill Proficiencies </span>
+                <span style={sourceTagStyle}>{bgDetail.name}</span>
+                <span style={{ marginLeft: 8, fontSize: 12, color: form.chosenBgSkills.length >= prof.skills.choose ? C.accentHl : C.muted }}>
+                  {form.chosenBgSkills.length} / {prof.skills.choose}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {(prof.skills.from ?? ALL_SKILLS).map(skill => {
+                  const sel = form.chosenBgSkills.includes(skill);
+                  const locked = !sel && form.chosenBgSkills.length >= prof.skills.choose;
+                  return (
+                    <button key={skill} type="button" disabled={locked}
+                      onClick={() => setForm(f => {
+                        const cur = f.chosenBgSkills;
+                        const next = cur.includes(skill) ? cur.filter(x => x !== skill) : cur.length < prof.skills.choose ? [...cur, skill] : cur;
+                        return { ...f, chosenBgSkills: next };
+                      })}
+                      style={{
+                        padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
+                        border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                        background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                        color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                        fontWeight: sel ? 700 : 400,
+                      }}>
+                      {skill}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Origin feat picker (interactive) — for backgrounds like Custom Background */}
+          {prof && prof.featChoice > 0 && (
+            <div>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Origin Feat </span>
+                <span style={sourceTagStyle}>{bgDetail.name}</span>
+              </div>
+              <input
+                type="text"
+                value={bgOriginFeatSearch}
+                onChange={e => setBgOriginFeatSearch(e.target.value)}
+                placeholder="Search origin feats…"
+                style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+              />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 180, overflowY: "auto" }}>
+                {filteredBgFeats.map(f => {
+                  const sel = form.chosenBgOriginFeatId === f.id;
+                  return (
+                    <button key={f.id} type="button"
+                      onClick={() => setForm(ff => ({ ...ff, chosenBgOriginFeatId: sel ? null : f.id }))}
+                      style={{
+                        padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                        border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                        background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
+                        color: sel ? C.accentHl : C.text,
+                        fontWeight: sel ? 700 : 400,
+                      }}>
+                      {f.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tool proficiency picker (interactive) */}
+          {(tools.fixed.length > 0 || tools.choose > 0) && (
+            <div>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Tools </span>
+                <span style={sourceTagStyle}>{bgDetail.name}</span>
+              </div>
+              {tools.fixed.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: tools.choose > 0 ? 8 : 0 }}>
+                  {tools.fixed.map(n => <span key={n} style={profChipStyle}>{n}</span>)}
+                </div>
+              )}
+              {tools.choose > 0 && (
+                <>
+                  <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>
+                    Choose {tools.choose} ({form.chosenBgTools.length}/{tools.choose})
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {(tools.from ?? ALL_TOOLS).map(n => {
+                      const sel = form.chosenBgTools.includes(n);
+                      const locked = !sel && form.chosenBgTools.length >= tools.choose;
+                      return (
+                        <button key={n} type="button" disabled={locked}
+                          onClick={() => toggleBgChoice(n, "chosenBgTools", tools.choose)}
+                          style={{
+                            padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
+                            border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                            background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                            color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
+                            fontWeight: sel ? 700 : 400,
+                          }}>
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Ability score bonus picker (interactive) */}
+          {prof?.abilityScores && prof.abilityScores.length > 0 && (() => {
+            const abilityKeys = abilityNamesToKeys(prof.abilityScores);
+            const bonuses = form.bgAbilityBonuses;
+            const mode = form.bgAbilityMode;
+
+            function setMode(m: "split" | "even") {
+              setForm(f => ({ ...f, bgAbilityMode: m, bgAbilityBonuses: {} }));
+            }
+            function handleSplitClick(key: string) {
+              setForm(f => {
+                const cur = { ...f.bgAbilityBonuses };
+                if (cur[key]) { delete cur[key]; return { ...f, bgAbilityBonuses: cur }; }
+                if (Object.keys(cur).length >= 2) return f;
+                cur[key] = Object.values(cur).includes(2) ? 1 : 2;
+                return { ...f, bgAbilityBonuses: cur };
+              });
+            }
+            function handleEvenClick(key: string) {
+              setForm(f => {
+                const cur = { ...f.bgAbilityBonuses };
+                if (cur[key]) { delete cur[key]; }
+                else if (Object.keys(cur).length < abilityKeys.length) { cur[key] = 1; }
+                return { ...f, bgAbilityBonuses: cur };
+              });
+            }
+            const splitDone = Object.keys(bonuses).length === 2;
+            const evenDone  = Object.keys(bonuses).length === abilityKeys.length;
+
+            return (
+              <div>
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Ability Scores </span>
+                  <span style={sourceTagStyle}>{bgDetail.name}</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  {(["split", "even"] as const).map(m => (
+                    <button key={m} type="button" onClick={() => setMode(m)} style={{
+                      padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
+                      border: `1px solid ${mode === m ? "#a78bfa" : "rgba(255,255,255,0.15)"}`,
+                      background: mode === m ? "rgba(167,139,250,0.18)" : "rgba(255,255,255,0.04)",
+                      color: mode === m ? "#a78bfa" : C.muted,
+                    }}>
+                      {m === "split" ? "+2 / +1" : "+1 each"}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ color: C.muted, fontSize: 11, marginBottom: 8 }}>
+                  {mode === "split"
+                    ? splitDone ? "✓ All bonuses assigned" : !Object.values(bonuses).includes(2) ? "Click to assign +2" : "Click another for +1"
+                    : evenDone  ? "✓ All bonuses assigned" : `Click abilities to assign +1 (${Object.keys(bonuses).length}/${abilityKeys.length})`
+                  }
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {prof.abilityScores.map((aName) => {
+                    const key = ABILITY_NAME_TO_KEY[aName.toLowerCase()] ?? "";
+                    const bonus = key ? bonuses[key] : undefined;
+                    const isSelected = bonus != null;
+                    const canSelect = mode === "split"
+                      ? !isSelected && Object.keys(bonuses).length < 2
+                      : !isSelected && Object.keys(bonuses).length < abilityKeys.length;
+                    return (
+                      <button key={aName} type="button"
+                        onClick={() => key && (mode === "split" ? handleSplitClick(key) : handleEvenClick(key))}
+                        style={{
+                          padding: "6px 16px", borderRadius: 6, cursor: canSelect || isSelected ? "pointer" : "default",
+                          border: `1px solid ${isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.12)"}`,
+                          background: isSelected ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.055)",
+                          color: isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.7)" : C.muted,
+                          fontSize: 13, fontWeight: isSelected ? 700 : 400,
+                          opacity: !canSelect && !isSelected ? 0.45 : 1,
+                        }}>
+                        {aName}
+                        {isSelected && <span style={{ marginLeft: 5, fontWeight: 800 }}>{bonus! > 0 ? `+${bonus}` : bonus}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Equipment option selector (interactive) */}
+          {bgDetail.equipment && equipOptions.length > 0 && (
+            <div>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Starting Equipment </span>
+                <span style={sourceTagStyle}>{bgDetail.name}</span>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {equipOptions.map((option) => {
+                  const selected = form.chosenBgEquipmentOption === option.id;
+                  return (
+                    <button key={option.id} type="button"
+                      onClick={() => setForm((f) => ({ ...f, chosenBgEquipmentOption: option.id }))}
+                      style={{
+                        padding: "6px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: selected ? 700 : 400,
+                        border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                        background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                        color: selected ? C.accentHl : C.text,
+                      }}>
+                      Option {option.id}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.chosenBgEquipmentOption && (
+                <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
+                  Inventory will start with option {form.chosenBgEquipmentOption}.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    })() : null;
+
+    // Right column: description only (no interactive elements)
+    const side = bgDetail ? (() => {
+      const prof = bgDetail.proficiencies;
+      const skills = prof?.skills ?? { fixed: bgDetail.proficiency.split(/[,;]/).map(s => s.trim()).filter(Boolean), choose: 0, from: null };
+      const langs = prof?.languages ?? { fixed: [], choose: 0, from: null };
+      const flavorTraits = bgDetail.traits.filter((t) => !/tool|language|starting equipment/i.test(t.name)).slice(0, 2);
+
+      return (
+        <div style={detailBoxStyle}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: C.accentHl }}>{bgDetail.name}</div>
+
+          {(skills.fixed.length > 0 || skills.choose > 0) && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Skills </span>
+              <span style={sourceTagStyle}>{bgDetail.name}</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                {skills.fixed.map(s => <span key={s} style={profChipStyle}>{s}</span>)}
+                {skills.choose > 0 && (
+                  <span style={{ ...profChipStyle, fontStyle: "italic", opacity: 0.7 }}>
+                    Choose {skills.choose} skill{skills.choose > 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {langs.fixed.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Languages </span>
+              <span style={sourceTagStyle}>{bgDetail.name}</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                {langs.fixed.map(n => <span key={n} style={profChipStyle}>{n}</span>)}
+              </div>
+            </div>
+          )}
+
+          {((prof?.feats && prof.feats.length > 0) || (prof?.featChoice ?? 0) > 0) && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Feat </span>
+              <span style={sourceTagStyle}>{bgDetail.name}</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                {prof?.feats.map((feat) => (
+                  <span key={feat.name} style={{ ...profChipStyle, background: "rgba(56,182,255,0.15)", border: "1px solid rgba(56,182,255,0.4)", color: C.accentHl }}>{feat.name}</span>
+                ))}
+                {(prof?.featChoice ?? 0) > 0 && (
+                  <span style={{ ...profChipStyle, fontStyle: "italic", opacity: 0.7 }}>Choose 1 origin feat</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {bgDetail.equipment && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Equipment </span>
+              <div style={{ color: C.muted, fontSize: 12, marginTop: 4, lineHeight: 1.6 }}>
+                {bgDetail.equipment.slice(0, 300)}{bgDetail.equipment.length > 300 ? "…" : ""}
+              </div>
+            </div>
+          )}
+
+          {flavorTraits.map((t) => (
+            <div key={t.name} style={{ marginBottom: 6, fontSize: 12 }}>
+              <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}. </span>
+              <span style={{ color: "rgba(160,180,220,0.65)" }}>{t.text.replace(/Source:.*$/m, "").trim()}</span>
+            </div>
+          ))}
+        </div>
+      );
+    })() : (
+      <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a background to see its details.</div>
+    );
+
+    const main = (
       <div>
         <h2 style={headingStyle}>Choose a Background</h2>
-
-        {bgs.length === 0
+        {availableBackgrounds.length === 0
           ? <p style={{ color: C.muted }}>No backgrounds found in compendium.</p>
           : (
             <>
-              {/* Search */}
               <input
                 value={bgSearch}
                 onChange={(e) => setBgSearch(e.target.value)}
                 placeholder="Search backgrounds…"
                 style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
               />
-
-              {/* 2-column grid */}
               <div style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 6,
-                maxHeight: 340,
-                overflowY: "auto",
-                paddingRight: 4,
-                marginBottom: 4,
+                display: "grid", gridTemplateColumns: "1fr 1fr",
+                gap: 6, maxHeight: 340, overflowY: "auto", paddingRight: 4, marginBottom: 4,
               }}>
                 {filtered.length === 0 && (
                   <p style={{ color: C.muted, gridColumn: "1 / -1" }}>No matches.</p>
@@ -1507,278 +2456,24 @@ export function CharacterCreatorView() {
             </>
           )
         }
-
-        {/* Detail panel for selected background */}
-        {bgDetail && (() => {
-          const prof = bgDetail.proficiencies;
-          const skills  = prof?.skills  ?? { fixed: bgDetail.proficiency.split(/[,;]/).map(s=>s.trim()).filter(Boolean), choose: 0, from: null };
-          const tools    = prof?.tools    ?? { fixed: [], choose: 0, from: null };
-          const langs    = prof?.languages ?? { fixed: [], choose: 0, from: null };
-          const equipmentOptions = parseStartingEquipmentOptions(bgDetail.equipment);
-          const flavorTraits = bgDetail.traits.filter((t) => !/tool|language|starting equipment/i.test(t.name)).slice(0, 1);
-
-          // Toggle helper for bg tool/language pickers
-          function toggleBgChoice(item: string, key: "chosenBgTools" | "chosenBgLanguages", max: number) {
-            setForm(f => {
-              const cur = f[key];
-              const next = cur.includes(item) ? cur.filter(x => x !== item)
-                : cur.length < max ? [...cur, item] : cur;
-              return { ...f, [key]: next };
-            });
-          }
-
-          function ProfPicker({ label, choice, formKey, canonical }: {
-            label: string;
-            choice: ProficiencyChoice;
-            formKey: "chosenBgTools" | "chosenBgLanguages";
-            canonical: string[];
-          }) {
-            const chosen: string[] = form[formKey];
-            const options = choice.from ?? canonical;
-            return (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ marginBottom: 5 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>{label} </span>
-                  <span style={sourceTagStyle}>{bgDetail!.name}</span>
-                </div>
-                {choice.fixed.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
-                    {choice.fixed.map(n => <span key={n} style={profChipStyle}>{n}</span>)}
-                  </div>
-                )}
-                {choice.choose > 0 && (
-                  <>
-                    <div style={{ color: C.muted, fontSize: 11, marginBottom: 5 }}>
-                      Choose {choice.choose} ({chosen.length}/{choice.choose})
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {options.map(n => {
-                        const sel = chosen.includes(n);
-                        return (
-                          <button key={n} type="button"
-                            onClick={() => toggleBgChoice(n, formKey, choice.choose)}
-                            style={{
-                              fontSize: 11, padding: "3px 9px", borderRadius: 20, cursor: "pointer",
-                              border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.15)"}`,
-                              background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
-                              color: sel ? C.accentHl : C.muted,
-                              fontWeight: sel ? 700 : 400,
-                            }}>
-                            {n}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          }
-
-          return (
-            <div style={detailBoxStyle}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.accentHl }}>
-                {bgDetail.name}
-              </div>
-
-              {/* Skills — always fixed from <proficiency> field */}
-              {skills.fixed.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Skills </span>
-                  <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
-                    {skills.fixed.map(s => <span key={s} style={profChipStyle}>{s}</span>)}
-                  </div>
-                </div>
-              )}
-
-              {/* Tools */}
-              {(tools.fixed.length > 0 || tools.choose > 0) && ProfPicker({
-                label: "Tools", choice: tools, formKey: "chosenBgTools", canonical: ALL_TOOLS,
-              })}
-
-              {/* Languages are chosen in the Skills step so all player picks live together */}
-              {langs.fixed.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Languages </span>
-                  <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
-                    {langs.fixed.map(n => <span key={n} style={profChipStyle}>{n}</span>)}
-                  </div>
-                </div>
-              )}
-
-              {/* Granted feat */}
-              {prof?.feats && prof.feats.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Feat </span>
-                  <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
-                    {prof.feats.map((feat) => (
-                      <span key={feat.name} style={{ ...profChipStyle, background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.4)", color: "#fb923c" }}>{feat.name}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Ability score bonus picker */}
-              {prof?.abilityScores && prof.abilityScores.length > 0 && (() => {
-                const abilityKeys = abilityNamesToKeys(prof.abilityScores);
-                const bonuses = form.bgAbilityBonuses;
-                const mode = form.bgAbilityMode;
-
-                function setMode(m: "split" | "even") {
-                  setForm(f => ({ ...f, bgAbilityMode: m, bgAbilityBonuses: {} }));
-                }
-
-                function handleSplitClick(key: string) {
-                  setForm(f => {
-                    const cur = { ...f.bgAbilityBonuses };
-                    if (cur[key]) {
-                      // Toggle off
-                      delete cur[key];
-                      return { ...f, bgAbilityBonuses: cur };
-                    }
-                    const hasTwoAlready = Object.keys(cur).length >= 2;
-                    if (hasTwoAlready) return f; // already have 2 picks
-                    const hasPlus2 = Object.values(cur).includes(2);
-                    cur[key] = hasPlus2 ? 1 : 2;
-                    return { ...f, bgAbilityBonuses: cur };
-                  });
-                }
-
-                function handleEvenClick(key: string) {
-                  setForm(f => {
-                    const cur = { ...f.bgAbilityBonuses };
-                    if (cur[key]) {
-                      delete cur[key];
-                    } else if (Object.keys(cur).length < abilityKeys.length) {
-                      cur[key] = 1;
-                    }
-                    return { ...f, bgAbilityBonuses: cur };
-                  });
-                }
-
-                const splitDone = Object.keys(bonuses).length === 2;
-                const evenDone  = Object.keys(bonuses).length === abilityKeys.length;
-
-                return (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ marginBottom: 6 }}>
-                      <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Ability Scores </span>
-                      <span style={sourceTagStyle}>{bgDetail!.name}</span>
-                    </div>
-
-                    {/* Mode toggle */}
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                      {(["split", "even"] as const).map(m => (
-                        <button key={m} type="button" onClick={() => setMode(m)} style={{
-                          padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
-                          border: `1px solid ${mode === m ? "#a78bfa" : "rgba(255,255,255,0.15)"}`,
-                          background: mode === m ? "rgba(167,139,250,0.18)" : "rgba(255,255,255,0.04)",
-                          color: mode === m ? "#a78bfa" : C.muted,
-                        }}>
-                          {m === "split" ? "+2 / +1" : "+1 each"}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>
-                      {mode === "split"
-                        ? splitDone ? "✓ All bonuses assigned" : !Object.values(bonuses).includes(2) ? "Click to assign +2" : "Click another for +1"
-                        : evenDone  ? "✓ All bonuses assigned" : `Click abilities to assign +1 (${Object.keys(bonuses).length}/${abilityKeys.length})`
-                      }
-                    </div>
-
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {prof.abilityScores.map((aName) => {
-                        const key = ABILITY_NAME_TO_KEY[aName.toLowerCase()] ?? "";
-                        const bonus = key ? bonuses[key] : undefined;
-                        const isSelected = bonus != null;
-                        const canSelect = mode === "split"
-                          ? !isSelected && Object.keys(bonuses).length < 2
-                          : !isSelected && Object.keys(bonuses).length < abilityKeys.length;
-
-                        return (
-                          <button key={aName} type="button"
-                            onClick={() => key && (mode === "split" ? handleSplitClick(key) : handleEvenClick(key))}
-                            style={{
-                              padding: "5px 13px", borderRadius: 20, cursor: canSelect || isSelected ? "pointer" : "default",
-                              border: `1px solid ${isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.12)"}`,
-                              background: isSelected ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.04)",
-                              color: isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.7)" : C.muted,
-                              fontSize: 12, fontWeight: isSelected ? 700 : 500,
-                              opacity: !canSelect && !isSelected ? 0.45 : 1,
-                            }}>
-                            {aName}
-                            {isSelected && <span style={{ marginLeft: 5, fontWeight: 800 }}>{bonus! > 0 ? `+${bonus}` : bonus}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Starting Equipment */}
-              {bgDetail.equipment && (
-                <div style={{ marginBottom: 10 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Starting Equipment </span>
-                  <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  {equipmentOptions.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                      {equipmentOptions.map((option) => {
-                        const selected = form.chosenBgEquipmentOption === option.id;
-                        return (
-                          <button key={option.id} type="button"
-                            onClick={() => setForm((f) => ({ ...f, chosenBgEquipmentOption: option.id }))}
-                            style={{
-                              padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
-                              border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.15)"}`,
-                              background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
-                              color: selected ? C.accentHl : C.muted,
-                            }}>
-                            Option {option.id}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 5, lineHeight: 1.6 }}>
-                    {bgDetail.equipment}
-                  </div>
-                  {form.chosenBgEquipmentOption && equipmentOptions.length > 0 && (
-                    <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
-                      Inventory will start with option {form.chosenBgEquipmentOption}.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Flavor */}
-              {flavorTraits.map((t) => (
-                <div key={t.name} style={{ marginBottom: 4, fontSize: "var(--fs-small)" }}>
-                  <span style={{ fontWeight: 700, color: C.accentHl }}>{t.name}.</span>{" "}
-                  <span style={{ color: C.muted }}>{t.text.replace(/Source:.*$/m, "").trim()}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
+        {bgChoicesMain}
         <NavButtons step={step} onBack={() => setStep(2)} onNext={() => setStep(4)}
           nextDisabled={!form.bgId || (equipmentOptions.length > 0 && !form.chosenBgEquipmentOption)} />
       </div>
     );
+
+    return { main, side };
   }
 
   // Step 4: Level
-  function StepLevel() {
+  function StepLevel(): { main: React.ReactNode; side: React.ReactNode } {
     const subclassList = classDetail ? getSubclassList(classDetail) : [];
     const scNeeded = classDetail ? (getSubclassLevel(classDetail) ?? 99) : 99;
     const showSubclass = classDetail && form.level >= scNeeded && subclassList.length > 0;
     const features = classDetail ? featuresUpToLevel(classDetail, form.level) : [];
     const optGroups = classDetail ? getOptionalGroups(classDetail, form.level) : [];
+    const classEquipmentText = extractClassStartingEquipment(classDetail);
+    const classEquipmentOptions = parseStartingEquipmentOptions(classEquipmentText);
 
     function toggleOptional(name: string, exclusive: boolean, groupFeatures: string[]) {
       setForm((f) => {
@@ -1795,7 +2490,7 @@ export function CharacterCreatorView() {
       });
     }
 
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Choose Level</h2>
         <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
@@ -1874,34 +2569,158 @@ export function CharacterCreatorView() {
           );
         })}
 
-        {/* Feature list */}
-        <div style={{ ...detailBoxStyle, maxHeight: 260, overflowY: "auto" }}>
-          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>Class Features — Level {form.level}</div>
-          {features.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>No features yet.</div>}
-          {features.map((f, i) => (
-            <div key={i} style={{ marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>Lv{f.level} · {f.name}</div>
-              <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.4 }}>
-                {f.text.slice(0, 200)}{f.text.length > 200 ? "…" : ""}
-              </div>
+        {classEquipmentText && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>
+              Class Starting Equipment {classDetail && <span style={sourceTagStyle}>{classDetail.name}</span>}
             </div>
-          ))}
-        </div>
+            {classEquipmentOptions.length > 0 && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                {classEquipmentOptions.map((option) => {
+                  const selected = form.chosenClassEquipmentOption === option.id;
+                  return (
+                    <button key={option.id} type="button"
+                      onClick={() => setForm((f) => ({ ...f, chosenClassEquipmentOption: option.id }))}
+                      style={{
+                        padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
+                        border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.15)"}`,
+                        background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
+                        color: selected ? C.accentHl : C.muted,
+                      }}>
+                      Option {option.id}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ color: C.muted, fontSize: "var(--fs-small)", lineHeight: 1.6 }}>
+              {classEquipmentText}
+            </div>
+            {form.chosenClassEquipmentOption && classEquipmentOptions.length > 0 && (
+              <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
+                Inventory will start with class option {form.chosenClassEquipmentOption}.
+              </div>
+            )}
+          </div>
+        )}
 
-        <NavButtons step={step} onBack={() => setStep(3)} onNext={() => setStep(5)} />
+        <NavButtons step={step} onBack={() => setStep(3)} onNext={() => setStep(5)}
+          nextDisabled={classEquipmentOptions.length > 0 && !form.chosenClassEquipmentOption} />
       </div>
     );
+
+    const side = (
+      <div style={{ ...detailBoxStyle, maxHeight: 600, overflowY: "auto" }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: C.accentHl }}>Class Features — Level {form.level}</div>
+        {features.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>No features yet. Select a class first.</div>}
+        {features.map((f, i) => (
+          <div key={i} style={{ marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>Lv{f.level} · {f.name}</div>
+            <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.4 }}>
+              {f.text.slice(0, 300)}{f.text.length > 300 ? "…" : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
+    return { main, side };
   }
 
   // Step 5: Skills, languages, and feature-based picks
-  function StepSkills() {
+  function StepSkills(): { main: React.ReactNode; side: React.ReactNode } {
     const skillList = classDetail ? parseSkillList(classDetail.proficiency) : [];
     const numSkills = classDetail?.numSkills ?? 0;
     const bgLangChoice = bgDetail?.proficiencies?.languages ?? { fixed: [], choose: 0, from: null };
-    const bgFeatChoices = getBackgroundFeatChoices(bgDetail);
-    const weaponMasteryChoice = getWeaponMasteryChoice(classDetail, form.level);
+    const bgSkillFixed = bgDetail?.proficiencies?.skills?.fixed ?? (bgDetail ? parseSkillList(bgDetail.proficiency) : []);
+    const bgToolFixed = bgDetail?.proficiencies?.tools?.fixed ?? [];
+    const core55eLanguageChoice = getCore55eLanguageChoice(raceDetail, selectedRuleset);
+    const classFeatChoices = getClassFeatChoices(classDetail, form.level, featSummaries, selectedRuleset);
+    const selectedClassFeatEntries = classFeatChoices
+      .map((choice) => {
+        const featId = form.chosenClassFeatIds[choice.featureName];
+        if (!featId) return null;
+        const detail = classFeatDetails[choice.featureName];
+        if (!detail) return null;
+        return { choice, detail };
+      })
+      .filter(Boolean) as Array<{ choice: ClassFeatChoice; detail: BackgroundFeat }>;
+    const bgFeatChoices = getBackgroundFeatChoicesByRuleset(selectedRuleset ?? "5e", bgDetail);
+    const raceFeatChoices: BackgroundFeatChoiceEntry[] = selectedRuleset === "5.5e" && raceFeatDetail
+      ? raceFeatDetail.parsed.choices
+          .filter(c => c.type === "proficiency" || c.type === "weapon_mastery")
+          .map(choice => ({
+            featName: raceFeatDetail.name,
+            feat: raceFeatDetail.parsed,
+            choice,
+            key: `race:${raceFeatDetail.name}:${choice.id}`,
+          }))
+      : [];
+    const weaponMasteryChoice = selectedRuleset === "5.5e" ? getWeaponMasteryChoice(classDetail, form.level) : null;
     const weaponOptions = getWeaponMasteryOptions(items);
-    const hasAnything = numSkills > 0 || bgLangChoice.fixed.length > 0 || bgLangChoice.choose > 0 || bgFeatChoices.length > 0 || Boolean(weaponMasteryChoice);
+    const missingClassFeatChoices = classFeatChoices.some((choice) => !form.chosenClassFeatIds[choice.featureName]);
+    const missingCore55eLanguages = Boolean(core55eLanguageChoice) && form.chosenRaceLanguages.length < core55eLanguageChoice.choose;
+    const hasAnything = numSkills > 0 || bgLangChoice.fixed.length > 0 || bgLangChoice.choose > 0 || classFeatChoices.length > 0 || bgFeatChoices.length > 0 || raceFeatChoices.length > 0 || Boolean(weaponMasteryChoice);
+
+    function selectedFeatOptionsMatching(choices: BackgroundFeatChoiceEntry[], kind: "skill" | "tool" | "language"): string[] {
+      const matcher = kind === "skill"
+        ? (value: string) => ALL_SKILLS.some((skill) => normalizeChoiceKey(skill) === normalizeChoiceKey(value))
+        : kind === "tool"
+          ? (value: string) => ALL_TOOLS.some((tool) => normalizeChoiceKey(tool) === normalizeChoiceKey(value))
+          : (value: string) => ALL_LANGUAGES.some((language) => normalizeChoiceKey(language) === normalizeChoiceKey(value));
+
+      return choices.flatMap(({ key }) => (form.chosenFeatOptions[key] ?? []).filter(matcher));
+    }
+
+    const chosenBgFeatSkills = selectedFeatOptionsMatching(bgFeatChoices, "skill");
+    const chosenBgFeatTools = selectedFeatOptionsMatching(bgFeatChoices, "tool");
+    const chosenBgFeatLanguages = selectedFeatOptionsMatching(bgFeatChoices, "language");
+    const chosenRaceFeatSkills = selectedFeatOptionsMatching(raceFeatChoices, "skill");
+    const chosenRaceFeatTools = selectedFeatOptionsMatching(raceFeatChoices, "tool");
+    const chosenRaceFeatLanguages = selectedFeatOptionsMatching(raceFeatChoices, "language");
+
+    const takenSkillKeys = new Set<string>([
+      ...form.chosenRaceSkills,
+      ...bgSkillFixed,
+      ...chosenBgFeatSkills,
+      ...chosenRaceFeatSkills,
+    ].map(normalizeChoiceKey));
+    const takenToolKeys = new Set<string>([
+      ...form.chosenRaceTools,
+      ...bgToolFixed,
+      ...form.chosenBgTools,
+      ...chosenBgFeatTools,
+      ...chosenRaceFeatTools,
+    ].map(normalizeChoiceKey));
+    const takenLanguageKeys = new Set<string>([
+      ...bgLangChoice.fixed,
+      ...form.chosenBgLanguages,
+      ...(core55eLanguageChoice?.fixed ?? []),
+      ...form.chosenRaceLanguages,
+      ...chosenBgFeatLanguages,
+      ...chosenRaceFeatLanguages,
+    ].map(normalizeChoiceKey));
+
+    function duplicateLocked(kind: "skill" | "tool" | "language", value: string, selected: boolean): boolean {
+      if (selected) return false;
+      const key = normalizeChoiceKey(value);
+      if (kind === "skill") return takenSkillKeys.has(key);
+      if (kind === "tool") return takenToolKeys.has(key);
+      return takenLanguageKeys.has(key);
+    }
+
+    function choiceButtonStyle(selected: boolean, locked: boolean, duplicate: boolean): React.CSSProperties {
+      return {
+        padding: "6px 14px",
+        borderRadius: 6,
+        fontSize: 13,
+        cursor: locked || duplicate ? "default" : "pointer",
+        border: `1px solid ${selected ? C.accentHl : duplicate ? "rgba(160,180,220,0.12)" : "rgba(255,255,255,0.12)"}`,
+        background: selected ? "rgba(56,182,255,0.18)" : duplicate ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.055)",
+        color: selected ? C.accentHl : (locked || duplicate) ? "rgba(160,180,220,0.35)" : C.text,
+        fontWeight: selected ? 700 : 400,
+      };
+    }
 
     function toggleLanguage(language: string) {
       setForm((f) => {
@@ -1913,6 +2732,20 @@ export function CharacterCreatorView() {
             : f.chosenBgLanguages.length < bgLangChoice.choose
               ? [...f.chosenBgLanguages, language]
               : f.chosenBgLanguages,
+        };
+      });
+    }
+
+    function toggleRaceLanguage(language: string, max: number) {
+      setForm((f) => {
+        const sel = f.chosenRaceLanguages.includes(language);
+        return {
+          ...f,
+          chosenRaceLanguages: sel
+            ? f.chosenRaceLanguages.filter((name) => name !== language)
+            : f.chosenRaceLanguages.length < max
+              ? [...f.chosenRaceLanguages, language]
+              : f.chosenRaceLanguages,
         };
       });
     }
@@ -1949,7 +2782,7 @@ export function CharacterCreatorView() {
       });
     }
 
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Skills &amp; Proficiencies</h2>
 
@@ -1968,7 +2801,8 @@ export function CharacterCreatorView() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {skillList.map((skill) => {
                 const sel = form.chosenSkills.includes(skill);
-                const locked = !sel && form.chosenSkills.length >= numSkills;
+                const duplicate = duplicateLocked("skill", skill, sel);
+                const locked = (!sel && form.chosenSkills.length >= numSkills) || duplicate;
                 return (
                   <button key={skill} type="button" disabled={locked}
                     onClick={() => setForm((f) => ({
@@ -1977,13 +2811,7 @@ export function CharacterCreatorView() {
                         ? f.chosenSkills.filter(s => s !== skill)
                         : f.chosenSkills.length < numSkills ? [...f.chosenSkills, skill] : f.chosenSkills,
                     }))}
-                    style={{
-                      padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
-                      border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                      background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
-                      color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
-                      fontWeight: sel ? 700 : 400,
-                    }}>
+                    style={choiceButtonStyle(sel, locked, duplicate)}>
                     {skill}
                   </button>
                 );
@@ -2016,17 +2844,12 @@ export function CharacterCreatorView() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {(bgLangChoice.from ?? ALL_LANGUAGES).map((language) => {
                   const sel = form.chosenBgLanguages.includes(language);
-                  const locked = !sel && form.chosenBgLanguages.length >= bgLangChoice.choose;
+                  const duplicate = duplicateLocked("language", language, sel);
+                  const locked = (!sel && form.chosenBgLanguages.length >= bgLangChoice.choose) || duplicate;
                   return (
                     <button key={language} type="button" disabled={locked}
                       onClick={() => toggleLanguage(language)}
-                      style={{
-                        padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
-                        border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                        background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
-                        color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
-                        fontWeight: sel ? 700 : 400,
-                      }}>
+                      style={choiceButtonStyle(sel, locked, duplicate)}>
                       {language}
                     </button>
                   );
@@ -2035,6 +2858,75 @@ export function CharacterCreatorView() {
             )}
           </div>
         )}
+
+        {core55eLanguageChoice && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ ...labelStyle, margin: 0 }}>
+                Languages <span style={sourceTagStyle}>{core55eLanguageChoice.source}</span>
+              </div>
+              <span style={{ fontSize: 12, color: form.chosenRaceLanguages.length >= core55eLanguageChoice.choose ? C.accentHl : C.muted }}>
+                {form.chosenRaceLanguages.length} / {core55eLanguageChoice.choose}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {core55eLanguageChoice.fixed.map((language) => (
+                <span key={language} style={profChipStyle}>{language}</span>
+              ))}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {core55eLanguageChoice.from.map((language) => {
+                const sel = form.chosenRaceLanguages.includes(language);
+                const duplicate = duplicateLocked("language", language, sel);
+                const locked = (!sel && form.chosenRaceLanguages.length >= core55eLanguageChoice.choose) || duplicate;
+                return (
+                  <button key={language} type="button" disabled={locked}
+                    onClick={() => toggleRaceLanguage(language, core55eLanguageChoice.choose)}
+                    style={choiceButtonStyle(sel, locked, duplicate)}>
+                    {language}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {classFeatChoices.map((choice) => {
+          const selectedId = form.chosenClassFeatIds[choice.featureName] ?? "";
+          return (
+            <div key={choice.featureName} style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ ...labelStyle, margin: 0 }}>
+                  {getClassFeatChoiceLabel(choice.featGroup)} <span style={sourceTagStyle}>{choice.featureName}</span>
+                </div>
+                <span style={{ fontSize: 12, color: selectedId ? C.accentHl : C.muted }}>
+                  {selectedId ? "1 / 1" : "Required"}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {choice.options.map((option) => {
+                  const selected = selectedId === option.id;
+                  return (
+                    <button key={option.id} type="button"
+                      onClick={() => setForm((f) => ({
+                        ...f,
+                        chosenClassFeatIds: { ...f.chosenClassFeatIds, [choice.featureName]: option.id },
+                      }))}
+                      style={{
+                        padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                        border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
+                        background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
+                        color: selected ? C.accentHl : C.text,
+                        fontWeight: selected ? 700 : 400,
+                      }}>
+                      {getClassFeatOptionLabel(option.name, choice.featGroup)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
 
         {bgFeatChoices.map(({ featName, feat, choice, key }) => {
           const options = getFeatChoiceOptions(choice);
@@ -2066,17 +2958,70 @@ export function CharacterCreatorView() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 220, overflowY: "auto", padding: "2px 0" }}>
                 {options.map((option) => {
                   const sel = selected.includes(option);
-                  const locked = !sel && selected.length >= choice.count;
+                  const duplicate = choice.type === "proficiency" && choice.anyOf?.includes("tool")
+                    ? duplicateLocked("tool", option, sel)
+                    : choice.type === "proficiency" && choice.anyOf?.includes("language")
+                      ? duplicateLocked("language", option, sel)
+                      : choice.type === "proficiency" && choice.anyOf?.includes("skill")
+                        ? duplicateLocked("skill", option, sel)
+                        : false;
+                  const locked = (!sel && selected.length >= choice.count) || duplicate;
                   return (
                     <button key={option} type="button" disabled={locked}
                       onClick={() => toggleFeatChoice(key, option, choice.count)}
-                      style={{
-                        padding: "6px 14px", borderRadius: 6, fontSize: 13, cursor: locked ? "default" : "pointer",
-                        border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                        background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
-                        color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
-                        fontWeight: sel ? 700 : 400,
-                      }}>
+                      style={choiceButtonStyle(sel, locked, duplicate)}>
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+              {choice.note && <div style={{ color: C.muted, fontSize: 12, marginTop: 8 }}>{choice.note}</div>}
+            </div>
+          );
+        })}
+
+        {raceFeatChoices.map(({ featName, feat, choice, key }) => {
+          const options = getFeatChoiceOptions(choice);
+          const selected = form.chosenFeatOptions[key] ?? [];
+          const fixedGrants = [
+            ...feat.grants.skills,
+            ...feat.grants.tools,
+            ...feat.grants.languages,
+            ...feat.grants.weapons,
+            ...feat.grants.armor,
+          ];
+          return (
+            <div key={key} style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ ...labelStyle, margin: 0 }}>
+                  {featName} <span style={{ ...sourceTagStyle, background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.4)", color: "#fb923c" }}>{raceDetail?.name}</span>
+                </div>
+                <span style={{ fontSize: 12, color: selected.length >= choice.count ? C.accentHl : C.muted }}>
+                  {selected.length} / {choice.count}
+                </span>
+              </div>
+              {fixedGrants.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                  {fixedGrants.map((grant) => (
+                    <span key={`${key}:${grant}`} style={profChipStyle}>{grant}</span>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 220, overflowY: "auto", padding: "2px 0" }}>
+                {options.map((option) => {
+                  const sel = selected.includes(option);
+                  const duplicate = choice.type === "proficiency" && choice.anyOf?.includes("tool")
+                    ? duplicateLocked("tool", option, sel)
+                    : choice.type === "proficiency" && choice.anyOf?.includes("language")
+                      ? duplicateLocked("language", option, sel)
+                      : choice.type === "proficiency" && choice.anyOf?.includes("skill")
+                        ? duplicateLocked("skill", option, sel)
+                        : false;
+                  const locked = (!sel && selected.length >= choice.count) || duplicate;
+                  return (
+                    <button key={option} type="button" disabled={locked}
+                      onClick={() => toggleFeatChoice(key, option, choice.count)}
+                      style={choiceButtonStyle(sel, locked, duplicate)}>
                       {option}
                     </button>
                   );
@@ -2124,13 +3069,34 @@ export function CharacterCreatorView() {
           <p style={{ color: C.muted, fontSize: 14 }}>There are no skill, language, or mastery choices at this level.</p>
         )}
 
-        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} />
+        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} nextDisabled={missingClassFeatChoices || missingCore55eLanguages} />
       </div>
     );
+
+    const side = (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {selectedClassFeatEntries.map(({ choice, detail }) => (
+          <div key={choice.featureName} style={detailBoxStyle}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.accentHl, marginBottom: 10 }}>
+              {getClassFeatChoiceLabel(choice.featGroup)}
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
+              {getClassFeatOptionLabel(detail.name, choice.featGroup)}
+            </div>
+            <div style={{ color: "rgba(160,180,220,0.75)", fontSize: 12, lineHeight: 1.5 }}>
+              {(detail.text ?? "").replace(/Source:.*$/m, "").trim()}
+            </div>
+          </div>
+        ))}
+        {SideSummaryCard()}
+      </div>
+    );
+
+    return { main, side };
   }
 
   // Step 6: Spells & Invocations
-  function StepSpells() {
+  function StepSpells(): { main: React.ReactNode; side: React.ReactNode } {
     const cantripCount = classDetail ? getCantripCount(classDetail, form.level) : 0;
     const maxSlotLvl   = classDetail ? getMaxSlotLevel(classDetail, form.level) : 0;
     const isCaster = classDetail ? isSpellcaster(classDetail) : false;
@@ -2153,7 +3119,7 @@ export function CharacterCreatorView() {
 
     const hasAnything = isCaster || invocCount > 0;
 
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Spells</h2>
 
@@ -2193,10 +3159,12 @@ export function CharacterCreatorView() {
         <NavButtons step={step} onBack={() => setStep(5)} onNext={() => setStep(7)} />
       </div>
     );
+
+    return { main, side: SideSummaryCard() };
   }
 
   // Step 7: Ability Scores
-  function StepAbilityScores() {
+  function StepAbilityScores(): { main: React.ReactNode; side: React.ReactNode } {
     const usedIndices = Object.values(form.standardAssign).filter((v) => v >= 0);
     const spent = pointBuySpent(form.pbScores);
     const remaining = POINT_BUY_BUDGET - spent;
@@ -2230,7 +3198,7 @@ export function CharacterCreatorView() {
       );
     }
 
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Ability Scores</h2>
 
@@ -2368,15 +3336,17 @@ export function CharacterCreatorView() {
         <NavButtons step={step} onBack={() => setStep(6)} onNext={() => setStep(8)} />
       </div>
     );
+
+    return { main, side: SideSummaryCard() };
   }
 
   // Step 8: Derived Stats
-  function StepDerivedStats() {
+  function StepDerivedStats(): { main: React.ReactNode; side: React.ReactNode } {
     const scores = resolvedScores(form);
     const conMod = abilityMod(scores.con ?? 10);
     const dexMod = abilityMod(scores.dex ?? 10);
     const hd = classDetail?.hd ?? 8;
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Combat Stats</h2>
         <p style={{ color: C.muted, marginBottom: 16 }}>Auto-calculated from your choices — override freely.</p>
@@ -2405,9 +3375,10 @@ export function CharacterCreatorView() {
         </div>
         {/* Proficiency summary */}
         {(() => {
-          const prof = buildProficiencyMap(
+          const prof = buildProficiencyMapForRuleset(
+            selectedRuleset ?? "5e",
             form, classDetail, raceDetail, bgDetail,
-            classCantrips, classSpells, classInvocations,
+            classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails,
           );
           const sections = [
             { label: "Skills",      items: prof.skills },
@@ -2444,10 +3415,12 @@ export function CharacterCreatorView() {
         <NavButtons step={step} onBack={() => setStep(7)} onNext={() => setStep(9)} />
       </div>
     );
+
+    return { main, side: SideSummaryCard() };
   }
 
   // Step 9: Identity
-  function StepIdentity() {
+  function StepIdentity(): { main: React.ReactNode; side: React.ReactNode } {
     const COLORS = ["#38b6ff", "#5ecb6b", "#f0a500", "#ff5d5d", "#a78bfa", "#fb923c", "#e879f9", "#94a3b8"];
     const detailFields: Array<{ key: keyof FormState; label: string; placeholder: string }> = [
       { key: "alignment", label: "Alignment", placeholder: "Chaotic Good" },
@@ -2468,7 +3441,7 @@ export function CharacterCreatorView() {
       setPortraitPreview(url);
     }
 
-    return (
+    const main = (
       <div>
         <h2 style={headingStyle}>Character Identity</h2>
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
@@ -2526,7 +3499,7 @@ export function CharacterCreatorView() {
                 <div key={key}>
                   <label style={labelStyle}>{label}</label>
                   <input
-                    value={form[key] ?? ""}
+                    value={(form[key] as string) ?? ""}
                     onChange={(e) => set(key, e.target.value)}
                     placeholder={placeholder}
                     style={{ ...inputStyle, width: "100%" }}
@@ -2553,11 +3526,13 @@ export function CharacterCreatorView() {
           nextDisabled={!form.characterName.trim()} />
       </div>
     );
+
+    return { main, side: SideSummaryCard() };
   }
 
   // Step 10: Campaigns
-  function StepCampaigns() {
-    return (
+  function StepCampaigns(): { main: React.ReactNode; side: React.ReactNode } {
+    const main = (
       <div>
         <h2 style={headingStyle}>Assign to Campaigns</h2>
         <p style={{ color: C.muted, marginBottom: 16 }}>Optional — you can assign later from your home page.</p>
@@ -2597,6 +3572,8 @@ export function CharacterCreatorView() {
         </div>
       </div>
     );
+
+    return { main, side: SideSummaryCard() };
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -2609,9 +3586,11 @@ export function CharacterCreatorView() {
     );
   }
 
+  const { main, side } = renderStep();
+
   return (
     <div style={{ height: "100%", overflowY: "auto", background: C.bg, color: C.text }}>
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "36px 28px" }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "36px 28px" }}>
         <h1 style={{ fontWeight: 900, fontSize: "var(--fs-hero)", margin: "0 0 8px", letterSpacing: -0.5 }}>
           {isEditing ? "Edit Character" : "Create Character"}
         </h1>
@@ -2619,7 +3598,10 @@ export function CharacterCreatorView() {
           {isEditing ? "Update your character details below." : "Build your character step by step."}
         </p>
         <StepHeader current={step} onStepClick={(s) => setStep(s)} />
-        {renderStep()}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 32, alignItems: "start" }}>
+          <div>{main}</div>
+          <div style={{ position: "sticky", top: 36 }}>{side}</div>
+        </div>
       </div>
     </div>
   );

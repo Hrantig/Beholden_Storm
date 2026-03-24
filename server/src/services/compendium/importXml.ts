@@ -3,8 +3,27 @@ import { XMLParser } from "fast-xml-parser";
 import { asArray, asText, normalizeKey, parseCrValue } from "../../lib/text.js";
 import { parseAttackFromText } from "../../lib/attacks.js";
 import { normalizeHp } from "./normalizeHp.js";
-import { parseBackgroundProficiencies } from "../../lib/proficiencyConstants.js";
+import { parseBackgroundProficiencies, parseRaceChoicesByRuleset } from "../../lib/proficiencyConstants.js";
 import { parseFeat } from "../../lib/featParser.js";
+
+type Ruleset = "5e" | "5.5e";
+
+function inferRuleset(...values: Array<unknown>): Ruleset {
+  const text = values
+    .map((value) => String(value ?? ""))
+    .join("\n");
+  return /\[(?:2024|5\.5e)\]|\((?:2024|5\.5e)\)|\b2024\b|\b5\.5e\b/i.test(text) ? "5.5e" : "5e";
+}
+
+function extractLabeledLine(text: string, labelPattern: RegExp): string | null {
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(new RegExp(`${labelPattern.source}\\s*:\\s*(.+)$`, "i"));
+    if (match?.[1]) return match[1].trim();
+  }
+  return null;
+}
 
 export function importCompendiumXml(args: {
   xml: string;
@@ -86,6 +105,7 @@ export function importCompendiumXml(args: {
       const data = {
         id: `m_${nameKey}`,
         name,
+        ruleset: inferRuleset(name, asText(m?.environment), asText(m?.type)),
         nameKey,
         name_key: nameKey,
         cr: crStr,
@@ -173,6 +193,7 @@ export function importCompendiumXml(args: {
       const data = {
         id,
         name: displayName,
+        ruleset: inferRuleset(displayName, texts.join("\n")),
         nameKey: fullKey,
         name_key: fullKey,
         baseName: normalizedName,
@@ -248,7 +269,7 @@ export function importCompendiumXml(args: {
       });
 
       const data = {
-        id, name, nameKey, name_key: nameKey, hd,
+        id, name, ruleset: inferRuleset(name), nameKey, name_key: nameKey, hd,
         proficiency: asText(c?.proficiency) || "",
         numSkills: c?.numSkills != null ? Number(c.numSkills) : 0,
         armor: asText(c?.armor) || "",
@@ -293,10 +314,14 @@ export function importCompendiumXml(args: {
       }
 
       const data = {
-        id, name, nameKey, name_key: nameKey,
+        id, name, ruleset: inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n")), nameKey, name_key: nameKey,
         size, speed,
         resist: asText(r?.resist) || null,
         vision,
+        parsedChoices: parseRaceChoicesByRuleset(
+          inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n")),
+          traits.map((t) => ({ name: t.name, text: t.text })),
+        ),
         traits,
       };
 
@@ -314,14 +339,16 @@ export function importCompendiumXml(args: {
         text: asText(t?.text) || "",
       }));
 
+      const bgRuleset = inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n"));
       const proficiencies = parseBackgroundProficiencies({
         proficiency: asText(bg?.proficiency) || "",
         trait: asArray(bg?.trait),
+        ruleset: bgRuleset,
       });
 
       // Starting equipment — prefer trait named "Starting Equipment", fallback to <equipment> tag
       let equipment = "";
-      const equipTrait = traits.find((t) => /starting equipment/i.test(t.name));
+      const equipTrait = traits.find((t) => /(?:starting|choose)\s+equipment/i.test(t.name));
       if (equipTrait) {
         equipment = equipTrait.text.replace(/Source:.*$/gim, "").trim();
       } else if (bg?.equipment) {
@@ -338,10 +365,13 @@ export function importCompendiumXml(args: {
           if (items.length > 0) equipment = items.join(", ");
           else equipment = asText(eq) || "";
         }
+      } else if (bgRuleset === "5e") {
+        const descriptionTrait = traits.find((t) => /^description$/i.test(t.name));
+        equipment = extractLabeledLine(descriptionTrait?.text ?? "", /Equipment/i) ?? "";
       }
 
       const data = {
-        id, name, nameKey, name_key: nameKey,
+        id, name, ruleset: bgRuleset, nameKey, name_key: nameKey,
         proficiency: asText(bg?.proficiency) || "",
         proficiencies,
         traits,
@@ -375,7 +405,7 @@ export function importCompendiumXml(args: {
       });
 
       const data = {
-        id, name, nameKey, name_key: nameKey,
+        id, name, ruleset: inferRuleset(name, asText(ft?.text), prerequisite, special), nameKey, name_key: nameKey,
         text: asText(ft?.text) || "",
         prerequisite,
         proficiency,
@@ -419,12 +449,14 @@ function xmlItemToJson(it: any): any | null {
     .map((t: any) => (t == null ? "" : String(t)).trim())
     .filter((t: string) => t.length > 0);
 
-  // Weapon stats
+  // Weapon / armor stats
   const dmg1 = it?.dmg1 != null ? String(it.dmg1).trim() : null;
   const dmg2 = it?.dmg2 != null ? String(it.dmg2).trim() : null;
   const dmgType = it?.dmgType != null ? String(it.dmgType).trim() : null;
   const weight = it?.weight != null ? Number(it.weight) : null;
   const value = it?.value != null ? Number(it.value) : null;
+  const ac = it?.ac != null ? Number(it.ac) : null;
+  const stealthDisadvantage = String(it?.stealth ?? "").trim().toUpperCase() === "YES";
 
   // Properties: single tag with comma-separated codes e.g. "F,L" or "2H"
   const propertyRaw = it?.property != null ? String(it.property).trim() : "";
@@ -444,6 +476,7 @@ function xmlItemToJson(it: any): any | null {
   return {
     id,
     name,
+    ruleset: inferRuleset(name, it?.detail, text.join("\n")),
     name_key: nameKey,
     nameKey,
     rarity,
@@ -454,6 +487,8 @@ function xmlItemToJson(it: any): any | null {
     magic,
     weight: Number.isFinite(weight) ? weight : null,
     value: Number.isFinite(value) ? value : null,
+    ac: Number.isFinite(ac) ? ac : null,
+    stealthDisadvantage,
     dmg1: dmg1 || null,
     dmg2: dmg2 || null,
     dmgType: dmgType || null,

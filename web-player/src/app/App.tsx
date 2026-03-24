@@ -9,6 +9,10 @@ import { AppShell } from "./AppShell";
 const CompendiumView = React.lazy(() => import("@/views/CompendiumView/CompendiumView").then(m => ({ default: m.CompendiumView })));
 const CharacterCreatorView = React.lazy(() => import("@/views/CharacterCreatorView").then(m => ({ default: m.CharacterCreatorView })));
 const CharacterView = React.lazy(() => import("@/views/CharacterView").then(m => ({ default: m.CharacterView })));
+const LevelUpView = React.lazy(() => import("@/views/LevelUpView").then(m => ({ default: m.LevelUpView })));
+const ProfileView = React.lazy(() => import("@/views/ProfileView").then(m => ({ default: m.ProfileView })));
+const CampaignPartyView = React.lazy(() => import("@/views/CampaignPartyView").then(m => ({ default: m.CampaignPartyView })));
+const PartyMemberView = React.lazy(() => import("@/views/PartyMemberView").then(m => ({ default: m.PartyMemberView })));
 
 function AuthGate() {
   const { user, isLoading } = useAuth();
@@ -42,6 +46,10 @@ function AuthGate() {
           <Route path="/characters/new" element={<CharacterCreatorView />} />
           <Route path="/characters/:id" element={<CharacterView />} />
           <Route path="/characters/:id/edit" element={<CharacterCreatorView />} />
+          <Route path="/characters/:id/levelup" element={<LevelUpView />} />
+          <Route path="/profile" element={<ProfileView />} />
+          <Route path="/campaigns/:id" element={<CampaignPartyView />} />
+          <Route path="/campaigns/:id/members/:playerId" element={<PartyMemberView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </React.Suspense>

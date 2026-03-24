@@ -22,4 +22,5 @@ export const OverridesSchema = z.object({
   tempHp: z.number().default(0),
   acBonus: z.number().default(0),
   hpMaxBonus: z.number().default(0),
+  inspiration: z.boolean().default(false),
 });

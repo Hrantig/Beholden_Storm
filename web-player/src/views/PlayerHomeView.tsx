@@ -1,8 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/services/api";
 import { C } from "@/lib/theme";
 import { IconPlayer } from "@/icons";
+
+const LS_KEY = "beholden:lastOpened";
+
+function readLastOpened(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "{}"); } catch { return {}; }
+}
+function touchLastOpened(id: string) {
+  const map = readLastOpened();
+  map[id] = Date.now();
+  localStorage.setItem(LS_KEY, JSON.stringify(map));
+}
 
 interface Campaign {
   id: string;
@@ -40,6 +51,7 @@ export function PlayerHomeView() {
   const [characters, setCharacters] = useState<UserCharacter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastOpened, setLastOpened] = useState<Record<string, number>>(readLastOpened);
 
   function reload() {
     return Promise.all([
@@ -56,6 +68,26 @@ export function PlayerHomeView() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openCharacter(id: string) {
+    touchLastOpened(id);
+    setLastOpened(readLastOpened());
+    navigate(`/characters/${id}`);
+  }
+
+  function openCampaign(id: string) {
+    touchLastOpened(id);
+    setLastOpened(readLastOpened());
+    navigate(`/campaigns/${id}`);
+  }
+
+  const sortedCharacters = useMemo(() =>
+    [...characters].sort((a, b) => (lastOpened[b.id] ?? 0) - (lastOpened[a.id] ?? 0)),
+  [characters, lastOpened]);
+
+  const sortedCampaigns = useMemo(() =>
+    [...campaigns].sort((a, b) => (lastOpened[b.id] ?? 0) - (lastOpened[a.id] ?? 0)),
+  [campaigns, lastOpened]);
 
   return (
     <div style={{ height: "100%", background: C.bg, color: C.text, overflowY: "auto" }}>
@@ -77,9 +109,14 @@ export function PlayerHomeView() {
         )}
 
         {!loading && characters.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 40 }}>
-            {characters.map((ch) => (
-              <CharacterRow key={ch.id} ch={ch} navigate={navigate} onRefresh={reload} />
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: 14,
+            marginBottom: 40,
+          }}>
+            {sortedCharacters.map((ch) => (
+              <CharacterRow key={ch.id} ch={ch} onOpen={openCharacter} onRefresh={reload} />
             ))}
           </div>
         )}
@@ -93,12 +130,12 @@ export function PlayerHomeView() {
               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
               gap: 18,
             }}>
-              {campaigns.map((c) => (
+              {sortedCampaigns.map((c) => (
                 <CampaignCard
                   key={c.id}
                   campaign={c}
                   characters={characters}
-                  navigate={navigate}
+                  onOpen={openCampaign}
                 />
               ))}
             </div>
@@ -109,17 +146,23 @@ export function PlayerHomeView() {
   );
 }
 
-// ── Character row ────────────────────────────────────────────────────────────
+// ── Character card ───────────────────────────────────────────────────────────
 
-function CharacterRow({ ch, navigate, onRefresh }: {
+function CharacterRow({ ch, onOpen, onRefresh }: {
   ch: UserCharacter;
-  navigate: ReturnType<typeof useNavigate>;
+  onOpen: (id: string) => void;
   onRefresh: () => Promise<void>;
 }) {
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const color = ch.color ?? C.accentHl;
+  const hpPct = ch.hpMax > 0 ? Math.max(0, Math.min(100, Math.round((ch.hpCurrent / ch.hpMax) * 100))) : 0;
+  const hpColor = hpPct <= 0 ? "#6b7280" : hpPct < 25 ? "#f87171" : hpPct < 50 ? "#fb923c" : hpPct < 75 ? "#fbbf24" : "#4ade80";
+  const hpLabel = hpPct <= 0 ? "Down" : hpPct < 25 ? "Critical" : hpPct < 50 ? "Bloodied" : hpPct < 75 ? "Bloody" : "Healthy";
 
   async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -146,73 +189,101 @@ function CharacterRow({ ch, navigate, onRefresh }: {
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 12,
       background: "rgba(255,255,255,0.04)",
-      border: `1px solid ${confirmDelete ? "rgba(248,113,113,0.35)" : "rgba(255,255,255,0.09)"}`,
-      borderRadius: 10, padding: "10px 14px",
+      border: `1px solid ${confirmDelete ? "rgba(248,113,113,0.35)" : `${color}33`}`,
+      borderRadius: 14,
+      padding: 16,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
       transition: "border-color 0.15s",
     }}>
       <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelected} style={{ display: "none" }} />
 
-      {/* Portrait / color dot */}
-      <div
-        onClick={() => fileRef.current?.click()}
-        title="Click to set portrait"
-        style={{
-          width: 40, height: 40, borderRadius: 8, flexShrink: 0, cursor: "pointer",
-          overflow: "hidden", position: "relative",
-          background: ch.color ?? "rgba(56,182,255,0.2)",
-          border: `2px solid ${ch.color ?? "rgba(56,182,255,0.3)"}`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-        {ch.imageUrl
-          ? <img src={ch.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <IconPlayer size={22} style={{ opacity: 0.4 }} />
-        }
-        {uploading && (
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>…</div>
-        )}
-      </div>
-
-      <div
-        style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
-        onClick={() => navigate(`/characters/${ch.id}`)}
-      >
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{ch.name}</div>
-        <div style={{ fontSize: 12, color: C.muted }}>
-          {[ch.className, ch.species, `Level ${ch.level}`].filter(Boolean).join(" · ")}
+      {/* Top row: portrait + info + AC */}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        {/* Portrait */}
+        <div
+          onClick={() => fileRef.current?.click()}
+          title="Click to change portrait"
+          style={{
+            width: 54, height: 54, borderRadius: 10, flexShrink: 0, cursor: "pointer",
+            overflow: "hidden", position: "relative",
+            background: `${color}22`, border: `2px solid ${color}55`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+          {ch.imageUrl
+            ? <img src={ch.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <IconPlayer size={28} style={{ opacity: 0.4 }} />}
+          {uploading && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>…</div>
+          )}
         </div>
-        {ch.campaigns.length > 0 && (
-          <div style={{ fontSize: 11, color: C.accentHl, marginTop: 2 }}>
-            {ch.campaigns.map((c) => c.campaignName).join(", ")}
+
+        {/* Info — clickable to open sheet */}
+        <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => onOpen(ch.id)}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {ch.name}
           </div>
-        )}
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+            {[ch.className, ch.species].filter(Boolean).join(" · ")}
+          </div>
+          <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 1 }}>Level {ch.level}</div>
+        </div>
+
+        {/* AC badge */}
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+          background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "4px 10px", flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 18, fontWeight: 900, color: C.text }}>{ch.ac}</span>
+          <span style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>AC</span>
+        </div>
       </div>
 
+      {/* HP bar */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 11, color: hpColor, fontWeight: 700 }}>{hpLabel}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>{ch.hpCurrent} / {ch.hpMax}</span>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div style={{ height: "100%", borderRadius: 3, width: `${hpPct}%`, background: hpColor, transition: "width 0.4s" }} />
+        </div>
+      </div>
+
+      {/* Campaigns */}
+      {ch.campaigns.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {ch.campaigns.map((c) => (
+            <span key={c.id} style={{
+              fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 600,
+              background: `${color}18`, border: `1px solid ${color}44`, color,
+            }}>
+              {c.campaignName}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
       {confirmDelete ? (
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: C.red, whiteSpace: "nowrap" }}>Delete?</span>
-          <button
-            disabled={deleting}
-            onClick={handleDelete}
-            style={{ ...ghostBtn, color: C.red, borderColor: "rgba(248,113,113,0.45)", fontSize: 12 }}
-          >
-            {deleting ? "…" : "Yes"}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>Delete this character?</span>
+          <button disabled={deleting} onClick={handleDelete}
+            style={{ ...ghostBtn, color: "#f87171", borderColor: "rgba(248,113,113,0.45)", fontSize: 12 }}>
+            {deleting ? "…" : "Yes, delete"}
           </button>
-          <button
-            onClick={() => setConfirmDelete(false)}
-            style={ghostBtn}
-          >
-            No
-          </button>
+          <button onClick={() => setConfirmDelete(false)} style={ghostBtn}>Cancel</button>
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button style={ghostBtn} onClick={() => navigate(`/characters/${ch.id}/edit`)}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={{ ...ghostBtn, flex: 1 }} onClick={() => navigate(`/characters/${ch.id}/edit`)}>
             Edit
           </button>
+
           <button
-            style={{ ...ghostBtn, color: "rgba(248,113,113,0.7)", borderColor: "rgba(248,113,113,0.25)" }}
+            style={{ ...ghostBtn, flex: 1, color: "rgba(248,113,113,0.7)", borderColor: "rgba(248,113,113,0.25)" }}
             onClick={() => setConfirmDelete(true)}
           >
             Delete
@@ -225,11 +296,12 @@ function CharacterRow({ ch, navigate, onRefresh }: {
 
 // ── Campaign card ────────────────────────────────────────────────────────────
 
-function CampaignCard({ campaign: c, characters, navigate }: {
+function CampaignCard({ campaign: c, characters, onOpen }: {
   campaign: Campaign;
   characters: UserCharacter[];
-  navigate: ReturnType<typeof useNavigate>;
+  onOpen: (id: string) => void;
 }) {
+  const navigate = useNavigate();
   const [imgHovered, setImgHovered] = useState(false);
 
   const assignedChars = characters.filter((ch) =>
@@ -309,7 +381,7 @@ function CampaignCard({ campaign: c, characters, navigate }: {
       <div style={{ padding: "0 12px 14px", display: "flex", gap: 8 }}>
         <button
           style={{ ...accentBtn, flex: 1 }}
-          onClick={() => navigate(`/campaigns/${c.id}`)}
+          onClick={() => onOpen(c.id)}
         >
           Open
         </button>

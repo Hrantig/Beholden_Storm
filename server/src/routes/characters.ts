@@ -212,7 +212,23 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
     const char = rowToUserCharacter(row);
     const assignments = getAssignments(char.id);
-    res.json({ ...mergeLiveStats(char, assignments), campaigns: assignmentsToJson(assignments) });
+    const merged = mergeLiveStats(char, assignments);
+
+    // Collect campaign-level shared notes as a separate field (read-only for player)
+    const campaignNotes: unknown[] = [];
+    for (const a of assignments) {
+      const camp = db.prepare("SELECT shared_notes FROM campaigns WHERE id = ?")
+        .get(a.campaign_id) as { shared_notes: string | null } | undefined;
+      if (camp?.shared_notes) {
+        try { campaignNotes.push(...(JSON.parse(camp.shared_notes) as unknown[])); } catch { /* ignore */ }
+      }
+    }
+
+    res.json({
+      ...merged,
+      campaignSharedNotes: JSON.stringify(campaignNotes),
+      campaigns: assignmentsToJson(assignments),
+    });
   });
 
   // Create a new user-owned character (no campaign required)
@@ -397,6 +413,36 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     }
 
     res.json({ ok: true, deathSaves });
+  });
+
+  // Toggle inspiration (writes to linked players overrides_json + broadcasts)
+  app.patch("/api/me/characters/:id/inspiration", requireAuth, (req, res) => {
+    const charId = requireParam(req, res, "id");
+    if (!charId) return;
+    const userId = (req as any).user.userId;
+    const existing = db
+      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
+      .get(charId, userId) as { id: string } | undefined;
+    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+
+    const inspiration: boolean = typeof req.body?.inspiration === "boolean" ? req.body.inspiration : false;
+    const t = now();
+
+    const assignments = db
+      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
+      .all(charId) as { player_id: string; campaign_id: string }[];
+
+    for (const { player_id, campaign_id } of assignments) {
+      const row = db.prepare("SELECT overrides_json FROM players WHERE id = ?")
+        .get(player_id) as { overrides_json: string } | undefined;
+      const overrides = JSON.parse(row?.overrides_json || "{}") as Record<string, unknown>;
+      overrides.inspiration = inspiration;
+      db.prepare("UPDATE players SET overrides_json=?, updated_at=? WHERE id=?")
+        .run(JSON.stringify(overrides), t, player_id);
+      ctx.broadcast("players:changed", { campaignId: campaign_id });
+    }
+
+    res.json({ ok: true, inspiration });
   });
 
   // Update shared notes (written to user_characters + synced to all players rows + broadcast)

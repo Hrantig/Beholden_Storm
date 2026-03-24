@@ -53,7 +53,7 @@ export function PlayersPanel(props: {
       }
       actions={
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <IconButton title="Full Rest" onClick={props.onFullRest}>
+          <IconButton title="Full Rest" onClick={props.onFullRest} variant="accent">
             <IconRest />
           </IconButton>
           <IconButton onClick={props.onCreatePlayer} title="Add player" variant="accent">

@@ -18,6 +18,7 @@ export interface StoredOverrides {
   tempHp: number;
   acBonus: number;
   hpMaxBonus: number;
+  inspiration?: boolean;
 }
 
 // Alias kept for call-site compatibility.
