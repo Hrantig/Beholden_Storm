@@ -12,6 +12,7 @@ import { api } from "@/services/api";
 interface ImportResult {
   imported: number;
   total: number;
+  items?: number;
   classes?: number;
   races?: number;
   backgrounds?: number;
@@ -68,7 +69,7 @@ export function CompendiumAdminPanel() {
         }
       >
         <div style={{ color: theme.colors.muted, lineHeight: 1.4 }}>
-          Upload a Fight Club–style compendium XML. The server stores it in a local database. Re-importing an entry with the same name (case-insensitive, ignoring trailing
+          Upload a Fight Club-style compendium XML. The server stores it in a local database. Re-importing an entry with the same name (case-insensitive, ignoring trailing
           <code>[...]</code>) will replace the existing entry.
           <br />
           <code>
@@ -87,7 +88,7 @@ export function CompendiumAdminPanel() {
             style={{ color: theme.colors.text }}
           />
           <Button onClick={uploadCompendium} disabled={!file || busy}>
-            {busy ? "Importing…" : "Import XML"}
+            {busy ? "Importing..." : "Import XML"}
           </Button>
           <Button variant="ghost" onClick={deleteCompendium} disabled={busy}>
             Delete Compendium
@@ -100,11 +101,12 @@ export function CompendiumAdminPanel() {
 
         {lastImport && (
           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: "6px 14px", color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
-            {lastImport.imported > 0 && <span>🐉 {lastImport.imported} monsters</span>}
-            {(lastImport.classes ?? 0) > 0 && <span>⚔️ {lastImport.classes} classes</span>}
-            {(lastImport.races ?? 0) > 0 && <span>🧝 {lastImport.races} species</span>}
-            {(lastImport.backgrounds ?? 0) > 0 && <span>📜 {lastImport.backgrounds} backgrounds</span>}
-            {(lastImport.feats ?? 0) > 0 && <span>✨ {lastImport.feats} feats</span>}
+            {lastImport.imported > 0 && <span>Monsters: {lastImport.imported}</span>}
+            {(lastImport.items ?? 0) > 0 && <span>Items: {lastImport.items}</span>}
+            {(lastImport.classes ?? 0) > 0 && <span>Classes: {lastImport.classes}</span>}
+            {(lastImport.races ?? 0) > 0 && <span>Species: {lastImport.races}</span>}
+            {(lastImport.backgrounds ?? 0) > 0 && <span>Backgrounds: {lastImport.backgrounds}</span>}
+            {(lastImport.feats ?? 0) > 0 && <span>Feats: {lastImport.feats}</span>}
           </div>
         )}
       </Panel>

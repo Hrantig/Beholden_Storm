@@ -330,13 +330,49 @@ export function formatWeight(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function isSimpleWeapon(item: InventoryItem): boolean {
+  return isWeaponItem(item) && !isMartialWeapon(item);
+}
+
+function normalizeWeaponProficiencyText(value: string): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return normalized;
+  if (/simple weapons?\s+and\s+martial weapons?\s+that have the finesse or light property/i.test(normalized)) {
+    return "Finesse and Light Weapons";
+  }
+  return normalized;
+}
+
+function weaponMatchesProficiency(item: InventoryItem, proficiencyName: string): boolean {
+  const normalized = normalizeWeaponProficiencyText(proficiencyName).toLowerCase();
+  const itemName = normalizeInventoryItemLookupName(item.name);
+
+  if (!normalized) return false;
+  if (normalized === itemName) return true;
+  if (normalized.includes("improvised weapon")) return /improvised/i.test(item.type ?? "") || /improvised/i.test(item.name);
+
+  const requiresFinesseOrLight = /finesse\s+and\s+light weapons|finesse or light/i.test(normalized);
+  if (requiresFinesseOrLight && !hasItemProperty(item, "F") && !hasItemProperty(item, "L")) return false;
+
+  const mentionsSimple = /\bsimple weapons?\b/.test(normalized);
+  const mentionsMartial = /\bmartial weapons?\b/.test(normalized);
+
+  if (mentionsSimple || mentionsMartial || requiresFinesseOrLight) {
+    if (mentionsSimple && isSimpleWeapon(item)) return true;
+    if (mentionsMartial && isMartialWeapon(item)) return true;
+    if (requiresFinesseOrLight && isWeaponItem(item)) return true;
+    return false;
+  }
+
+  return normalized === itemName;
+}
+
+export function formatWeaponProficiencyName(name: string): string {
+  return normalizeWeaponProficiencyText(name);
+}
+
 export function hasWeaponProficiency(item: InventoryItem, prof: ProficiencyMapLike | undefined): boolean {
-  const names = (prof?.weapons ?? []).map((w) => w.name.toLowerCase());
-  const itemName = item.name.replace(/\s+\[2024\]\s*$/i, "").toLowerCase();
-  if (names.some((n) => n === itemName || itemName.includes(n) || n.includes(itemName))) return true;
-  if (isMartialWeapon(item) && names.some((n) => n.includes("martial weapon"))) return true;
-  if (isWeaponItem(item) && names.some((n) => n.includes("simple weapon"))) return true;
-  return false;
+  return (prof?.weapons ?? []).some((entry) => weaponMatchesProficiency(item, entry.name));
 }
 
 export function conditionDisplayWeaponMeta(item: InventoryItem): string {

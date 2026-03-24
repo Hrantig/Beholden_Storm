@@ -342,7 +342,7 @@ function buildGrantedSpellData(sources: SpellGrantSource[], scores: Record<AbilK
     const spellMatch = text.match(/you can cast\s+([A-Z][A-Za-z' -]+?)\s+without expending a spell slot/i);
     if (!spellMatch) continue;
 
-    const spellName = spellMatch[1].trim();
+    const spellName = spellMatch[1].replace(/\s+on yourself$/i, "").trim();
     const reset = /finish a short rest/i.test(text) ? "S" : /finish a long rest/i.test(text) ? "L" : undefined;
     const abilityCountMatch = text.match(/a number of times equal to your\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+modifier\s*\(minimum of once\)/i);
     const fixedCountMatch = text.match(/\b(once|twice|one|two|three|four|five|six)\b[^.]*without expending a spell slot/i);
@@ -396,7 +396,7 @@ function buildGrantedSpellData(sources: SpellGrantSource[], scores: Record<AbilK
       spellName,
       sourceName,
       mode: "at_will",
-      note: "At will. Cast without expending a spell slot.",
+      note: "",
     });
   }
 
@@ -1015,6 +1015,8 @@ export function CharacterView() {
           <CharacterCombatPanels
             effectiveAc={effectiveAc}
             speed={char.speed}
+            level={char.level}
+            className={char.className}
             dexScore={char.dexScore}
             strScore={char.strScore}
             pb={pb}

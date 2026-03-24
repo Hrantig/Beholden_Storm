@@ -4,6 +4,7 @@ import { Panel, PanelTitle, ProfDot, Tooltip } from "@/views/CharacterViewParts"
 import type { AbilKey, ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
 import { ABILITY_FULL, ABILITY_LABELS, ALL_SKILLS } from "@/views/CharacterSheetConstants";
 import { hasNamedProficiency } from "@/views/CharacterSheetUtils";
+import { formatWeaponProficiencyName } from "@/views/CharacterInventory";
 
 export interface CharacterAbilitiesPanelsProps {
   scores: Record<AbilKey, number | null>;
@@ -183,7 +184,7 @@ export function CharacterAbilitiesPanels({
                             fontWeight: 600,
                           }}
                         >
-                          {item.name}
+                          {s.label === "Weapons" ? formatWeaponProficiencyName(item.name) : item.name}
                         </span>
                       </Tooltip>
                     ))}

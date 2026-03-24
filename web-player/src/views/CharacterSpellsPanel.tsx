@@ -139,6 +139,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
 }) {
   const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
   const [selectedSpell, setSelectedSpell] = React.useState<FetchedSpellDetail | null>(null);
+  const [collapsedSections, setCollapsedSections] = React.useState<Record<string, boolean>>({});
 
   const entries = React.useMemo(() => spells.map((sp) => ({
     rawName: sp.name,
@@ -226,6 +227,10 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
 
   const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
 
+  function toggleSection(key: string) {
+    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   return (
     <Panel>
       {spellcastingBlocked && (
@@ -274,15 +279,19 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
 
       {grantedEntries.length > 0 && (
         <div style={{ marginBottom: 18, opacity: spellcastingBlocked ? 0.65 : 1 }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            paddingBottom: 5, borderBottom: "1px solid rgba(96,165,250,0.25)", marginBottom: 8,
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "#60a5fa", textTransform: "uppercase", letterSpacing: 1 }}>
-              Granted Spells
+          <button
+            type="button"
+            onClick={() => toggleSection("granted")}
+            style={spellSectionHeaderBtn("rgba(96,165,250,0.25)")}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span aria-hidden="true" style={spellSectionArrow(Boolean(collapsedSections.granted), "#60a5fa")}>▼</span>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#60a5fa", textTransform: "uppercase", letterSpacing: 1 }}>
+                Granted Spells
+              </div>
             </div>
-          </div>
-          {grantedEntries.map((entry) => {
+          </button>
+          {!collapsedSections.granted && grantedEntries.map((entry) => {
             const detail = details[entry.key];
             const resource = entry.resourceKey ? resources.find((item) => item.key === entry.resourceKey) : null;
             return (
@@ -305,7 +314,9 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{entry.searchName}</div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{entry.sourceName}</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>{entry.note}</div>
+                  {entry.note ? (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>{entry.note}</div>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {entry.mode === "at_will" ? (
@@ -355,6 +366,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
 
       <div style={{ opacity: spellcastingBlocked ? 0.65 : 1 }}>
       {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupEntries]) => {
+        const sectionKey = `level:${level}`;
+        const isCollapsed = Boolean(collapsedSections[sectionKey]);
         const maxSlots = (levelSlots && level > 0) ? (levelSlots[level] ?? 0) : 0;
         const usedCount = usedSpellSlots[String(level)] ?? 0;
         const remaining = maxSlots - usedCount;
@@ -362,11 +375,14 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
         return (
           <div key={level} style={{ marginBottom: 18 }}>
             {/* Level header with inline slots */}
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              paddingBottom: 5, borderBottom: "1px solid rgba(239,68,68,0.25)", marginBottom: 8,
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "#ef4444", textTransform: "uppercase", letterSpacing: 1 }}>
+            <button
+              type="button"
+              onClick={() => toggleSection(sectionKey)}
+              style={spellSectionHeaderBtn("rgba(239,68,68,0.25)", 8)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span aria-hidden="true" style={spellSectionArrow(isCollapsed, "#ef4444")}>▼</span>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "#ef4444", textTransform: "uppercase", letterSpacing: 1 }}>
                 {level === -1 ? "Loading…" : level === 0 ? "Cantrips" : (LEVEL_LABELS[level] ?? `Level ${level}`)}
               </div>
               {maxSlots > 0 && (
@@ -378,7 +394,10 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                       <button
                         key={i}
                         title={filled ? "Expend slot" : "Regain slot"}
-                        onClick={() => toggleSlot(level, i)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleSlot(level, i);
+                        }}
                         style={{
                           width: 18, height: 18, borderRadius: "50%", padding: 0, cursor: "pointer",
                           border: `2px solid ${filled ? accentColor : "rgba(255,255,255,0.2)"}`,
@@ -389,8 +408,11 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                   })}
                 </div>
               )}
-            </div>
+              </div>
+            </button>
 
+            {!isCollapsed && (
+              <>
             {/* Column headers */}
             <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto auto auto", gap: "0 8px", marginBottom: 4 }}>
               <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>PREP</div>
@@ -476,6 +498,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                 </div>
               );
             })}
+              </>
+            )}
           </div>
         );
       })}
@@ -724,6 +748,37 @@ function grantedSpellChargeBtn(enabled: boolean): React.CSSProperties {
     background: enabled ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.03)",
     color: enabled ? C.text : C.muted,
     fontWeight: 800,
+  };
+}
+
+function spellSectionHeaderBtn(borderColor: string, marginBottom = 8): React.CSSProperties {
+  return {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 0 5px",
+    marginBottom,
+    background: "transparent",
+    border: "none",
+    borderBottom: `1px solid ${borderColor}`,
+    cursor: "pointer",
+    textAlign: "left",
+  };
+}
+
+function spellSectionArrow(collapsed: boolean, color: string): React.CSSProperties {
+  return {
+    color,
+    fontSize: 10,
+    lineHeight: 1,
+    transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
+    transition: "transform 120ms ease",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 10,
+    flexShrink: 0,
   };
 }
 

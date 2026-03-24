@@ -123,6 +123,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
   const [saving, setSaving] = useState(false);
   const [itemIndex, setItemIndex] = useState<ItemSummaryRow[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [collapsedContainerIds, setCollapsedContainerIds] = useState<string[]>([]);
   const [expandedDetail, setExpandedDetail] = useState<CompendiumItemDetail | null>(null);
   const [expandedBusy, setExpandedBusy] = useState(false);
   const [itemEditMode, setItemEditMode] = useState(false);
@@ -347,6 +348,14 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
       : DEFAULT_CONTAINER_ID;
     const nextItems = items.map((item) => item.id === id ? { ...item, containerId: nextContainerId } : item);
     await persist(nextItems);
+  }
+
+  function toggleContainerCollapsed(containerId: string) {
+    setCollapsedContainerIds((prev) =>
+      prev.includes(containerId)
+        ? prev.filter((id) => id !== containerId)
+        : [...prev, containerId]
+    );
   }
 
   async function setEquipStateFor(id: string, state: EquipState) {
@@ -628,10 +637,35 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
       {containers.map((container) => {
         const containerItems = itemsByContainer.get(container.id) ?? [];
         const isDefault = container.id === DEFAULT_CONTAINER_ID;
+        const isCollapsed = collapsedContainerIds.includes(container.id);
         return (
           <div key={container.id} style={{ marginBottom: 12 }}>
-            <div style={{ ...subLabelStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div
+              onClick={(event) => {
+                const target = event.target;
+                if (target instanceof HTMLElement && target.closest("button, input, select, textarea, label")) return;
+                toggleContainerCollapsed(container.id);
+              }}
+              style={{ ...subLabelStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: "pointer" }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    color: C.muted,
+                    fontSize: 10,
+                    lineHeight: 1,
+                    transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                    transition: "transform 120ms ease",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 10,
+                    flexShrink: 0,
+                  }}
+                >
+                  ▼
+                </span>
                 <input
                   value={container.name}
                   onChange={(e) => {
@@ -689,7 +723,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                 )}
               </div>
             </div>
-            {containerItems.length > 0 ? containerItems.map((it) => (
+            {!isCollapsed && (containerItems.length > 0 ? containerItems.map((it) => (
               <ItemRow key={it.id} item={it} accentColor={accentColor}
                 charData={charData}
                 expanded={expandedItemId === it.id}
@@ -709,7 +743,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
               }}>
                 Empty.
               </div>
-            )}
+            ))}
           </div>
         );
       })}

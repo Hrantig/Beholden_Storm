@@ -24,6 +24,8 @@ import {
 export interface CharacterCombatPanelsProps {
   effectiveAc: number;
   speed: number;
+  level: number;
+  className?: string | null;
   dexScore: number | null;
   strScore: number | null;
   pb: number;
@@ -39,6 +41,8 @@ export interface CharacterCombatPanelsProps {
 export function CharacterCombatPanels({
   effectiveAc,
   speed,
+  level,
+  className,
   dexScore,
   strScore,
   pb,
@@ -55,6 +59,8 @@ export function CharacterCombatPanels({
   const strMod = abilityMod(strScore);
   const unarmedToHit = strMod + pb;
   const unarmedDmg = 1 + strMod;
+  const isRogue = /rogue/i.test(String(className ?? ""));
+  const sneakAttackDice = Math.max(1, Math.ceil(level / 2));
 
   return (
     <>
@@ -142,6 +148,23 @@ export function CharacterCombatPanels({
               </div>
             );
           })}
+
+          {isRogue && (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>Sneak Attack</div>
+                <div style={{ fontSize: 10, color: C.muted }}>Once per turn</div>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>On hit</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.muted, textAlign: "center", minWidth: 36 }}>
+                -
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{sneakAttackDice}d6</div>
+                <div style={{ fontSize: 11, color: C.muted }}>Finesse or ranged weapon</div>
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0" }}>
             <div>

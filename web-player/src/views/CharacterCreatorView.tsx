@@ -75,7 +75,7 @@ import {
   renderSpeciesStep,
   renderSpellsStep,
 } from "@/views/CharacterCreatorStepPanels";
-import { normalizeInventoryItemLookupName } from "@/views/CharacterInventory";
+import { formatWeaponProficiencyName, normalizeInventoryItemLookupName } from "@/views/CharacterInventory";
 import type { ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
 
 // ---------------------------------------------------------------------------
@@ -348,6 +348,25 @@ function resolveStartingInventoryItem(name: string, items: ItemSummary[]): ItemS
     ?? null;
 }
 
+function currencyCodeFromEntry(entry: string): "PP" | "GP" | "EP" | "SP" | "CP" | null {
+  const normalized = String(entry ?? "")
+    .replace(/\bplatinum pieces?\b/gi, "PP")
+    .replace(/\bgold pieces?\b/gi, "GP")
+    .replace(/\belectrum pieces?\b/gi, "EP")
+    .replace(/\bsilver pieces?\b/gi, "SP")
+    .replace(/\bcopper pieces?\b/gi, "CP")
+    .replace(/\bplatinum\b/gi, "PP")
+    .replace(/\bgold\b/gi, "GP")
+    .replace(/\belectrum\b/gi, "EP")
+    .replace(/\bsilver\b/gi, "SP")
+    .replace(/\bcopper\b/gi, "CP")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  const currencyMatch = normalized.match(/^(\d+)\s*(GP|CP|SP|EP|PP)$/i);
+  return currencyMatch ? (currencyMatch[2].toUpperCase() as "PP" | "GP" | "EP" | "SP" | "CP") : null;
+}
+
 function buildEquipmentItems(optionId: string | null, equipmentText: string | undefined, prefix: string, grantedTools: string[], itemIndex: ItemSummary[]): InventoryItemSeed[] {
   const options = parseStartingEquipmentOptions(equipmentText);
   const selected = options.find((option) => option.id === optionId);
@@ -397,10 +416,34 @@ function buildEquipmentItems(optionId: string | null, equipmentText: string | un
     });
   }
 
+  function pushCurrency(code: "PP" | "GP" | "EP" | "SP" | "CP", quantity: number) {
+    const amount = Math.max(0, Math.floor(Number(quantity) || 0));
+    if (amount <= 0) return;
+    const existing = seeds.find((seed) => seed.name === code);
+    if (existing) {
+      existing.quantity += amount;
+      return;
+    }
+    seeds.push({
+      id: `${prefix}-eq-${autoId++}`,
+      name: code,
+      quantity: amount,
+      equipped: false,
+      source: "custom",
+      type: null,
+      rarity: null,
+      magic: false,
+      attunement: false,
+    });
+  }
+
   for (const entry of selected.entries) {
     const normalized = entry
       .replace(/\bC\s*p\b/gi, "CP")
       .replace(/\bG\s*p\b/gi, "GP")
+      .replace(/\bS\s*p\b/gi, "SP")
+      .replace(/\bP\s*p\b/gi, "PP")
+      .replace(/\bE\s*p\b/gi, "EP")
       .trim();
     if (/same as above/i.test(normalized)) {
       const prefix = normalized.replace(/\s*\(same as above\)\s*/i, "").trim();
@@ -418,9 +461,10 @@ function buildEquipmentItems(optionId: string | null, equipmentText: string | un
       continue;
     }
 
-    const currencyMatch = normalized.match(/^(\d+)\s*(GP|CP|SP|EP|PP)$/i);
-    if (currencyMatch) {
-      pushItem(currencyMatch[2].toUpperCase(), Number(currencyMatch[1]));
+    const currencyCode = currencyCodeFromEntry(normalized);
+    if (currencyCode) {
+      const amount = Number.parseInt(normalized, 10);
+      pushCurrency(currencyCode, amount);
       continue;
     }
 
@@ -599,11 +643,15 @@ function buildProficiencyMapInternal(
   const masteries:   TaggedItem[] = [];
   const spells:      TaggedItem[] = [];
   const invocations: TaggedItem[] = [];
+  const pushWeapon = (name: string, source: string) => {
+    const formatted = formatWeaponProficiencyName(name);
+    if (formatted) weapons.push({ name: formatted, source });
+  };
 
   // ── Class ──────────────────────────────────────────────────────────────────
   if (classDetail) {
     splitComma(classDetail.armor).forEach(n => armor.push({ name: n, source: className }));
-    splitComma(classDetail.weapons).forEach(n => weapons.push({ name: n, source: className }));
+    splitComma(classDetail.weapons).forEach(n => pushWeapon(n, className));
     splitComma(classDetail.tools).forEach(n => tools.push({ name: n, source: className }));
 
     // Saving throws — primary source: ability score names in <proficiency> field
@@ -649,7 +697,7 @@ function buildProficiencyMapInternal(
       if (!ftext) continue;
       const grants = parseFeatureGrants(ftext);
       grants.armor.forEach(n    => armor.push({ name: n, source: fname }));
-      grants.weapons.forEach(n  => weapons.push({ name: n, source: fname }));
+      grants.weapons.forEach(n  => pushWeapon(n, fname));
       grants.tools.forEach(n    => tools.push({ name: n, source: fname }));
       grants.skills.forEach(n   => skills.push({ name: n, source: fname }));
       grants.languages.forEach(n => languages.push({ name: n, source: fname }));
@@ -660,7 +708,7 @@ function buildProficiencyMapInternal(
       feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
       feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
       feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
-      feat.parsed.grants.weapons.forEach((name) => weapons.push({ name, source: feat.name }));
+      feat.parsed.grants.weapons.forEach((name) => pushWeapon(name, feat.name));
       feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
       for (const choice of feat.parsed.choices) {
         if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
@@ -703,7 +751,7 @@ function buildProficiencyMapInternal(
         feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
         feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
         feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
-        feat.parsed.grants.weapons.forEach((name) => weapons.push({ name, source: feat.name }));
+        feat.parsed.grants.weapons.forEach((name) => pushWeapon(name, feat.name));
         feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
 
         for (const choice of feat.parsed.choices) {
@@ -756,7 +804,7 @@ function buildProficiencyMapInternal(
       rg.tools.forEach(n => tools.push({ name: n, source: raceFeatDetail.name }));
       rg.languages.forEach(n => languages.push({ name: n, source: raceFeatDetail.name }));
       rg.armor.forEach(n => armor.push({ name: n, source: raceFeatDetail.name }));
-      rg.weapons.forEach(n => weapons.push({ name: n, source: raceFeatDetail.name }));
+      rg.weapons.forEach(n => pushWeapon(n, raceFeatDetail.name));
       rg.savingThrows.forEach(n => saves.push({ name: n, source: raceFeatDetail.name }));
       for (const choice of raceFeatDetail.parsed.choices) {
         if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;

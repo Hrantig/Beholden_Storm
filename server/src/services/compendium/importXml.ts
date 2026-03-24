@@ -20,7 +20,15 @@ function extractLabeledLine(text: string, labelPattern: RegExp): string | null {
 export function importCompendiumXml(args: {
   xml: string;
   db: Database.Database;
-}): { imported: number; total: number; classes?: number; races?: number; backgrounds?: number; feats?: number } {
+}): {
+  imported: number;
+  total: number;
+  items?: number;
+  classes?: number;
+  races?: number;
+  backgrounds?: number;
+  feats?: number;
+} {
   const { xml, db } = args;
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -418,6 +426,7 @@ export function importCompendiumXml(args: {
   return {
     imported: monsters.length,
     total: totalMonsters,
+    items: items.length,
     classes: classes.length,
     races: races.length,
     backgrounds: backgrounds.length,

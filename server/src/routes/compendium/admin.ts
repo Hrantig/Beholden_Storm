@@ -31,6 +31,7 @@ export function registerCompendiumAdminRoutes(app: Express, ctx: ServerContext) 
       ok: true,
       imported: out.imported,
       total: out.total,
+      items: out.items ?? 0,
       classes: out.classes ?? 0,
       races: out.races ?? 0,
       backgrounds: out.backgrounds ?? 0,

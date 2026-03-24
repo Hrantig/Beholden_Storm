@@ -39,7 +39,15 @@ export interface Helpers {
   nextLabelNumber: (encounterId: string, baseName: string) => number;
   createPlayerCombatant: (args: { encounterId: string; player: StoredPlayer; t?: number }) => StoredCombatant;
   seedDefaultConditions: (campaignId: string) => void;
-  importCompendiumXml: (args: { xml: string }) => { imported: number; total: number; classes?: number; races?: number; backgrounds?: number; feats?: number };
+  importCompendiumXml: (args: { xml: string }) => {
+    imported: number;
+    total: number;
+    items?: number;
+    classes?: number;
+    races?: number;
+    backgrounds?: number;
+    feats?: number;
+  };
 }
 
 export interface ServerContext {
