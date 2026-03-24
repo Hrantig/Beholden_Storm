@@ -16,6 +16,50 @@ export function hasNamedProficiency(list: Array<Pick<TaggedItem, "name">> | null
   return (list ?? []).some((s) => String(s.name).toLowerCase() === name.toLowerCase());
 }
 
+export function normalizeWeaponProficiencyName(name: string): string {
+  const normalized = String(name ?? "").trim();
+  if (!normalized) return normalized;
+  if (/simple weapons?\s+and\s+martial weapons?\s+that have the finesse or light property/i.test(normalized)) {
+    return "Finesse and Light Weapons";
+  }
+  return normalized;
+}
+
+export function normalizeArmorProficiencyName(name: string): string {
+  const normalized = String(name ?? "").trim();
+  if (!normalized) return normalized;
+  if (/^shield$/i.test(normalized)) return "Shields";
+  return normalized;
+}
+
+export function normalizeLanguageName(name: string): string {
+  const normalized = String(name ?? "").trim();
+  if (!normalized) return normalized;
+  if (/^thieves'? cant$/i.test(normalized)) return "Thieves' Cant";
+  if (/^common$/i.test(normalized)) return "Common";
+  return normalized;
+}
+
+export function dedupeTaggedItems(
+  list: TaggedItem[] | null | undefined,
+  normalizeName?: (name: string) => string,
+): TaggedItem[] {
+  const out: TaggedItem[] = [];
+  const seen = new Set<string>();
+  for (const item of list ?? []) {
+    const name = (normalizeName ? normalizeName(item.name) : String(item.name ?? "").trim()).trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      ...item,
+      name,
+    });
+  }
+  return out;
+}
+
 export function normalizeResourceKey(name: string): string {
   return String(name ?? "")
     .trim()

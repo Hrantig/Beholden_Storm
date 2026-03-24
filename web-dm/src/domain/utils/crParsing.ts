@@ -13,7 +13,7 @@ export const toNumberOrNull = (v: any): number | null => {
 };
 
 /**
- * Parses a 5e-style CR value.
+ * Parses a CR value.
  *
  * Handles common formats safely:
  * - 0, 1, 2, 10, 12

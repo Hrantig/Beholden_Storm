@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, jsonInit } from "@/services/api";
 import { C } from "@/lib/theme";
 import { rollDiceExpr } from "@/lib/dice";
-import { inferRulesetFromLabel, matchesRulesetLabel } from "@/lib/characterRules";
 import { abilityMod, extractPrerequisite, formatModifier, invocationPrerequisitesMet, spellLooksLikeDamageSpell, stripPrerequisiteLine } from "@/views/CharacterSheetUtils";
 import {
   getCantripCount,
@@ -179,7 +178,6 @@ export function LevelUpView() {
   const spellcaster = classDetail ? isSpellcaster(classDetail) : false;
   const allowedInvocationIds = React.useMemo(
     () => {
-      const ruleset = inferRulesetFromLabel(classDetail?.name);
       const chosenCantripNames = classCantrips
         .filter((spell) => chosenCantrips.includes(spell.id))
         .map((spell) => spell.name);
@@ -192,7 +190,6 @@ export function LevelUpView() {
 
       return new Set(
         classInvocations
-          .filter((invocation) => matchesRulesetLabel(invocation.name, ruleset))
           .filter((invocation) =>
             invocationPrerequisitesMet(invocation.text ?? "", {
               level: nextLevel,

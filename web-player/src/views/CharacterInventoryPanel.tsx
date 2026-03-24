@@ -164,7 +164,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
       const next = prev.map((item) => {
         const summary = matchInventorySummary(item, itemIndex);
         if (!summary) return item;
-        const canonicalName = summary.name.replace(/\s+\[(?:2024|5\.5e|5e)\]\s*$/i, "").trim();
+        const canonicalName = summary.name.replace(/\s+\[(?:2024|5\.5e)\]\s*$/i, "").trim();
         const patched: InventoryItem = {
           ...item,
           name: item.source === "custom" && !item.itemId ? item.name : canonicalName,

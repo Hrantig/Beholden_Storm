@@ -3,7 +3,7 @@ import type { MonsterDetail, SpellSummary } from "@/views/CombatView/types";
 export function parseMonsterSpells(detail: MonsterDetail | null): string[] {
   if (!detail) return [];
 
-  // The server imports monsters from Fight Club XML and preserves `spells` as either:
+  // The server imports monsters from compendium XML and preserves `spells` as either:
   // - an array of spell names
   // - a CSV/semicolon-separated string
   // And we may receive them either on the top-level monster record or inside `raw_json`.

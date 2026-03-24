@@ -1,4 +1,4 @@
-/** Maps D&D 5e spell school abbreviations (from XML imports) to full names. */
+/** Maps spell school abbreviations from XML imports to full names. */
 const SCHOOL_MAP: Record<string, string> = {
   A:  "Abjuration",
   C:  "Conjuration",

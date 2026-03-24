@@ -35,7 +35,7 @@ export function FaqView() {
         </Q>
 
         <Q q="Why make this?">
-          Because I used to use a great app called Game Master 5e, but it stopped working and the developer disappeared. I wanted a free tool that did the same but with a better Combat Difficulty meter.
+          Because I used to use a great older GM app, but it stopped working and the developer disappeared. I wanted a free tool that did the same but with a better Combat Difficulty meter.
         </Q>
 
         <Q q="Can my players...?">

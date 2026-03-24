@@ -7,16 +7,6 @@ import { parseBackgroundProficiencies, parseRaceChoicesByRuleset } from "../../l
 import { parseFeat } from "../../lib/featParser.js";
 import { inferRuleset } from "../../lib/inferRuleset.js";
 
-function extractLabeledLine(text: string, labelPattern: RegExp): string | null {
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const match = line.match(new RegExp(`${labelPattern.source}\\s*:\\s*(.+)$`, "i"));
-    if (match?.[1]) return match[1].trim();
-  }
-  return null;
-}
-
 export function importCompendiumXml(args: {
   xml: string;
   db: Database.Database;
@@ -365,9 +355,6 @@ export function importCompendiumXml(args: {
           if (items.length > 0) equipment = items.join(", ");
           else equipment = asText(eq) || "";
         }
-      } else if (bgRuleset === "5e") {
-        const descriptionTrait = traits.find((t) => /^description$/i.test(t.name));
-        equipment = extractLabeledLine(descriptionTrait?.text ?? "", /Equipment/i) ?? "";
       }
 
       const data = {

@@ -1,7 +1,7 @@
 import type { MonsterDetail } from "@/domain/types/compendium";
 import { toNumberOrNull, parseCrToNumberOrNull, findNearestValue } from "@/domain/utils/crParsing";
 
-// 5e XP by Challenge Rating (DMG / Basic Rules).
+// XP by Challenge Rating (DMG / Basic Rules).
 // Many compendium imports do not provide `xp`, so we fall back to CR.
 const XP_BY_CR: Record<string, number> = {
   "0": 10,

@@ -1,5 +1,5 @@
 /**
- * Canonical 5e proficiency name lists used for structured parsing of
+ * Canonical proficiency name lists used for structured parsing of
  * background / race / class XML trait text.
  *
  * Names are stored in "display" casing (title-case).  The matcher
@@ -78,7 +78,7 @@ export interface StructuredBgProficiencies {
   abilityScores: string[];   // the ability scores player can choose from
 }
 
-export type Ruleset = "5e" | "5.5e";
+export type Ruleset = "5.5e";
 
 export interface StructuredRaceChoices {
   hasChosenSize: boolean;
@@ -214,11 +214,13 @@ function parseLangTrait(traitName: string, traitText: string): ProficiencyChoice
 
 // ── Main entry ───────────────────────────────────────────────────────────────
 
-/** Parse a 2024 / 5.5e background XML object into structured proficiencies. */
-export function parseBackgroundProficiencies55e(bg: {
+/** Parse a 2024 background XML object into structured proficiencies. */
+export function parseBackgroundProficiencies(bg: {
   proficiency?: unknown;
   trait?: unknown;
+  ruleset?: Ruleset | null;
 }): StructuredBgProficiencies {
+  void bg.ruleset;
   // Skills — clean comma-separated <proficiency> field
   const profText = typeof bg.proficiency === "string" ? bg.proficiency : "";
   const fixedSkills = profText.split(",").map(s => s.trim()).filter(Boolean);
@@ -296,73 +298,7 @@ export function parseBackgroundProficiencies55e(bg: {
   };
 }
 
-/** Parse a 2014 / 5e background XML object into structured proficiencies. */
-export function parseBackgroundProficiencies5e(bg: {
-  proficiency?: unknown;
-  trait?: unknown;
-}): StructuredBgProficiencies {
-  const profText = typeof bg.proficiency === "string" ? bg.proficiency : "";
-  const fixedSkills = profText.split(",").map(s => s.trim()).filter(Boolean);
-
-  const rawTraits = Array.isArray(bg.trait) ? bg.trait : bg.trait ? [bg.trait] : [];
-  const traits: { name: string; text: string }[] = (rawTraits as any[]).map(t => ({
-    name: (typeof t?.name === "string" ? t.name : String(t?.name ?? "")).trim(),
-    text: (typeof t?.text === "string" ? t.text : String(t?.text ?? "")).trim(),
-  }));
-
-  const descriptionTrait = traits.find(t => /^description$/i.test(t.name));
-  const toolTrait = traits.find(t =>
-    /tool|instrument|kit|vehicle|gaming|music/i.test(t.name)
-  );
-  const langTrait = traits.find(t => /language/i.test(t.name));
-  const skillTrait = fixedSkills.length === 0
-    ? traits.find(t => /skill/i.test(t.name))
-    : null;
-
-  const describedToolText = !toolTrait && descriptionTrait
-    ? extractLabeledLine(descriptionTrait.text, /Tool Proficiencies?/i)
-    : null;
-  const describedLanguageText = !langTrait && descriptionTrait
-    ? extractLabeledLine(descriptionTrait.text, /Languages?/i)
-    : null;
-
-  let skills: ProficiencyChoice = { fixed: fixedSkills, choose: 0, from: null };
-  if (skillTrait) {
-    const chooseN = detectChooseN(skillTrait.name) || detectChooseN(skillTrait.text) || 2;
-    const listInText = findNamesIn(skillTrait.text, ALL_SKILLS);
-    skills = { fixed: [], choose: chooseN, from: listInText.length >= chooseN ? listInText : null };
-  }
-
-  return {
-    skills,
-    tools: toolTrait
-      ? parseToolTrait(toolTrait.name, toolTrait.text)
-      : describedToolText
-        ? parseToolTrait("Tool Proficiencies", describedToolText)
-        : { fixed: [], choose: 0, from: null },
-    languages: langTrait
-      ? parseLangTrait(langTrait.name, langTrait.text)
-      : describedLanguageText
-        ? parseLangTrait("Languages", describedLanguageText)
-        : { fixed: [], choose: 0, from: null },
-    feats: [],
-    featChoice: 0,
-    abilityScores: [],
-  };
-}
-
-/** Parse a background XML object into fully structured proficiencies. */
-export function parseBackgroundProficiencies(bg: {
-  proficiency?: unknown;
-  trait?: unknown;
-  ruleset?: Ruleset | null;
-}): StructuredBgProficiencies {
-  return bg.ruleset === "5.5e"
-    ? parseBackgroundProficiencies55e(bg)
-    : parseBackgroundProficiencies5e(bg);
-}
-
-/** Shared skill/tool/language scanning logic for both 5e and 5.5e race trait parsing. */
+/** Shared skill/tool/language scanning logic for race trait parsing. */
 function parseRaceChoicesCore(traits: { name: string; text: string }[]): Pick<StructuredRaceChoices, "skillChoice" | "toolChoice" | "languageChoice"> {
   let skillChoice: StructuredRaceChoices["skillChoice"] = null;
   let toolChoice: StructuredRaceChoices["toolChoice"] = null;
@@ -406,12 +342,7 @@ function parseRaceChoicesCore(traits: { name: string; text: string }[]): Pick<St
   return { skillChoice, toolChoice, languageChoice };
 }
 
-export function parseRaceChoices5e(traits: { name: string; text: string }[]): StructuredRaceChoices {
-  const core = parseRaceChoicesCore(traits);
-  return { hasChosenSize: false, ...core, hasFeatChoice: false };
-}
-
-export function parseRaceChoices55e(traits: { name: string; text: string }[]): StructuredRaceChoices {
+export function parseRaceChoices(traits: { name: string; text: string }[]): StructuredRaceChoices {
   const hasChosenSize = traits.some(t => /^size$/i.test(t.name) && /chosen when you select/i.test(t.text));
   const hasFeatChoice = traits.some(t => /origin feat of your choice/i.test(t.text));
   return { hasChosenSize, ...parseRaceChoicesCore(traits), hasFeatChoice };
@@ -421,5 +352,6 @@ export function parseRaceChoicesByRuleset(
   ruleset: Ruleset,
   traits: { name: string; text: string }[],
 ): StructuredRaceChoices {
-  return ruleset === "5.5e" ? parseRaceChoices55e(traits) : parseRaceChoices5e(traits);
+  void ruleset;
+  return parseRaceChoices(traits);
 }

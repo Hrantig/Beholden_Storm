@@ -1,6 +1,6 @@
 import { titleCase } from "@/lib/format/titleCase";
 import type { ClassFeatureEntry, CharacterData, ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
-import { abilityMod } from "@/views/CharacterSheetUtils";
+import { abilityMod, normalizeWeaponProficiencyName } from "@/views/CharacterSheetUtils";
 
 export type TaggedItemLike = TaggedItem;
 export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons" | "armor">;
@@ -179,8 +179,8 @@ export function hasStealthDisadvantage(item: { stealthDisadvantage?: boolean; de
 
 export function normalizeInventoryItemLookupName(name: string): string {
   return String(name ?? "")
-    .replace(/\s+\[(?:2024|5\.5e|5e)\]\s*$/i, "")
-    .replace(/\s+\((?:2024|5\.5e|5e)\)\s*$/i, "")
+    .replace(/\s+\[(?:2024|5\.5e)\]\s*$/i, "")
+    .replace(/\s+\((?:2024|5\.5e)\)\s*$/i, "")
     .trim()
     .toLowerCase();
 }
@@ -334,17 +334,8 @@ function isSimpleWeapon(item: InventoryItem): boolean {
   return isWeaponItem(item) && !isMartialWeapon(item);
 }
 
-function normalizeWeaponProficiencyText(value: string): string {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return normalized;
-  if (/simple weapons?\s+and\s+martial weapons?\s+that have the finesse or light property/i.test(normalized)) {
-    return "Finesse and Light Weapons";
-  }
-  return normalized;
-}
-
 function weaponMatchesProficiency(item: InventoryItem, proficiencyName: string): boolean {
-  const normalized = normalizeWeaponProficiencyText(proficiencyName).toLowerCase();
+  const normalized = normalizeWeaponProficiencyName(proficiencyName).toLowerCase();
   const itemName = normalizeInventoryItemLookupName(item.name);
 
   if (!normalized) return false;
@@ -368,7 +359,7 @@ function weaponMatchesProficiency(item: InventoryItem, proficiencyName: string):
 }
 
 export function formatWeaponProficiencyName(name: string): string {
-  return normalizeWeaponProficiencyText(name);
+  return normalizeWeaponProficiencyName(name);
 }
 
 export function hasWeaponProficiency(item: InventoryItem, prof: ProficiencyMapLike | undefined): boolean {

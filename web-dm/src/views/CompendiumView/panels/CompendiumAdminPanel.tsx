@@ -19,6 +19,11 @@ interface ImportResult {
   feats?: number;
 }
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 export function CompendiumAdminPanel() {
   const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -37,8 +42,8 @@ export function CompendiumAdminPanel() {
       setLastImport(result);
       setMsg("Imported.");
       await api<unknown>("/api/meta");
-    } catch (e: any) {
-      setMsg(String(e?.message ?? e));
+    } catch (error: unknown) {
+      setMsg(toErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -51,12 +56,23 @@ export function CompendiumAdminPanel() {
       await api<unknown>("/api/compendium", { method: "DELETE" });
       setMsg("Compendium deleted.");
       await api<unknown>("/api/meta");
-    } catch (e: any) {
-      setMsg(String(e?.message ?? e));
+    } catch (error: unknown) {
+      setMsg(toErrorMessage(error));
     } finally {
       setBusy(false);
     }
   }
+
+  const importSummary = lastImport
+    ? [
+        { label: "Monsters", count: lastImport.imported },
+        { label: "Items", count: lastImport.items ?? 0 },
+        { label: "Classes", count: lastImport.classes ?? 0 },
+        { label: "Species", count: lastImport.races ?? 0 },
+        { label: "Backgrounds", count: lastImport.backgrounds ?? 0 },
+        { label: "Feats", count: lastImport.feats ?? 0 },
+      ].filter((entry) => entry.count > 0)
+    : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, minHeight: 0, overflow: "auto" }}>
@@ -69,15 +85,8 @@ export function CompendiumAdminPanel() {
         }
       >
         <div style={{ color: theme.colors.muted, lineHeight: 1.4 }}>
-          Upload a Fight Club-style compendium XML. The server stores it in a local database. Re-importing an entry with the same name (case-insensitive, ignoring trailing
+          Upload a compendium XML. The server stores it in a local database. Re-importing an entry with the same name (case-insensitive, ignoring trailing
           <code>[...]</code>) will replace the existing entry.
-          <br />
-          <code>
-            I recommend:{" "}
-            <a target="_blank" rel="noopener noreferrer" href="https://github.com/vidalvanbergen/FightClub5eXML">
-              Vianna's Compendium
-            </a>
-          </code>
         </div>
 
         <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -99,14 +108,9 @@ export function CompendiumAdminPanel() {
           <div style={{ marginTop: 12, color: msg.toLowerCase().includes("fail") ? theme.colors.red : theme.colors.text }}>{msg}</div>
         ) : null}
 
-        {lastImport && (
+        {importSummary.length > 0 && (
           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: "6px 14px", color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
-            {lastImport.imported > 0 && <span>Monsters: {lastImport.imported}</span>}
-            {(lastImport.items ?? 0) > 0 && <span>Items: {lastImport.items}</span>}
-            {(lastImport.classes ?? 0) > 0 && <span>Classes: {lastImport.classes}</span>}
-            {(lastImport.races ?? 0) > 0 && <span>Species: {lastImport.races}</span>}
-            {(lastImport.backgrounds ?? 0) > 0 && <span>Backgrounds: {lastImport.backgrounds}</span>}
-            {(lastImport.feats ?? 0) > 0 && <span>Feats: {lastImport.feats}</span>}
+            {importSummary.map((entry) => <span key={entry.label}>{entry.label}: {entry.count}</span>)}
           </div>
         )}
       </Panel>

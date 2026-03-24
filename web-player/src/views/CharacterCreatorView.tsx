@@ -4,15 +4,24 @@ import { C } from "@/lib/theme";
 import {
   getBackgroundFeatChoices,
   getBackgroundFeatChoicesByRuleset,
-  inferRulesetFromLabel,
   matchesRuleset,
-  matchesRulesetLabel,
   type BackgroundFeatChoiceEntry,
   type Ruleset,
 } from "@/lib/characterRules";
 import { api, jsonInit } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { invocationPrerequisitesMet, spellLooksLikeDamageSpell } from "@/views/CharacterSheetUtils";
+import {
+  buildEquipmentItems as buildEquipmentItemsFromUtils,
+  getBackgroundGrantedToolSelections as getBackgroundGrantedToolSelectionsFromUtils,
+} from "@/views/CharacterCreatorEquipmentUtils";
+import {
+  dedupeTaggedItems,
+  invocationPrerequisitesMet,
+  normalizeArmorProficiencyName,
+  normalizeLanguageName,
+  normalizeWeaponProficiencyName,
+  spellLooksLikeDamageSpell,
+} from "@/views/CharacterSheetUtils";
 import {
   ABILITY_NAME_TO_KEY,
   ABILITY_KEYS,
@@ -75,7 +84,6 @@ import {
   renderSpeciesStep,
   renderSpellsStep,
 } from "@/views/CharacterCreatorStepPanels";
-import { formatWeaponProficiencyName, normalizeInventoryItemLookupName } from "@/views/CharacterInventory";
 import type { ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
 
 // ---------------------------------------------------------------------------
@@ -209,21 +217,6 @@ interface ClassFeatureEntry {
 // Feature grant parsing
 // ---------------------------------------------------------------------------
 
-interface FeatureGrants {
-  armor: string[];
-  weapons: string[];
-  tools: string[];
-  skills: string[];
-  languages: string[];
-}
-
-interface ClassLanguageChoice {
-  fixed: string[];
-  choose: number;
-  from: string[] | null;
-  source: string;
-}
-
 interface WeaponMasteryChoice {
   source: string;
   count: number;
@@ -301,194 +294,27 @@ function getClassLanguageChoice(classDetail: ClassDetail | null, level: number):
 }
 
 
-function getCore55eLanguageChoice(raceDetail: RaceDetail | null, ruleset: Ruleset | null) {
-  if (ruleset !== "5.5e") return null;
+function getCoreLanguageChoice(raceDetail: RaceDetail | null, ruleset: Ruleset | null) {
+  if (!ruleset) return null;
   const hasExplicitLanguageTrait = (raceDetail?.traits ?? []).some((t) => /^languages?$/i.test(t.name));
   if (hasExplicitLanguageTrait) return null;
   return {
     fixed: ["Common"],
     choose: 2,
     from: STANDARD_55E_LANGUAGES,
-    source: "Core 5.5e",
+    source: "Core Rules",
   };
-}
-
-function getBackgroundGrantedToolSelections(form: FormState, bgDetail: BgDetail | null): string[] {
-  const granted = new Set<string>([
-    ...(bgDetail?.proficiencies?.tools.fixed ?? []),
-    ...form.chosenBgTools,
-  ]);
-  for (const featChoice of getBackgroundFeatChoices(bgDetail)) {
-    const selected = form.chosenFeatOptions[featChoice.key] ?? [];
-    for (const value of selected) {
-      if (classifyFeatSelection(featChoice.choice, value) === "tool") granted.add(value);
-    }
-  }
-  return [...granted];
-}
-
-function singularizeEquipmentName(name: string): string {
-  const trimmed = name.trim();
-  const irregular: Record<string, string> = {
-    daggers: "Dagger",
-  };
-  const lowered = trimmed.toLowerCase();
-  if (irregular[lowered]) return irregular[lowered];
-  if (/ies$/i.test(trimmed)) return `${trimmed.slice(0, -3)}y`;
-  if (/es$/i.test(trimmed) && /(ches|shes|sses|xes|zes)$/i.test(trimmed)) return trimmed.slice(0, -2);
-  if (/s$/i.test(trimmed) && !/ss$/i.test(trimmed)) return trimmed.slice(0, -1);
-  return trimmed;
-}
-
-function resolveStartingInventoryItem(name: string, items: ItemSummary[]): ItemSummary | null {
-  const normalized = normalizeInventoryItemLookupName(name);
-  const singularNormalized = normalizeInventoryItemLookupName(singularizeEquipmentName(name));
-  return items.find((item) => normalizeInventoryItemLookupName(item.name) === normalized)
-    ?? items.find((item) => normalizeInventoryItemLookupName(item.name) === singularNormalized)
-    ?? null;
-}
-
-function currencyCodeFromEntry(entry: string): "PP" | "GP" | "EP" | "SP" | "CP" | null {
-  const normalized = String(entry ?? "")
-    .replace(/\bplatinum pieces?\b/gi, "PP")
-    .replace(/\bgold pieces?\b/gi, "GP")
-    .replace(/\belectrum pieces?\b/gi, "EP")
-    .replace(/\bsilver pieces?\b/gi, "SP")
-    .replace(/\bcopper pieces?\b/gi, "CP")
-    .replace(/\bplatinum\b/gi, "PP")
-    .replace(/\bgold\b/gi, "GP")
-    .replace(/\belectrum\b/gi, "EP")
-    .replace(/\bsilver\b/gi, "SP")
-    .replace(/\bcopper\b/gi, "CP")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
-  const currencyMatch = normalized.match(/^(\d+)\s*(GP|CP|SP|EP|PP)$/i);
-  return currencyMatch ? (currencyMatch[2].toUpperCase() as "PP" | "GP" | "EP" | "SP" | "CP") : null;
-}
-
-function buildEquipmentItems(optionId: string | null, equipmentText: string | undefined, prefix: string, grantedTools: string[], itemIndex: ItemSummary[]): InventoryItemSeed[] {
-  const options = parseStartingEquipmentOptions(equipmentText);
-  const selected = options.find((option) => option.id === optionId);
-  if (!selected) return [];
-
-  const seeds: InventoryItemSeed[] = [];
-  let autoId = 1;
-
-  function pushItem(name: string, quantity: number) {
-    const trimmed = name.trim();
-    if (!trimmed || quantity <= 0) return;
-    const matched = resolveStartingInventoryItem(trimmed, itemIndex);
-    const canonicalName = matched ? matched.name.replace(/\s+\[(?:2024|5\.5e|5e)\]\s*$/i, "").trim() : trimmed;
-    const seedBase = {
-      name: canonicalName,
-      equipped: false,
-      source: matched ? "compendium" as const : "custom" as const,
-      itemId: matched?.id,
-      type: matched?.type ?? null,
-      rarity: matched?.rarity ?? null,
-      magic: matched?.magic ?? false,
-      attunement: matched?.attunement ?? false,
-      weight: matched?.weight ?? null,
-      value: matched?.value ?? null,
-      ac: matched?.ac ?? null,
-      stealthDisadvantage: matched?.stealthDisadvantage ?? false,
-      dmg1: matched?.dmg1 ?? null,
-      dmg2: matched?.dmg2 ?? null,
-      dmgType: matched?.dmgType ?? null,
-      properties: matched?.properties ?? [],
-    };
-    const isWeapon = Boolean(matched?.type && /weapon/i.test(matched.type));
-    if (isWeapon && quantity > 1) {
-      for (let index = 0; index < quantity; index += 1) {
-        seeds.push({
-          id: `${prefix}-eq-${autoId++}`,
-          ...seedBase,
-          quantity: 1,
-        });
-      }
-      return;
-    }
-    seeds.push({
-      id: `${prefix}-eq-${autoId++}`,
-      ...seedBase,
-      quantity,
-    });
-  }
-
-  function pushCurrency(code: "PP" | "GP" | "EP" | "SP" | "CP", quantity: number) {
-    const amount = Math.max(0, Math.floor(Number(quantity) || 0));
-    if (amount <= 0) return;
-    const existing = seeds.find((seed) => seed.name === code);
-    if (existing) {
-      existing.quantity += amount;
-      return;
-    }
-    seeds.push({
-      id: `${prefix}-eq-${autoId++}`,
-      name: code,
-      quantity: amount,
-      equipped: false,
-      source: "custom",
-      type: null,
-      rarity: null,
-      magic: false,
-      attunement: false,
-    });
-  }
-
-  for (const entry of selected.entries) {
-    const normalized = entry
-      .replace(/\bC\s*p\b/gi, "CP")
-      .replace(/\bG\s*p\b/gi, "GP")
-      .replace(/\bS\s*p\b/gi, "SP")
-      .replace(/\bP\s*p\b/gi, "PP")
-      .replace(/\bE\s*p\b/gi, "EP")
-      .trim();
-    if (/same as above/i.test(normalized)) {
-      const prefix = normalized.replace(/\s*\(same as above\)\s*/i, "").trim();
-      const matching = grantedTools.filter((tool) => {
-        if (/Musical Instrument/i.test(prefix)) return MUSICAL_INSTRUMENTS.includes(tool);
-        if (/Artisan'?s Tools/i.test(prefix)) return ALL_TOOLS.includes(tool) && !MUSICAL_INSTRUMENTS.includes(tool);
-        if (/Gaming Set/i.test(prefix)) return /Set$/i.test(tool);
-        return true;
-      });
-      if (matching.length > 0) {
-        matching.forEach((tool) => pushItem(tool, 1));
-      } else {
-        pushItem(prefix || normalized, 1);
-      }
-      continue;
-    }
-
-    const currencyCode = currencyCodeFromEntry(normalized);
-    if (currencyCode) {
-      const amount = Number.parseInt(normalized, 10);
-      pushCurrency(currencyCode, amount);
-      continue;
-    }
-
-    const countMatch = normalized.match(/^(\d+)\s+(.+)$/);
-    if (countMatch) {
-      pushItem(countMatch[2], Number(countMatch[1]));
-      continue;
-    }
-
-    pushItem(normalized, 1);
-  }
-
-  return seeds;
 }
 
 function buildStartingInventory(form: FormState, bgDetail: BgDetail | null, classDetail: ClassDetail | null, itemIndex: ItemSummary[]): InventoryItemSeed[] {
-  const bgItems = buildEquipmentItems(
+  const bgItems = buildEquipmentItemsFromUtils(
     form.chosenBgEquipmentOption,
     bgDetail?.equipment,
     "bg",
-    getBackgroundGrantedToolSelections(form, bgDetail),
+    getBackgroundGrantedToolSelectionsFromUtils(form, bgDetail, getBackgroundFeatChoices(bgDetail), classifyFeatSelection),
     itemIndex,
   );
-  const classItems = buildEquipmentItems(
+  const classItems = buildEquipmentItemsFromUtils(
     form.chosenClassEquipmentOption,
     extractClassStartingEquipment(classDetail),
     "class",
@@ -571,8 +397,7 @@ function getClassFeatOptionLabel(optionName: string, featGroup: string): string 
 
 // ---------------------------------------------------------------------------
 
-function buildProficiencyMapForRuleset(
-  ruleset: Ruleset,
+function buildProficiencyMap(
   form: FormState,
   classDetail: ClassDetail | null,
   raceDetail: RaceDetail | null,
@@ -583,41 +408,10 @@ function buildProficiencyMapForRuleset(
   raceFeatDetail: BackgroundFeat | null,
   classFeatDetails: Record<string, BackgroundFeat>,
 ): ProficiencyMap {
-  return ruleset === "5.5e"
-    ? buildProficiencyMap55e(form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails)
-    : buildProficiencyMap5e(form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
-}
-
-function buildProficiencyMap5e(
-  form: FormState,
-  classDetail: ClassDetail | null,
-  raceDetail: RaceDetail | null,
-  bgDetail: BgDetail | null,
-  classCantrips: SpellSummary[],
-  classSpells: SpellSummary[],
-  classInvocations: SpellSummary[],
-  raceFeatDetail: BackgroundFeat | null,
-  classFeatDetails: Record<string, BackgroundFeat>,
-): ProficiencyMap {
-  return buildProficiencyMapInternal("5e", form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
-}
-
-function buildProficiencyMap55e(
-  form: FormState,
-  classDetail: ClassDetail | null,
-  raceDetail: RaceDetail | null,
-  bgDetail: BgDetail | null,
-  classCantrips: SpellSummary[],
-  classSpells: SpellSummary[],
-  classInvocations: SpellSummary[],
-  raceFeatDetail: BackgroundFeat | null,
-  classFeatDetails: Record<string, BackgroundFeat>,
-): ProficiencyMap {
-  return buildProficiencyMapInternal("5.5e", form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
+  return buildProficiencyMapInternal(form, classDetail, raceDetail, bgDetail, classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails);
 }
 
 function buildProficiencyMapInternal(
-  ruleset: Ruleset,
   form: FormState,
   classDetail: ClassDetail | null,
   raceDetail: RaceDetail | null,
@@ -643,14 +437,22 @@ function buildProficiencyMapInternal(
   const masteries:   TaggedItem[] = [];
   const spells:      TaggedItem[] = [];
   const invocations: TaggedItem[] = [];
+  const pushArmor = (name: string, source: string) => {
+    const formatted = normalizeArmorProficiencyName(name);
+    if (formatted) armor.push({ name: formatted, source });
+  };
   const pushWeapon = (name: string, source: string) => {
-    const formatted = formatWeaponProficiencyName(name);
+    const formatted = normalizeWeaponProficiencyName(name);
     if (formatted) weapons.push({ name: formatted, source });
+  };
+  const pushLanguage = (name: string, source: string) => {
+    const formatted = normalizeLanguageName(name);
+    if (formatted) languages.push({ name: formatted, source });
   };
 
   // ── Class ──────────────────────────────────────────────────────────────────
   if (classDetail) {
-    splitComma(classDetail.armor).forEach(n => armor.push({ name: n, source: className }));
+    splitComma(classDetail.armor).forEach(n => pushArmor(n, className));
     splitComma(classDetail.weapons).forEach(n => pushWeapon(n, className));
     splitComma(classDetail.tools).forEach(n => tools.push({ name: n, source: className }));
 
@@ -677,9 +479,9 @@ function buildProficiencyMapInternal(
     // Skill choices made in the Skills step
     form.chosenSkills.forEach(n => skills.push({ name: n, source: className }));
     const classLanguageChoice = getClassLanguageChoice(classDetail, form.level);
-    classLanguageChoice?.fixed.forEach((name) => languages.push({ name, source: classLanguageChoice.source }));
-    form.chosenClassLanguages.forEach((name) => languages.push({ name, source: classLanguageChoice?.source ?? className }));
-    const masteryChoice = ruleset === "5.5e" ? getWeaponMasteryChoice(classDetail, form.level) : null;
+    classLanguageChoice?.fixed.forEach((name) => pushLanguage(name, classLanguageChoice.source));
+    form.chosenClassLanguages.forEach((name) => pushLanguage(name, classLanguageChoice?.source ?? className));
+    const masteryChoice = getWeaponMasteryChoice(classDetail, form.level);
     if (masteryChoice) {
       form.chosenWeaponMasteries.forEach((name) => masteries.push({ name, source: masteryChoice.source }));
     }
@@ -696,18 +498,18 @@ function buildProficiencyMapInternal(
       const ftext = optFeatureMap[fname];
       if (!ftext) continue;
       const grants = parseFeatureGrants(ftext);
-      grants.armor.forEach(n    => armor.push({ name: n, source: fname }));
+      grants.armor.forEach(n    => pushArmor(n, fname));
       grants.weapons.forEach(n  => pushWeapon(n, fname));
       grants.tools.forEach(n    => tools.push({ name: n, source: fname }));
       grants.skills.forEach(n   => skills.push({ name: n, source: fname }));
-      grants.languages.forEach(n => languages.push({ name: n, source: fname }));
+      grants.languages.forEach(n => pushLanguage(n, fname));
     }
 
     for (const [featureName, feat] of Object.entries(classFeatDetails)) {
       feat.parsed.grants.skills.forEach((name) => skills.push({ name, source: feat.name }));
       feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
-      feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
-      feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
+      feat.parsed.grants.languages.forEach((name) => pushLanguage(name, feat.name));
+      feat.parsed.grants.armor.forEach((name) => pushArmor(name, feat.name));
       feat.parsed.grants.weapons.forEach((name) => pushWeapon(name, feat.name));
       feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
       for (const choice of feat.parsed.choices) {
@@ -717,7 +519,7 @@ function buildProficiencyMapInternal(
           const kind = classifyFeatSelection(choice, name);
           if (kind === "skill") skills.push({ name, source: feat.name });
           else if (kind === "tool") tools.push({ name, source: feat.name });
-          else if (kind === "language") languages.push({ name, source: feat.name });
+          else if (kind === "language") pushLanguage(name, feat.name);
           else if (kind === "weapon_mastery") masteries.push({ name, source: feat.name });
         }
       }
@@ -736,41 +538,39 @@ function buildProficiencyMapInternal(
       prof.tools.fixed.forEach(n => tools.push({ name: n, source: bgName }));
       form.chosenBgTools.forEach(n => tools.push({ name: n, source: bgName }));
       // Languages — fixed grants + chosen picks
-      prof.languages.fixed.forEach(n => languages.push({ name: n, source: bgName }));
-      form.chosenBgLanguages.forEach(n => languages.push({ name: n, source: bgName }));
+      prof.languages.fixed.forEach(n => pushLanguage(n, bgName));
+      form.chosenBgLanguages.forEach(n => pushLanguage(n, bgName));
     } else {
       // Fallback: old-style trait text parsing
       for (const t of bgDetail.traits) {
         if (/tool/i.test(t.name)) splitComma(t.text).forEach(n => tools.push({ name: n, source: bgName }));
-        else if (/language/i.test(t.name)) splitComma(t.text).forEach(n => languages.push({ name: n, source: bgName }));
+        else if (/language/i.test(t.name)) splitComma(t.text).forEach(n => pushLanguage(n, bgName));
       }
     }
-    if (ruleset === "5.5e") {
-      for (const feat of prof?.feats ?? []) {
-        feat.parsed.grants.skills.forEach((name) => skills.push({ name, source: feat.name }));
-        feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
-        feat.parsed.grants.languages.forEach((name) => languages.push({ name, source: feat.name }));
-        feat.parsed.grants.armor.forEach((name) => armor.push({ name, source: feat.name }));
-        feat.parsed.grants.weapons.forEach((name) => pushWeapon(name, feat.name));
-        feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
+    for (const feat of prof?.feats ?? []) {
+      feat.parsed.grants.skills.forEach((name) => skills.push({ name, source: feat.name }));
+      feat.parsed.grants.tools.forEach((name) => tools.push({ name, source: feat.name }));
+      feat.parsed.grants.languages.forEach((name) => pushLanguage(name, feat.name));
+      feat.parsed.grants.armor.forEach((name) => pushArmor(name, feat.name));
+      feat.parsed.grants.weapons.forEach((name) => pushWeapon(name, feat.name));
+      feat.parsed.grants.savingThrows.forEach((name) => saves.push({ name, source: feat.name }));
 
-        for (const choice of feat.parsed.choices) {
-          if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
-          const selected = form.chosenFeatOptions[`bg:${feat.name}:${choice.id}`] ?? [];
-          for (const name of selected) {
-            const kind = classifyFeatSelection(choice, name);
-            if (kind === "skill") skills.push({ name, source: feat.name });
-            else if (kind === "tool") tools.push({ name, source: feat.name });
-            else if (kind === "language") languages.push({ name, source: feat.name });
-            else if (kind === "weapon_mastery") masteries.push({ name, source: feat.name });
-          }
+      for (const choice of feat.parsed.choices) {
+        if (choice.type !== "proficiency" && choice.type !== "weapon_mastery") continue;
+        const selected = form.chosenFeatOptions[`bg:${feat.name}:${choice.id}`] ?? [];
+        for (const name of selected) {
+          const kind = classifyFeatSelection(choice, name);
+          if (kind === "skill") skills.push({ name, source: feat.name });
+          else if (kind === "tool") tools.push({ name, source: feat.name });
+          else if (kind === "language") pushLanguage(name, feat.name);
+          else if (kind === "weapon_mastery") masteries.push({ name, source: feat.name });
         }
       }
     }
   }
 
   // ── Species ────────────────────────────────────────────────────────────────
-  const core55eLanguageChoice = getCore55eLanguageChoice(raceDetail, ruleset);
+  const coreLanguageChoice = getCoreLanguageChoice(raceDetail, ruleset);
 
   if (raceDetail) {
     for (const t of raceDetail.traits) {
@@ -779,7 +579,7 @@ function buildProficiencyMapInternal(
         const m = mod.match(/^(language|tool|skill)[:\s]+(.+)/i);
         if (m) {
           const val = m[2].trim();
-          if (/language/i.test(m[1])) languages.push({ name: val, source: raceName });
+          if (/language/i.test(m[1])) pushLanguage(val, raceName);
           else if (/tool/i.test(m[1]))   tools.push({ name: val, source: raceName });
           else if (/skill/i.test(m[1]))  skills.push({ name: val, source: raceName });
         }
@@ -787,23 +587,23 @@ function buildProficiencyMapInternal(
       // Trait named "Languages" — fall back to parsing text
       if (/^languages?$/i.test(t.name) && t.modifier.length === 0) {
         splitComma(t.text).forEach(n => {
-          if (n && !/choose/i.test(n)) languages.push({ name: n, source: raceName });
+          if (n && !/choose/i.test(n)) pushLanguage(n, raceName);
         });
       }
     }
     // Chosen race skills/languages/tools (e.g. Human Skillful, Elf Keen Senses, Warforged Specialized Design)
     form.chosenRaceSkills.forEach(n => skills.push({ name: n, source: raceName }));
-    if (!core55eLanguageChoice) {
-      form.chosenRaceLanguages.forEach(n => languages.push({ name: n, source: raceName }));
+    if (!coreLanguageChoice) {
+      form.chosenRaceLanguages.forEach(n => pushLanguage(n, raceName));
     }
     form.chosenRaceTools.forEach(n => tools.push({ name: n, source: raceName }));
     // Race feat grants (e.g. Human Versatile origin feat)
-    if (ruleset === "5.5e" && raceFeatDetail) {
+    if (raceFeatDetail) {
       const rg = raceFeatDetail.parsed.grants;
       rg.skills.forEach(n => skills.push({ name: n, source: raceFeatDetail.name }));
       rg.tools.forEach(n => tools.push({ name: n, source: raceFeatDetail.name }));
-      rg.languages.forEach(n => languages.push({ name: n, source: raceFeatDetail.name }));
-      rg.armor.forEach(n => armor.push({ name: n, source: raceFeatDetail.name }));
+      rg.languages.forEach(n => pushLanguage(n, raceFeatDetail.name));
+      rg.armor.forEach(n => pushArmor(n, raceFeatDetail.name));
       rg.weapons.forEach(n => pushWeapon(n, raceFeatDetail.name));
       rg.savingThrows.forEach(n => saves.push({ name: n, source: raceFeatDetail.name }));
       for (const choice of raceFeatDetail.parsed.choices) {
@@ -813,16 +613,16 @@ function buildProficiencyMapInternal(
           const kind = classifyFeatSelection(choice, name);
           if (kind === "skill") skills.push({ name, source: raceFeatDetail.name });
           else if (kind === "tool") tools.push({ name, source: raceFeatDetail.name });
-          else if (kind === "language") languages.push({ name, source: raceFeatDetail.name });
+          else if (kind === "language") pushLanguage(name, raceFeatDetail.name);
           else if (kind === "weapon_mastery") masteries.push({ name, source: raceFeatDetail.name });
         }
       }
     }
   }
 
-  if (core55eLanguageChoice) {
-    core55eLanguageChoice.fixed.forEach((name) => languages.push({ name, source: core55eLanguageChoice.source }));
-    form.chosenRaceLanguages.forEach((name) => languages.push({ name, source: core55eLanguageChoice.source }));
+  if (coreLanguageChoice) {
+    coreLanguageChoice.fixed.forEach((name) => pushLanguage(name, coreLanguageChoice.source));
+    form.chosenRaceLanguages.forEach((name) => pushLanguage(name, coreLanguageChoice.source));
   }
 
   // ── Spells ─────────────────────────────────────────────────────────────────
@@ -843,7 +643,17 @@ function buildProficiencyMapInternal(
     if (sp) invocations.push({ name: sp.name, source: className });
   });
 
-  return { skills, saves, armor, weapons, tools, languages, masteries, spells, invocations };
+  return {
+    skills: dedupeTaggedItems(skills),
+    saves: dedupeTaggedItems(saves),
+    armor: dedupeTaggedItems(armor, normalizeArmorProficiencyName),
+    weapons: dedupeTaggedItems(weapons, normalizeWeaponProficiencyName),
+    tools: dedupeTaggedItems(tools),
+    languages: dedupeTaggedItems(languages, normalizeLanguageName),
+    masteries: dedupeTaggedItems(masteries),
+    spells: dedupeTaggedItems(spells),
+    invocations: dedupeTaggedItems(invocations),
+  };
 }
 
 /** Group optional non-subclass features by level, up to `level`.
@@ -1039,12 +849,7 @@ export function CharacterCreatorView() {
     () => classes.find((c) => c.id === form.classId) ?? null,
     [classes, form.classId]
   );
-  const selectedRuleset: Ruleset | null = React.useMemo(() => {
-    const explicit = classDetail?.ruleset ?? selectedClassSummary?.ruleset ?? form.ruleset ?? null;
-    if (explicit) return explicit;
-    const label = classDetail?.name ?? selectedClassSummary?.name ?? null;
-    return label ? inferRulesetFromLabel(label) : null;
-  }, [classDetail?.name, classDetail?.ruleset, selectedClassSummary?.name, selectedClassSummary?.ruleset, form.ruleset]);
+  const selectedRuleset: Ruleset = "5.5e";
 
   // Load compendium lists on mount
   React.useEffect(() => {
@@ -1064,7 +869,7 @@ export function CharacterCreatorView() {
         const cd = ch.characterData ?? {};
         setForm((f) => ({
           ...f,
-          ruleset: cd.ruleset ?? null,
+          ruleset: "5.5e",
           classId: cd.classId ?? "",
           raceId: cd.raceId ?? "",
           bgId: cd.bgId ?? "",
@@ -1154,7 +959,6 @@ export function CharacterCreatorView() {
 
     return new Set(
       classInvocations
-        .filter((invocation) => matchesRulesetLabel(invocation.name, selectedRuleset))
         .filter((invocation) =>
           invocationPrerequisitesMet(invocation.text ?? "", {
             level: form.level,
@@ -1165,7 +969,7 @@ export function CharacterCreatorView() {
         )
         .map((invocation) => invocation.id)
     );
-  }, [classCantrips, classInvocations, form.chosenCantrips, form.chosenInvocations, form.level, selectedRuleset]);
+  }, [classCantrips, classInvocations, form.chosenCantrips, form.chosenInvocations, form.level]);
 
   // Drop any chosen invocations whose prerequisites are no longer met
   React.useEffect(() => {
@@ -1345,8 +1149,8 @@ export function CharacterCreatorView() {
           chosenSpells: form.chosenSpells,
           chosenInvocations: form.chosenInvocations,
           ...(startingInventory ? { inventory: startingInventory } : {}),
-          proficiencies: buildProficiencyMapForRuleset(
-            selectedRuleset ?? "5e",
+          proficiencies: buildProficiencyMap(
+            selectedRuleset,
             form, classDetail, raceDetail, bgDetail,
             classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails
           ),
@@ -1470,7 +1274,7 @@ export function CharacterCreatorView() {
       onSelectClass: (classId) => setForm((f) => ({
         ...f,
         classId,
-        ruleset: inferRulesetFromLabel(classes.find((c) => c.id === classId)?.name ?? ""),
+        ruleset: "5.5e",
         raceId: "",
         bgId: "",
         chosenRaceSkills: [],
@@ -1514,7 +1318,7 @@ export function CharacterCreatorView() {
     }
 
     const raceChoices = raceDetail
-      ? (raceDetail.parsedChoices ?? parseRaceChoicesByRuleset(selectedRuleset ?? "5e", raceDetail.traits))
+      ? (raceDetail.parsedChoices ?? parseRaceChoicesByRuleset(selectedRuleset, raceDetail.traits))
       : null;
     const { skillChoice, toolChoice, languageChoice } = raceChoices ?? { skillChoice: null, toolChoice: null, languageChoice: null };
     const originFeats = featSummaries.filter(f => /\borigin\b/i.test(f.name) && matchesRuleset(f, selectedRuleset));
@@ -2225,7 +2029,7 @@ export function CharacterCreatorView() {
     const bgLangChoice = bgDetail?.proficiencies?.languages ?? { fixed: [], choose: 0, from: null };
     const bgSkillFixed = bgDetail?.proficiencies?.skills?.fixed ?? (bgDetail ? parseSkillList(bgDetail.proficiency) : []);
     const bgToolFixed = bgDetail?.proficiencies?.tools?.fixed ?? [];
-    const core55eLanguageChoice = getCore55eLanguageChoice(raceDetail, selectedRuleset);
+    const coreLanguageChoice = getCoreLanguageChoice(raceDetail, selectedRuleset);
     const classFeatChoices = getClassFeatChoices(classDetail, form.level, featSummaries, selectedRuleset);
     const selectedClassFeatEntries = classFeatChoices
       .map((choice) => {
@@ -2236,8 +2040,8 @@ export function CharacterCreatorView() {
         return { choice, detail };
       })
       .filter(Boolean) as Array<{ choice: ClassFeatChoice; detail: BackgroundFeat }>;
-    const bgFeatChoices = getBackgroundFeatChoicesByRuleset(selectedRuleset ?? "5e", bgDetail);
-    const raceFeatChoices: BackgroundFeatChoiceEntry[] = selectedRuleset === "5.5e" && raceFeatDetail
+    const bgFeatChoices = getBackgroundFeatChoicesByRuleset(selectedRuleset, bgDetail);
+    const raceFeatChoices: BackgroundFeatChoiceEntry[] = raceFeatDetail
       ? raceFeatDetail.parsed.choices
           .filter(c => c.type === "proficiency" || c.type === "weapon_mastery")
           .map(choice => ({
@@ -2248,10 +2052,10 @@ export function CharacterCreatorView() {
           }))
       : [];
     const classLanguageChoice = getClassLanguageChoice(classDetail, form.level);
-    const weaponMasteryChoice = selectedRuleset === "5.5e" ? getWeaponMasteryChoice(classDetail, form.level) : null;
+    const weaponMasteryChoice = getWeaponMasteryChoice(classDetail, form.level);
     const weaponOptions = getWeaponMasteryOptions(items);
     const missingClassFeatChoices = classFeatChoices.some((choice) => !form.chosenClassFeatIds[choice.featureName]);
-    const missingCore55eLanguages = Boolean(core55eLanguageChoice) && form.chosenRaceLanguages.length < core55eLanguageChoice.choose;
+    const missingCoreLanguages = Boolean(coreLanguageChoice) && form.chosenRaceLanguages.length < coreLanguageChoice.choose;
     const missingClassLanguages = Boolean(classLanguageChoice) && form.chosenClassLanguages.length < classLanguageChoice.choose;
     const hasAnything = numSkills > 0 || bgLangChoice.fixed.length > 0 || bgLangChoice.choose > 0 || classFeatChoices.length > 0 || bgFeatChoices.length > 0 || raceFeatChoices.length > 0 || Boolean(weaponMasteryChoice) || Boolean(classLanguageChoice);
 
@@ -2290,7 +2094,7 @@ export function CharacterCreatorView() {
       ...form.chosenBgLanguages,
       ...(classLanguageChoice?.fixed ?? []),
       ...form.chosenClassLanguages,
-      ...(core55eLanguageChoice?.fixed ?? []),
+      ...(coreLanguageChoice?.fixed ?? []),
       ...form.chosenRaceLanguages,
       ...chosenBgFeatLanguages,
       ...chosenRaceFeatLanguages,
@@ -2468,29 +2272,29 @@ export function CharacterCreatorView() {
           </div>
         )}
 
-        {core55eLanguageChoice && (
+        {coreLanguageChoice && (
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ ...labelStyle, margin: 0 }}>
-                Languages <span style={sourceTagStyle}>{core55eLanguageChoice.source}</span>
+                Languages <span style={sourceTagStyle}>{coreLanguageChoice.source}</span>
               </div>
-              <span style={{ fontSize: 12, color: form.chosenRaceLanguages.length >= core55eLanguageChoice.choose ? C.accentHl : C.muted }}>
-                {form.chosenRaceLanguages.length} / {core55eLanguageChoice.choose}
+              <span style={{ fontSize: 12, color: form.chosenRaceLanguages.length >= coreLanguageChoice.choose ? C.accentHl : C.muted }}>
+                {form.chosenRaceLanguages.length} / {coreLanguageChoice.choose}
               </span>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-              {core55eLanguageChoice.fixed.map((language) => (
+              {coreLanguageChoice.fixed.map((language) => (
                 <span key={language} style={profChipStyle}>{language}</span>
               ))}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {core55eLanguageChoice.from.map((language) => {
+              {coreLanguageChoice.from.map((language) => {
                 const sel = form.chosenRaceLanguages.includes(language);
                 const duplicate = duplicateLocked("language", language, sel);
-                const locked = (!sel && form.chosenRaceLanguages.length >= core55eLanguageChoice.choose) || duplicate;
+                const locked = (!sel && form.chosenRaceLanguages.length >= coreLanguageChoice.choose) || duplicate;
                 return (
                   <button key={language} type="button" disabled={locked}
-                    onClick={() => toggleRaceLanguage(language, core55eLanguageChoice.choose)}
+                    onClick={() => toggleRaceLanguage(language, coreLanguageChoice.choose)}
                     style={choiceButtonStyle(sel, locked, duplicate)}>
                     {language}
                   </button>
@@ -2716,7 +2520,7 @@ export function CharacterCreatorView() {
           <p style={{ color: C.muted, fontSize: 14 }}>There are no skill, language, or mastery choices at this level.</p>
         )}
 
-        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} nextDisabled={missingClassFeatChoices || missingCore55eLanguages || missingClassLanguages} />
+        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} nextDisabled={missingClassFeatChoices || missingCoreLanguages || missingClassLanguages} />
       </div>
     );
 
@@ -2824,8 +2628,8 @@ export function CharacterCreatorView() {
     const conMod = abilityMod(scores.con ?? 10);
     const dexMod = abilityMod(scores.dex ?? 10);
     const hd = classDetail?.hd ?? 8;
-    const prof = buildProficiencyMapForRuleset(
-      selectedRuleset ?? "5e",
+    const prof = buildProficiencyMap(
+      selectedRuleset,
       form, classDetail, raceDetail, bgDetail,
       classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails,
     );

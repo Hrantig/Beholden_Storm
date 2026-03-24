@@ -2,7 +2,7 @@ import { estimateMonsterDpr, labelForRoundsToTpk } from "@/domain/utils/monsterD
 
 type DifficultyLabel = "Too Easy" | "Easy" | "Medium" | "Hard" | "Deadly" | "TPK";
 
-// ── 5e XP thresholds by character level (DMG p.82) ───────────────────────────
+// ── XP thresholds by character level (DMG p.82) ──────────────────────────────
 // [easy, medium, hard, deadly]
 const XP_THRESHOLDS: Record<number, [number, number, number, number]> = {
   1:  [25,   50,    75,    100  ],

@@ -12,16 +12,26 @@ import { CharacterAbilitiesPanels } from "@/views/CharacterAbilitiesPanels";
 import { CharacterCombatPanels } from "@/views/CharacterCombatPanels";
 import { CharacterHudPanel } from "@/views/CharacterHudPanel";
 import { InventoryPanel } from "@/views/CharacterInventoryPanel";
+import { buildGrantedSpellData, type SpellGrantSource } from "@/views/CharacterRuleParsers";
 import { SpellSlotsPanel, RichSpellsPanel, ItemSpellsPanel } from "@/views/CharacterSpellsPanel";
 import { CharacterSupportPanels } from "@/views/CharacterSupportPanels";
-import { abilityMod, formatModifier, hasNamedProficiency, normalizeResourceKey, proficiencyBonus } from "@/views/CharacterSheetUtils";
+import {
+  abilityMod,
+  dedupeTaggedItems,
+  formatModifier,
+  hasNamedProficiency,
+  normalizeArmorProficiencyName,
+  normalizeLanguageName,
+  normalizeResourceKey,
+  normalizeWeaponProficiencyName,
+  proficiencyBonus,
+} from "@/views/CharacterSheetUtils";
 import type {
   AbilKey,
   CharacterCampaign,
   CharacterData,
   ClassFeatureEntry,
   ConditionInstance,
-  GrantedSpellCast,
   PlayerNote,
   ProficiencyMap,
   ResourceCounter,
@@ -300,109 +310,6 @@ function collectClassResources(classDetail: ClassRestDetail | null, level: numbe
   return Array.from(latest.values());
 }
 
-interface SpellGrantSource {
-  name: string;
-  text: string;
-}
-
-function abilityModFromScores(scores: Record<AbilKey, number | null>, abilityName: string): number {
-  const key = abilityName.trim().toLowerCase().slice(0, 3) as AbilKey;
-  return abilityMod(scores[key]);
-}
-
-function parseWordCount(value: string): number | null {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  const direct = Number.parseInt(normalized, 10);
-  if (Number.isFinite(direct)) return direct;
-  const words: Record<string, number> = {
-    once: 1,
-    one: 1,
-    twice: 2,
-    two: 2,
-    three: 3,
-    four: 4,
-    five: 5,
-    six: 6,
-  };
-  return words[normalized] ?? null;
-}
-
-function buildGrantedSpellData(sources: SpellGrantSource[], scores: Record<AbilKey, number | null>): { spells: GrantedSpellCast[]; resources: ResourceCounter[] } {
-  const spells: GrantedSpellCast[] = [];
-  const resources: ResourceCounter[] = [];
-
-  for (const source of sources) {
-    const sourceName = String(source.name ?? "").trim();
-    const text = String(source.text ?? "")
-      .replace(/Source:.*$/gim, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!sourceName || !text || !/without expending a spell slot/i.test(text)) continue;
-
-    const spellMatch = text.match(/you can cast\s+([A-Z][A-Za-z' -]+?)\s+without expending a spell slot/i);
-    if (!spellMatch) continue;
-
-    const spellName = spellMatch[1].replace(/\s+on yourself$/i, "").trim();
-    const reset = /finish a short rest/i.test(text) ? "S" : /finish a long rest/i.test(text) ? "L" : undefined;
-    const abilityCountMatch = text.match(/a number of times equal to your\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+modifier\s*\(minimum of once\)/i);
-    const fixedCountMatch = text.match(/\b(once|twice|one|two|three|four|five|six)\b[^.]*without expending a spell slot/i);
-
-    if (abilityCountMatch && reset) {
-      const max = Math.max(1, abilityModFromScores(scores, abilityCountMatch[1]));
-      const resourceKey = normalizeResourceKey(`${sourceName}:${spellName}`);
-      spells.push({
-        key: `granted-spell:${resourceKey}`,
-        spellName,
-        sourceName,
-        mode: "limited",
-        note: `Free cast ${max} time${max === 1 ? "" : "s"} per ${reset === "S" ? "Short Rest" : "Long Rest"}. No spell slot required.`,
-        resourceKey,
-        reset,
-      });
-      resources.push({
-        key: resourceKey,
-        name: `${spellName} (${sourceName})`,
-        current: max,
-        max,
-        reset,
-      });
-      continue;
-    }
-
-    if (fixedCountMatch && reset) {
-      const max = parseWordCount(fixedCountMatch[1]) ?? 1;
-      const resourceKey = normalizeResourceKey(`${sourceName}:${spellName}`);
-      spells.push({
-        key: `granted-spell:${resourceKey}`,
-        spellName,
-        sourceName,
-        mode: "limited",
-        note: `Free cast ${max} time${max === 1 ? "" : "s"} per ${reset === "S" ? "Short Rest" : "Long Rest"}. No spell slot required.`,
-        resourceKey,
-        reset,
-      });
-      resources.push({
-        key: resourceKey,
-        name: `${spellName} (${sourceName})`,
-        current: max,
-        max,
-        reset,
-      });
-      continue;
-    }
-
-    spells.push({
-      key: `granted-spell:${normalizeResourceKey(`${sourceName}:${spellName}`)}`,
-      spellName,
-      sourceName,
-      mode: "at_will",
-      note: "",
-    });
-  }
-
-  return { spells, resources };
-}
-
 function mergeResourceState(saved: ResourceCounter[] | undefined, derived: ResourceCounter[]): ResourceCounter[] {
   const savedList = Array.isArray(saved) ? saved : [];
   const savedByKey = new Map(savedList.map((resource) => [resource.key || normalizeResourceKey(resource.name), resource]));
@@ -577,7 +484,19 @@ export function CharacterView() {
   if (loading) return <Wrap><p style={{ color: C.muted }}>Loading…</p></Wrap>;
   if (error || !char) return <Wrap><p style={{ color: C.red }}>{error ?? "Character not found."}</p></Wrap>;
 
-  const prof = char.characterData?.proficiencies;
+  const rawProf = char.characterData?.proficiencies;
+  const prof = rawProf ? {
+    ...rawProf,
+    skills: dedupeTaggedItems(rawProf.skills),
+    saves: dedupeTaggedItems(rawProf.saves),
+    armor: dedupeTaggedItems(rawProf.armor, normalizeArmorProficiencyName),
+    weapons: dedupeTaggedItems(rawProf.weapons, normalizeWeaponProficiencyName),
+    tools: dedupeTaggedItems(rawProf.tools),
+    languages: dedupeTaggedItems(rawProf.languages, normalizeLanguageName),
+    masteries: dedupeTaggedItems(rawProf.masteries),
+    spells: dedupeTaggedItems(rawProf.spells),
+    invocations: dedupeTaggedItems(rawProf.invocations),
+  } : undefined;
   const pb = proficiencyBonus(char.level);
   const hd = char.characterData?.hd ?? null;
   const hitDieSize = hd ?? classDetail?.hd ?? null;

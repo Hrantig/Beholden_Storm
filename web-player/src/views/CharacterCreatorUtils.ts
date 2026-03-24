@@ -261,50 +261,7 @@ export function classifyFeatSelection(
   return null;
 }
 
-export function parseRaceChoices5e(traits: CreatorRaceTraitLike[]): RaceChoices {
-  let skillChoice: RaceChoices["skillChoice"] = null;
-  let toolChoice: RaceChoices["toolChoice"] = null;
-  let languageChoice: RaceChoices["languageChoice"] = null;
-
-  for (const trait of traits) {
-    const text = trait.text;
-    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
-    if (skillListMatch) {
-      const from = skillListMatch[1]
-        .split(/,\s*|\s+or\s+/i)
-        .map((s) => s.trim())
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
-        .filter((s) => SKILL_NAMES.includes(s));
-      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
-    } else if (
-      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
-      /one skill of your choice/i.test(text)
-    ) {
-      if (!skillChoice) skillChoice = { count: 1, from: null };
-    }
-
-    if (/one tool proficiency of your choice/i.test(text)) {
-      if (!toolChoice) toolChoice = { count: 1, from: null };
-    }
-
-    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
-    if (langListMatch) {
-      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
-      const from = langListMatch[2]
-        .split(/[,\n\t]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
-      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
-    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
-      if (!languageChoice) languageChoice = { count: 1, from: null };
-    }
-  }
-
-  return { hasChosenSize: false, skillChoice, toolChoice, languageChoice, hasFeatChoice: false };
-}
-
-export function parseRaceChoices55e(traits: CreatorRaceTraitLike[]): RaceChoices {
+export function parseRaceChoices(traits: CreatorRaceTraitLike[]): RaceChoices {
   let hasChosenSize = false;
   let skillChoice: RaceChoices["skillChoice"] = null;
   let toolChoice: RaceChoices["toolChoice"] = null;
@@ -353,7 +310,8 @@ export function parseRaceChoices55e(traits: CreatorRaceTraitLike[]): RaceChoices
 }
 
 export function parseRaceChoicesByRuleset(ruleset: Ruleset, traits: CreatorRaceTraitLike[]): RaceChoices {
-  return ruleset === "5.5e" ? parseRaceChoices55e(traits) : parseRaceChoices5e(traits);
+  void ruleset;
+  return parseRaceChoices(traits);
 }
 
 export function parseStartingEquipmentOptions(equipment: string | undefined): StartingEquipmentOption[] {

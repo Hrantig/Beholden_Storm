@@ -1,4 +1,4 @@
-// D&D 5e (2024 PHB) quick-reference data for the Rules Reference panel.
+// 2024 PHB quick-reference data for the Rules Reference panel.
 
 export const CONDITIONS: { name: string; bullets: string[] }[] = [
   { name: "Blinded", bullets: ["Can't see", "Attacks vs. you have advantage", "Your attacks have disadvantage"] },
