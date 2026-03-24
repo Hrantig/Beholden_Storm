@@ -28,6 +28,7 @@ import type {
 import {
   type InventoryItem,
   getEquipState,
+  hasArmorProficiency,
   hasStealthDisadvantage,
   isArmorItem,
   isShieldItem,
@@ -492,9 +493,13 @@ export function CharacterView() {
   const xpEarned = char.characterData?.xp ?? 0;
   const xpNeeded = XP_TO_LEVEL[char.level + 1] ?? 0;
   const inventory = char.characterData?.inventory ?? [];
-  const shieldBonus = inventory.some((it) => getEquipState(it) === "offhand" && isShieldItem(it)) ? 2 : 0;
+  const wornShield = inventory.find((it) => getEquipState(it) === "offhand" && isShieldItem(it));
+  const shieldBonus = wornShield ? 2 : 0;
   const wornArmor = inventory.find((it) => getEquipState(it) === "worn" && isArmorItem(it) && (it.ac ?? 0) > 0);
-  const stealthDisadvantage = Boolean(wornArmor && hasStealthDisadvantage(wornArmor));
+  const armorWithoutProficiency = Boolean(wornArmor && !hasArmorProficiency(wornArmor, prof ?? undefined));
+  const shieldWithoutProficiency = Boolean(wornShield && !hasArmorProficiency(wornShield, prof ?? undefined));
+  const nonProficientArmorPenalty = armorWithoutProficiency || shieldWithoutProficiency;
+  const stealthDisadvantage = Boolean((wornArmor && hasStealthDisadvantage(wornArmor)) || nonProficientArmorPenalty);
   const dexMod = abilityMod(char.dexScore);
   const conMod = abilityMod(char.conScore);
   const wornArmorAc = (() => {
@@ -631,6 +636,10 @@ export function CharacterView() {
     // Reset spell slots on long rest (unless Warlock which uses short rest — checked via slotsReset)
     const slotsReset = classDetail?.slotsReset ?? "L";
     const nextUsedSpellSlots = /S/i.test(slotsReset) ? (char.characterData?.usedSpellSlots ?? {}) : {};
+    // Reset item charges on long rest
+    const nextInventory = inventory.map((it) =>
+      (it.chargesMax ?? 0) > 0 ? { ...it, charges: it.chargesMax } : it
+    );
 
     await api(`/api/me/characters/${char.id}`, jsonInit("PUT", {
       hpCurrent: effectiveHpMax,
@@ -639,6 +648,7 @@ export function CharacterView() {
         hitDiceCurrent: nextHitDice,
         resources: nextResources,
         usedSpellSlots: nextUsedSpellSlots,
+        inventory: nextInventory,
       },
     }));
 
@@ -654,6 +664,7 @@ export function CharacterView() {
         hitDiceCurrent: nextHitDice,
         resources: nextResources,
         usedSpellSlots: nextUsedSpellSlots,
+        inventory: nextInventory,
       },
     } : prev);
   }
@@ -871,6 +882,7 @@ export function CharacterView() {
             prof={prof}
             accentColor={accentColor}
             stealthDisadvantage={stealthDisadvantage}
+            nonProficientArmorPenalty={nonProficientArmorPenalty}
             mod={abilityMod}
             fmtMod={formatModifier}
           />
@@ -893,6 +905,7 @@ export function CharacterView() {
             inventory={inventory}
             prof={prof}
             characterData={char.characterData}
+            nonProficientArmorPenalty={nonProficientArmorPenalty}
           />
           <ItemSpellsPanel
             items={inventory}
@@ -902,6 +915,7 @@ export function CharacterView() {
             chaScore={char.chaScore}
             accentColor={accentColor}
             onChargeChange={handleItemChargeChange}
+            spellcastingBlocked={nonProficientArmorPenalty}
           />
           {/* Known / Prepared spells — rich table with inline slots */}
           {prof && prof.spells.length > 0 && (
@@ -918,6 +932,7 @@ export function CharacterView() {
               preparedSpells={char.characterData?.preparedSpells ?? []}
               onSlotsChange={saveUsedSpellSlots}
               onPreparedChange={savePreparedSpells}
+              spellcastingBlocked={nonProficientArmorPenalty}
             />
           )}
 

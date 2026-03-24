@@ -40,6 +40,7 @@ import {
   getClassFeatureTable,
   getFeatChoiceOptions,
   getMaxSlotLevel,
+  getPreparedSpellCount,
   getSubclassLevel,
   getSubclassList,
   normalizeChoiceKey,
@@ -216,6 +217,13 @@ interface FeatureGrants {
   languages: string[];
 }
 
+interface ClassLanguageChoice {
+  fixed: string[];
+  choose: number;
+  from: string[] | null;
+  source: string;
+}
+
 interface WeaponMasteryChoice {
   source: string;
   count: number;
@@ -263,8 +271,33 @@ function parseFeatureGrants(text: string): FeatureGrants {
   while ((m = langRe.exec(t)) !== null) {
     result.languages.push(toTitleCase(m[1]));
   }
+  if (/know\s+thieves' cant/i.test(t)) result.languages.push("Thieves' Cant");
 
   return result;
+}
+
+function getClassLanguageChoice(classDetail: ClassDetail | null, level: number): ClassLanguageChoice | null {
+  if (!classDetail) return null;
+  const fixed = new Set<string>();
+  let choose = 0;
+  let source = classDetail.name;
+  for (const al of classDetail.autolevels) {
+    if (al.level == null || al.level > level) continue;
+    for (const feature of al.features) {
+      if (feature.optional) continue;
+      const text = String(feature.text ?? "");
+      if (/know\s+thieves' cant/i.test(text)) {
+        fixed.add("Thieves' Cant");
+        source = feature.name;
+      }
+      if (/one\s+other\s+language\s+of\s+your\s+choice/i.test(text) || /one\s+language\s+of\s+your\s+choice/i.test(text)) {
+        choose = Math.max(choose, 1);
+        source = feature.name;
+      }
+    }
+  }
+  if (fixed.size === 0 && choose === 0) return null;
+  return { fixed: [...fixed], choose, from: ALL_LANGUAGES, source };
 }
 
 
@@ -571,6 +604,7 @@ function buildProficiencyMapInternal(
   if (classDetail) {
     splitComma(classDetail.armor).forEach(n => armor.push({ name: n, source: className }));
     splitComma(classDetail.weapons).forEach(n => weapons.push({ name: n, source: className }));
+    splitComma(classDetail.tools).forEach(n => tools.push({ name: n, source: className }));
 
     // Saving throws — primary source: ability score names in <proficiency> field
     // e.g. "Wisdom, Charisma, History, Insight" → Wisdom + Charisma are saves
@@ -594,6 +628,9 @@ function buildProficiencyMapInternal(
     }
     // Skill choices made in the Skills step
     form.chosenSkills.forEach(n => skills.push({ name: n, source: className }));
+    const classLanguageChoice = getClassLanguageChoice(classDetail, form.level);
+    classLanguageChoice?.fixed.forEach((name) => languages.push({ name, source: classLanguageChoice.source }));
+    form.chosenClassLanguages.forEach((name) => languages.push({ name, source: classLanguageChoice?.source ?? className }));
     const masteryChoice = ruleset === "5.5e" ? getWeaponMasteryChoice(classDetail, form.level) : null;
     if (masteryChoice) {
       form.chosenWeaponMasteries.forEach((name) => masteries.push({ name, source: masteryChoice.source }));
@@ -819,6 +856,7 @@ interface FormState {
   bgAbilityBonuses: Record<string, number>; // e.g. { str: 2, dex: 1 } or { str:1, dex:1, con:1 }
   // Skill proficiency selections (up to numSkills)
   chosenSkills: string[];
+  chosenClassLanguages: string[];
   chosenWeaponMasteries: string[];
   // Spellcasting selections
   chosenCantrips: string[];    // spell IDs
@@ -855,7 +893,7 @@ function initForm(user: { name?: string } | null, params: URLSearchParams): Form
     chosenRaceSkills: [], chosenRaceLanguages: [], chosenRaceTools: [], chosenRaceFeatId: null, chosenRaceSize: null,
     chosenBgSkills: [], chosenBgOriginFeatId: null,
     chosenBgTools: [], chosenBgLanguages: [], chosenClassEquipmentOption: null, chosenBgEquipmentOption: null, chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {},
-    chosenSkills: [], chosenWeaponMasteries: [], chosenCantrips: [], chosenSpells: [], chosenInvocations: [],
+    chosenSkills: [], chosenClassLanguages: [], chosenWeaponMasteries: [], chosenCantrips: [], chosenSpells: [], chosenInvocations: [],
     abilityMethod: "standard",
     standardAssign: { str: -1, dex: -1, con: -1, int: -1, wis: -1, cha: -1 },
     pbScores: { ...DEFAULT_SCORES },
@@ -992,6 +1030,7 @@ export function CharacterCreatorView() {
           chosenRaceFeatId: cd.chosenRaceFeatId ?? null,
           chosenRaceSize: cd.chosenRaceSize ?? null,
           chosenSkills: cd.chosenSkills ?? [],
+          chosenClassLanguages: cd.chosenClassLanguages ?? [],
           chosenClassEquipmentOption: cd.chosenClassEquipmentOption ?? null,
           chosenBgEquipmentOption: cd.chosenBgEquipmentOption ?? null,
           chosenFeatOptions: cd.chosenFeatOptions ?? {},
@@ -1032,6 +1071,7 @@ export function CharacterCreatorView() {
     setForm((f) => ({
       ...f,
       chosenClassFeatIds: {},
+      chosenClassLanguages: [],
       chosenClassEquipmentOption: null,
       chosenFeatOptions: Object.fromEntries(Object.entries(f.chosenFeatOptions).filter(([k]) => !k.startsWith("classfeat:"))),
     }));
@@ -1095,6 +1135,7 @@ export function CharacterCreatorView() {
     setForm(f => ({
       ...f,
       chosenRaceSkills: [], chosenRaceLanguages: [], chosenRaceTools: [], chosenRaceFeatId: null, chosenRaceSize: null,
+      chosenClassLanguages: [],
       chosenFeatOptions: Object.fromEntries(Object.entries(f.chosenFeatOptions).filter(([k]) => !k.startsWith("race:"))),
     }));
     setRaceFeatDetail(null);
@@ -1137,6 +1178,25 @@ export function CharacterCreatorView() {
     api<BgDetail>(`/api/compendium/backgrounds/${form.bgId}`).then(setBgDetail).catch(() => {});
   }, [form.bgId]);
 
+  // Auto-select the first equipment option when bgDetail loads
+  React.useEffect(() => {
+    if (!bgDetail?.equipment) return;
+    const options = parseStartingEquipmentOptions(bgDetail.equipment);
+    if (options.length > 0) {
+      setForm(f => f.chosenBgEquipmentOption ? f : { ...f, chosenBgEquipmentOption: options[0].id });
+    }
+  }, [bgDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select the first equipment option when classDetail loads
+  React.useEffect(() => {
+    if (!classDetail) return;
+    const text = extractClassStartingEquipment(classDetail);
+    const options = parseStartingEquipmentOptions(text);
+    if (options.length > 0) {
+      setForm(f => f.chosenClassEquipmentOption ? f : { ...f, chosenClassEquipmentOption: options[0].id });
+    }
+  }, [classDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-calculate HP, speed when class/race/scores change
   React.useEffect(() => {
     const hd = classDetail?.hd ?? 8;
@@ -1166,7 +1226,15 @@ export function CharacterCreatorView() {
         for (const al of classDetail.autolevels) {
           if (al.level == null || al.level > form.level) continue;
           for (const f of al.features) {
-            if (!f.optional) continue;
+            if (!f.optional) {
+              if (/^Becoming A /i.test(f.name)) continue;
+              featureByName.set(f.name, {
+                id: f.name,
+                name: f.name,
+                text: f.text?.trim() ?? "",
+              });
+              continue;
+            }
             if (!form.chosenOptionals.includes(f.name)) continue;
             if (featureByName.has(f.name)) continue;
             featureByName.set(f.name, {
@@ -1176,14 +1244,12 @@ export function CharacterCreatorView() {
             });
           }
         }
-        const selectedOptionals = form.chosenOptionals
-          .map((name) => featureByName.get(name) ?? { id: name, name, text: "" })
-          .filter(Boolean);
+        const orderedFeatures = Array.from(featureByName.values());
         const selectedClassFeats = Object.entries(form.chosenClassFeatIds)
           .map(([featureName]) => classFeatDetails[featureName])
           .filter(Boolean)
           .map((feat) => ({ id: feat.name, name: feat.name, text: feat.text?.trim() ?? "" }));
-        return [...selectedOptionals, ...selectedClassFeats];
+        return [...orderedFeatures, ...selectedClassFeats];
       })();
       const startingInventory = isEditing
         ? undefined
@@ -1222,6 +1288,7 @@ export function CharacterCreatorView() {
           chosenRaceFeatId: form.chosenRaceFeatId,
           chosenRaceSize: form.chosenRaceSize,
           chosenSkills: form.chosenSkills,
+          chosenClassLanguages: form.chosenClassLanguages,
           chosenClassEquipmentOption: form.chosenClassEquipmentOption,
           chosenBgEquipmentOption: form.chosenBgEquipmentOption,
           chosenFeatOptions: form.chosenFeatOptions,
@@ -2050,7 +2117,7 @@ export function CharacterCreatorView() {
         }
         {bgChoicesMain}
         <NavButtons step={step} onBack={() => setStep(2)} onNext={() => setStep(4)}
-          nextDisabled={!form.bgId || (equipmentOptions.length > 0 && !form.chosenBgEquipmentOption)} />
+          nextDisabled={!form.bgId || bgDetail?.id !== form.bgId || (equipmentOptions.length > 0 && !form.chosenBgEquipmentOption)} />
       </div>
     );
 
@@ -2132,11 +2199,13 @@ export function CharacterCreatorView() {
             key: `race:${raceFeatDetail.name}:${choice.id}`,
           }))
       : [];
+    const classLanguageChoice = getClassLanguageChoice(classDetail, form.level);
     const weaponMasteryChoice = selectedRuleset === "5.5e" ? getWeaponMasteryChoice(classDetail, form.level) : null;
     const weaponOptions = getWeaponMasteryOptions(items);
     const missingClassFeatChoices = classFeatChoices.some((choice) => !form.chosenClassFeatIds[choice.featureName]);
     const missingCore55eLanguages = Boolean(core55eLanguageChoice) && form.chosenRaceLanguages.length < core55eLanguageChoice.choose;
-    const hasAnything = numSkills > 0 || bgLangChoice.fixed.length > 0 || bgLangChoice.choose > 0 || classFeatChoices.length > 0 || bgFeatChoices.length > 0 || raceFeatChoices.length > 0 || Boolean(weaponMasteryChoice);
+    const missingClassLanguages = Boolean(classLanguageChoice) && form.chosenClassLanguages.length < classLanguageChoice.choose;
+    const hasAnything = numSkills > 0 || bgLangChoice.fixed.length > 0 || bgLangChoice.choose > 0 || classFeatChoices.length > 0 || bgFeatChoices.length > 0 || raceFeatChoices.length > 0 || Boolean(weaponMasteryChoice) || Boolean(classLanguageChoice);
 
     function selectedFeatOptionsMatching(choices: BackgroundFeatChoiceEntry[], kind: "skill" | "tool" | "language"): string[] {
       const matcher = kind === "skill"
@@ -2171,6 +2240,8 @@ export function CharacterCreatorView() {
     const takenLanguageKeys = new Set<string>([
       ...bgLangChoice.fixed,
       ...form.chosenBgLanguages,
+      ...(classLanguageChoice?.fixed ?? []),
+      ...form.chosenClassLanguages,
       ...(core55eLanguageChoice?.fixed ?? []),
       ...form.chosenRaceLanguages,
       ...chosenBgFeatLanguages,
@@ -2222,6 +2293,20 @@ export function CharacterCreatorView() {
             : f.chosenRaceLanguages.length < max
               ? [...f.chosenRaceLanguages, language]
               : f.chosenRaceLanguages,
+        };
+      });
+    }
+
+    function toggleClassLanguage(language: string, max: number) {
+      setForm((f) => {
+        const sel = f.chosenClassLanguages.includes(language);
+        return {
+          ...f,
+          chosenClassLanguages: sel
+            ? f.chosenClassLanguages.filter((name) => name !== language)
+            : f.chosenClassLanguages.length < max
+              ? [...f.chosenClassLanguages, language]
+              : f.chosenClassLanguages,
         };
       });
     }
@@ -2364,6 +2449,44 @@ export function CharacterCreatorView() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {classLanguageChoice && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ ...labelStyle, margin: 0 }}>
+                Languages <span style={sourceTagStyle}>{classLanguageChoice.source}</span>
+              </div>
+              {classLanguageChoice.choose > 0 && (
+                <span style={{ fontSize: 12, color: form.chosenClassLanguages.length >= classLanguageChoice.choose ? C.accentHl : C.muted }}>
+                  {form.chosenClassLanguages.length} / {classLanguageChoice.choose}
+                </span>
+              )}
+            </div>
+            {classLanguageChoice.fixed.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: classLanguageChoice.choose > 0 ? 10 : 0 }}>
+                {classLanguageChoice.fixed.map((language) => (
+                  <span key={language} style={profChipStyle}>{language}</span>
+                ))}
+              </div>
+            )}
+            {classLanguageChoice.choose > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {(classLanguageChoice.from ?? ALL_LANGUAGES).map((language) => {
+                  const sel = form.chosenClassLanguages.includes(language);
+                  const duplicate = duplicateLocked("language", language, sel);
+                  const locked = (!sel && form.chosenClassLanguages.length >= classLanguageChoice.choose) || duplicate;
+                  return (
+                    <button key={language} type="button" disabled={locked}
+                      onClick={() => toggleClassLanguage(language, classLanguageChoice.choose)}
+                      style={choiceButtonStyle(sel, locked, duplicate)}>
+                      {language}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -2545,7 +2668,7 @@ export function CharacterCreatorView() {
           <p style={{ color: C.muted, fontSize: 14 }}>There are no skill, language, or mastery choices at this level.</p>
         )}
 
-        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} nextDisabled={missingClassFeatChoices || missingCore55eLanguages} />
+        <NavButtons step={step} onBack={() => setStep(4)} onNext={() => setStep(6)} nextDisabled={missingClassFeatChoices || missingCore55eLanguages || missingClassLanguages} />
       </div>
     );
 
@@ -2580,8 +2703,7 @@ export function CharacterCreatorView() {
     const invocTable = classDetail ? getClassFeatureTable(classDetail, "Invocation", 1) : [];
     const invocCount = invocTable.length > 0 ? tableValueAtLevel(invocTable, form.level) : 0;
 
-    const prepTable = classDetail ? getClassFeatureTable(classDetail, "Pact Magic|Spellcasting", 1) : [];
-    const prepCount = prepTable.length > 0 ? tableValueAtLevel(prepTable, form.level) : 0;
+    const prepCount = classDetail ? getPreparedSpellCount(classDetail, form.level) : 0;
 
     function toggleSpell(id: string, listKey: "chosenCantrips" | "chosenSpells" | "chosenInvocations", max: number) {
       setForm((f) => {

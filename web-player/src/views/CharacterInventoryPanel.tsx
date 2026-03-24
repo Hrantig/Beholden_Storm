@@ -32,6 +32,7 @@ import {
   formatItemProperties,
   formatWeight,
   getEquipState,
+  hasArmorProficiency,
   hasStealthDisadvantage,
   isArmorItem,
   isCurrencyItem,
@@ -804,6 +805,7 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
   const mainActive = state === "mainhand-1h" || state === "mainhand-2h";
   const mainLabel = state === "mainhand-2h" ? "2H" : "1H";
   const equipped = state !== "backpack";
+  const lacksArmorProficiency = equipped && (isArmor || isShieldItem(item)) && !hasArmorProficiency(item, charData?.proficiencies as any);
   const stateLabel =
     state === "mainhand-2h" ? "Main Hand (2H)"
       : state === "mainhand-1h" ? "Main Hand (1H)"
@@ -919,6 +921,28 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                 D
               </span>
             )}
+            {lacksArmorProficiency && (
+              <span
+                title="You are not proficient with this armor or shield"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  border: "1px solid rgba(248,113,113,0.55)",
+                  background: "rgba(248,113,113,0.14)",
+                  color: "#f87171",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  padding: "0 6px",
+                }}
+              >
+                NP
+              </span>
+            )}
           </div>
           {meta && (
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{meta}</div>
@@ -926,6 +950,11 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
           {stateLabel && (
             <div style={{ fontSize: 10, color: accentColor, marginTop: 2, fontWeight: 700 }}>
               {stateLabel}
+            </div>
+          )}
+          {lacksArmorProficiency && (
+            <div style={{ fontSize: 10, color: "#f87171", marginTop: 2, fontWeight: 700 }}>
+              Not proficient: AC applies, but STR/DEX rolls have disadvantage and spellcasting is blocked.
             </div>
           )}
           {item.notes && (
@@ -1790,4 +1819,3 @@ const stepperBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   padding: 0, lineHeight: 1,
 };
-

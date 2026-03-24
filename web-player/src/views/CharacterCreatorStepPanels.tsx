@@ -1261,7 +1261,7 @@ export function renderDerivedStatsStep({
   const main = (
     <div>
       <h2 style={headingStyle}>Combat Stats</h2>
-      <p style={{ color: C.muted, marginBottom: 16 }}>Auto-calculated from your choices — override freely.</p>
+      <p style={{ color: C.muted, marginBottom: 16 }}>Auto-calculated from your choices — HP Max can be overridden.</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
         <div>
           <label style={labelStyle}>HP Max</label>
@@ -1271,12 +1271,12 @@ export function renderDerivedStatsStep({
         <div>
           <label style={labelStyle}>Armor Class</label>
           <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 4 }}>10 + {dexMod >= 0 ? "+" : ""}{dexMod} DEX (base)</div>
-          <input type="number" value={ac} onChange={(e) => setField("ac", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+          <div style={{ ...inputStyle, width: "100%", opacity: 0.6, cursor: "default" }}>{ac}</div>
         </div>
         <div>
           <label style={labelStyle}>Speed (ft)</label>
           <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 4 }}>From species ({raceSpeed} ft)</div>
-          <input type="number" value={speed} onChange={(e) => setField("speed", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+          <div style={{ ...inputStyle, width: "100%", opacity: 0.6, cursor: "default" }}>{speed}</div>
         </div>
       </div>
       {sections.length > 0 && (

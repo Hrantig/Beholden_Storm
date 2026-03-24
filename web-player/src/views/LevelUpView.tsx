@@ -9,6 +9,7 @@ import {
   getCantripCount,
   getClassFeatureTable,
   getMaxSlotLevel,
+  getPreparedSpellCount,
   getSubclassLevel,
   getSubclassList,
   isSpellcaster,
@@ -155,21 +156,10 @@ export function LevelUpView() {
     }
   }, [classDetail]);
 
-  if (loading) return <Wrap><p style={{ color: C.muted }}>Loading…</p></Wrap>;
-  if (error || !char) return <Wrap><p style={{ color: C.red }}>{error ?? "Character not found."}</p></Wrap>;
-
-  const nextLevel = char.level + 1;
-  if (nextLevel > 20) {
-    return (
-      <Wrap>
-        <p style={{ color: C.muted }}>Already at max level (20).</p>
-        <BackBtn onClick={() => navigate(`/characters/${char.id}`)} />
-      </Wrap>
-    );
-  }
+  const nextLevel = (char?.level ?? 0) + 1;
 
   const hd = classDetail?.hd ?? 8;
-  const conScore = char.conScore ?? 10;
+  const conScore = char?.conScore ?? 10;
   const conMod = abilityMod(conScore);
   const hpAverage = Math.floor(hd / 2) + 1 + conMod;
   const hpRollMax = hd + conMod;
@@ -184,8 +174,7 @@ export function LevelUpView() {
   const cantripCount = classDetail ? getCantripCount(classDetail, nextLevel) : 0;
   const invocTable = classDetail ? getClassFeatureTable(classDetail, "Invocation", nextLevel) : [];
   const invocCount = invocTable.length > 0 ? tableValueAtLevel(invocTable, nextLevel) : 0;
-  const prepTable = classDetail ? getClassFeatureTable(classDetail, "Prepared Spells", nextLevel) : [];
-  const prepCount = prepTable.length > 0 ? tableValueAtLevel(prepTable, nextLevel) : 0;
+  const prepCount = classDetail ? getPreparedSpellCount(classDetail, nextLevel) : 0;
   const maxSpellLevel = classDetail ? getMaxSlotLevel(classDetail, nextLevel) : 0;
   const spellcaster = classDetail ? isSpellcaster(classDetail) : false;
   const allowedInvocationIds = React.useMemo(
@@ -259,8 +248,8 @@ export function LevelUpView() {
 
   // Current scores + ASI deltas
   const baseScores: Record<string, number> = {
-    str: char.strScore ?? 10, dex: char.dexScore ?? 10, con: char.conScore ?? 10,
-    int: char.intScore ?? 10, wis: char.wisScore ?? 10, cha: char.chaScore ?? 10,
+    str: char?.strScore ?? 10, dex: char?.dexScore ?? 10, con: char?.conScore ?? 10,
+    int: char?.intScore ?? 10, wis: char?.wisScore ?? 10, cha: char?.chaScore ?? 10,
   };
   const previewScores: Record<string, number> = { ...baseScores };
   for (const [k, v] of Object.entries(asiStats)) {
@@ -279,6 +268,17 @@ export function LevelUpView() {
   const invocationsValid = invocCount === 0 || chosenInvocations.length === invocCount;
 
   const canConfirm = hpGain !== null && asiValid && subclassValid && cantripsValid && spellsValid && invocationsValid;
+
+  if (loading) return <Wrap><p style={{ color: C.muted }}>Loading…</p></Wrap>;
+  if (error || !char) return <Wrap><p style={{ color: C.red }}>{error ?? "Character not found."}</p></Wrap>;
+  if (nextLevel > 20) {
+    return (
+      <Wrap>
+        <p style={{ color: C.muted }}>Already at max level (20).</p>
+        <BackBtn onClick={() => navigate(`/characters/${char.id}`)} />
+      </Wrap>
+    );
+  }
 
   function rollHp() {
     const rolled = rollDiceExpr(`1d${hd}`);
@@ -674,11 +674,13 @@ export function LevelUpView() {
 
 function Wrap({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      maxWidth: 540, margin: "0 auto", padding: "24px 16px 48px",
-      fontFamily: "system-ui, Segoe UI, Arial", color: C.text,
-    }}>
-      {children}
+    <div style={{ height: "100%", overflowY: "auto", background: C.bg, color: C.text }}>
+      <div style={{
+        maxWidth: 540, margin: "0 auto", padding: "24px 16px 140px",
+        fontFamily: "system-ui, Segoe UI, Arial", color: C.text,
+      }}>
+        {children}
+      </div>
     </div>
   );
 }

@@ -79,6 +79,7 @@ export interface CharacterData {
   xp?: number;
   chosenOptionals?: string[];
   chosenSkills?: string[];
+  chosenClassLanguages?: string[];
   chosenCantrips?: string[];
   chosenSpells?: string[];
   chosenInvocations?: string[];

@@ -182,6 +182,11 @@ export function getClassFeatureTable(cls: CreatorClassDetailLike, keyword: strin
   return [];
 }
 
+export function getPreparedSpellCount(cls: CreatorClassDetailLike, level: number): number {
+  const prepTable = getClassFeatureTable(cls, "Prepared Spells|Pact Magic|Spellcasting", level);
+  return prepTable.length > 0 ? tableValueAtLevel(prepTable, level) : 0;
+}
+
 export function parseSkillList(proficiency: string): string[] {
   return proficiency.split(/[,;]/).map((s) => s.trim()).filter((s) => s && !ABILITY_SCORE_NAMES.has(s));
 }

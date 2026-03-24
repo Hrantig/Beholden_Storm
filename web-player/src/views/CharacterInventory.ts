@@ -3,7 +3,7 @@ import type { ClassFeatureEntry, CharacterData, ProficiencyMap, TaggedItem } fro
 import { abilityMod } from "@/views/CharacterSheetUtils";
 
 export type TaggedItemLike = TaggedItem;
-export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons">;
+export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons" | "armor">;
 export type ClassFeatureEntryLike = ClassFeatureEntry;
 export type CharacterDataLike = Pick<CharacterData, "chosenOptionals" | "classFeatures" | "proficiencies" | "inventoryContainers">;
 
@@ -209,6 +209,23 @@ export function isShieldItem(item: InventoryItem): boolean {
   const type = String(item.type ?? "").toLowerCase();
   const name = String(item.name ?? "").toLowerCase();
   return type.includes("shield") || (name.includes("shield") && !name.includes("torch"));
+}
+
+export function armorProficiencyNameForItem(item: InventoryItem): "Light Armor" | "Medium Armor" | "Heavy Armor" | "Shields" | null {
+  if (isShieldItem(item)) return "Shields";
+  const type = String(item.type ?? "").toLowerCase();
+  if (type.includes("light armor")) return "Light Armor";
+  if (type.includes("medium armor")) return "Medium Armor";
+  if (type.includes("heavy armor")) return "Heavy Armor";
+  if (type.includes("shield")) return "Shields";
+  return null;
+}
+
+export function hasArmorProficiency(item: InventoryItem, prof: ProficiencyMapLike | undefined): boolean {
+  const required = armorProficiencyNameForItem(item);
+  if (!required) return true;
+  const names = (prof?.armor ?? []).map((entry) => String(entry.name ?? "").toLowerCase());
+  return names.includes(required.toLowerCase());
 }
 
 export function getEquipState(item: InventoryItem): EquipState {

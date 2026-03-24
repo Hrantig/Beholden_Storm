@@ -118,7 +118,7 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
 // RichSpellsPanel
 // ---------------------------------------------------------------------------
 
-export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange }: {
+export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, spellcastingBlocked = false }: {
   spells: { name: string; source: string }[];
   pb: number;
   intScore: number | null;
@@ -131,6 +131,7 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
   preparedSpells: string[];
   onSlotsChange: (next: Record<string, number>) => Promise<void>;
   onPreparedChange: (next: string[]) => Promise<void>;
+  spellcastingBlocked?: boolean;
 }) {
   const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
   const [selectedSpell, setSelectedSpell] = React.useState<FetchedSpellDetail | null>(null);
@@ -215,6 +216,20 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
 
   return (
     <Panel>
+      {spellcastingBlocked && (
+        <div style={{
+          marginBottom: 10,
+          padding: "8px 10px",
+          borderRadius: 8,
+          border: "1px solid rgba(248,113,113,0.35)",
+          background: "rgba(248,113,113,0.10)",
+          color: "#fca5a5",
+          fontSize: 11,
+          fontWeight: 700,
+        }}>
+          You can't cast spells while wearing armor or a shield without proficiency.
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <PanelTitle color="#a78bfa" style={{ margin: 0 }}>Spells</PanelTitle>
@@ -237,12 +252,15 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
               minWidth: 56,
             }}>
               <span style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
-              <span style={{ fontSize: 15, fontWeight: 900, color: highlight ? accentColor : C.text }}>{value}</span>
+              <span style={{ fontSize: 15, fontWeight: 900, color: spellcastingBlocked && !highlight ? "#f87171" : highlight ? accentColor : C.text }}>
+                {value}{spellcastingBlocked && !highlight ? " X" : ""}
+              </span>
             </div>
           ))}
         </div>
       </div>
 
+      <div style={{ opacity: spellcastingBlocked ? 0.65 : 1 }}>
       {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupEntries]) => {
         const maxSlots = (levelSlots && level > 0) ? (levelSlots[level] ?? 0) : 0;
         const usedCount = usedSpellSlots[String(level)] ?? 0;
@@ -346,8 +364,8 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
                       <div style={{ fontSize: 9, color: C.muted, fontWeight: 700 }}>
                         {usesSave ? (d.save ?? "SAVE") : "ATK"}
                       </div>
-                      <div style={{ fontWeight: 900, fontSize: 15, color: accentColor, lineHeight: 1.2 }}>
-                        {usesSave ? saveDc : `+${spellAtk}`}
+                      <div style={{ fontWeight: 900, fontSize: 15, color: spellcastingBlocked ? "#f87171" : accentColor, lineHeight: 1.2 }}>
+                        {usesSave ? `${saveDc}${spellcastingBlocked ? " X" : ""}` : `+${spellAtk}${spellcastingBlocked ? " X" : ""}`}
                       </div>
                     </div>
                   ) : <div />}
@@ -368,6 +386,7 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
           </div>
         );
       })}
+      </div>
       {selectedSpell && (
         <SpellDrawer spell={selectedSpell} accentColor={accentColor} onClose={() => setSelectedSpell(null)} charLevel={charLevel} maxSlotLevel={maxSpellSlotLevel} />
       )}
@@ -615,7 +634,7 @@ const LEVEL_LABELS: Record<number, string> = {
   5: "5th Level", 6: "6th Level", 7: "7th Level", 8: "8th Level", 9: "9th Level",
 };
 
-export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accentColor, onChargeChange }: {
+export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accentColor, onChargeChange, spellcastingBlocked = false }: {
   items: InventoryItem[];
   pb: number;
   intScore: number | null;
@@ -623,6 +642,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
   chaScore: number | null;
   accentColor: string;
   onChargeChange: (itemId: string, charges: number) => void;
+  spellcastingBlocked?: boolean;
 }) {
   const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
   const [selectedSpell, setSelectedSpell] = React.useState<FetchedSpellDetail | null>(null);
@@ -630,6 +650,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
   const itemsWithSpells = React.useMemo(() =>
     items
       .filter((it) => getEquipState(it) !== "backpack")
+      .filter((it) => !it.attunement || it.attuned)
       .map((it) => ({ item: it, spells: parseItemSpells(it.description ?? "") }))
       .filter(({ spells }) => spells.length > 0),
   [items]);
@@ -687,6 +708,20 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
 
         return (
           <Panel key={item.id}>
+            {spellcastingBlocked && (
+              <div style={{
+                marginBottom: 10,
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid rgba(248,113,113,0.35)",
+                background: "rgba(248,113,113,0.10)",
+                color: "#fca5a5",
+                fontSize: 11,
+                fontWeight: 700,
+              }}>
+                You can't cast spells while wearing armor or a shield without proficiency.
+              </div>
+            )}
             {/* Header: item name + charge circles */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <PanelTitle color="#a78bfa" style={{ margin: 0 }}>
@@ -716,6 +751,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
               )}
             </div>
 
+            <div style={{ opacity: spellcastingBlocked ? 0.65 : 1 }}>
             {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupSpells]) => (
               <div key={level} style={{ marginBottom: 14 }}>
                 {/* Level header */}
@@ -784,8 +820,8 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
                       {d && (usesSave || usesAtk) ? (
                         <div style={{ textAlign: "center", paddingTop: 1 }}>
                           <div style={{ fontSize: 9, color: C.muted, fontWeight: 700 }}>{usesSave ? (d.save ?? "SAVE") : "ATK"}</div>
-                          <div style={{ fontWeight: 900, fontSize: 15, color: accentColor, lineHeight: 1.2 }}>
-                            {usesSave ? saveDc : `+${spellAtk}`}
+                          <div style={{ fontWeight: 900, fontSize: 15, color: spellcastingBlocked ? "#f87171" : accentColor, lineHeight: 1.2 }}>
+                            {usesSave ? `${saveDc}${spellcastingBlocked ? " X" : ""}` : `+${spellAtk}${spellcastingBlocked ? " X" : ""}`}
                           </div>
                         </div>
                       ) : <div />}
@@ -805,6 +841,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
                 })}
               </div>
             ))}
+            </div>
           </Panel>
         );
       })}

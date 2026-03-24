@@ -11,9 +11,11 @@ import {
   formatItemDamageType,
   formatItemProperties,
   getEquipState,
+  hasArmorProficiency,
   hasItemProperty,
   hasWeaponProficiency,
   isRangedWeapon,
+  isShieldItem,
   isWeaponItem,
   weaponAbilityMod,
   weaponDamageDice,
@@ -31,6 +33,7 @@ export interface CharacterCombatPanelsProps {
   inventory: InventoryItem[];
   prof?: ProficiencyMapLike | null;
   characterData?: CharacterDataLike | null;
+  nonProficientArmorPenalty: boolean;
 }
 
 export function CharacterCombatPanels({
@@ -45,8 +48,10 @@ export function CharacterCombatPanels({
   inventory,
   prof,
   characterData,
+  nonProficientArmorPenalty,
 }: CharacterCombatPanelsProps) {
-  const actionItems = inventory.filter((it) => getEquipState(it) !== "backpack" && isWeaponItem(it));
+  const actionItems = inventory.filter((it) => getEquipState(it) !== "backpack" && isWeaponItem(it) && (!it.attunement || it.attuned));
+  const nonProficientArmorItems = inventory.filter((it) => getEquipState(it) !== "backpack" && (isShieldItem(it) || /\barmor\b/i.test(it.type ?? "")) && !hasArmorProficiency(it, prof ?? undefined));
   const strMod = abilityMod(strScore);
   const unarmedToHit = strMod + pb;
   const unarmedDmg = 1 + strMod;
@@ -65,6 +70,20 @@ export function CharacterCombatPanels({
       </Panel>
 
       <Panel>
+        {nonProficientArmorItems.length > 0 && (
+          <div style={{
+            marginBottom: 10,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "1px solid rgba(248,113,113,0.35)",
+            background: "rgba(248,113,113,0.10)",
+            color: "#fca5a5",
+            fontSize: 11,
+            fontWeight: 700,
+          }}>
+            Not proficient with equipped armor: disadvantage on STR/DEX attacks and you can't cast spells.
+          </div>
+        )}
         <PanelTitle color={accentColor}>Actions</PanelTitle>
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", marginBottom: 6 }}>
           {(["ATTACK", "RANGE", "HIT / DC", "DAMAGE / NOTES"] as const).map((h) => (
@@ -96,6 +115,7 @@ export function CharacterCombatPanels({
                     <span style={{ fontSize: 13, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</span>
                     {modeLabel && <span style={{ fontSize: 9, fontWeight: 800, color: accentColor, border: `1px solid ${accentColor}44`, background: `${accentColor}18`, borderRadius: 999, padding: "1px 5px" }}>{modeLabel}</span>}
                     {!proficient && <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>No proficiency</span>}
+                    {nonProficientArmorPenalty && <span style={{ fontSize: 10, color: "#f87171", fontWeight: 700 }}>D</span>}
                   </div>
                   <div style={{ fontSize: 10, color: C.muted }}>{isWeaponItem(it) ? "Melee Weapon" : it.type ?? ""}</div>
                 </div>
@@ -104,7 +124,7 @@ export function CharacterCombatPanels({
                   style={{
                     fontSize: 18,
                     fontWeight: 900,
-                    color: C.text,
+                    color: nonProficientArmorPenalty ? "#f87171" : C.text,
                     textAlign: "center",
                     minWidth: 36,
                     border: `1px solid ${proficient ? accentColor + "55" : "rgba(255,255,255,0.15)"}`,
@@ -113,7 +133,7 @@ export function CharacterCombatPanels({
                     background: "rgba(255,255,255,0.04)",
                   }}
                 >
-                  {formatModifier(toHit)}
+                  {formatModifier(toHit)}{nonProficientArmorPenalty ? " D" : ""}
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dmgText}</div>
@@ -129,8 +149,8 @@ export function CharacterCombatPanels({
               <div style={{ fontSize: 10, color: C.muted }}>Melee Attack</div>
             </div>
             <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>5 ft.</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: C.text, textAlign: "center", minWidth: 36, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
-              {formatModifier(unarmedToHit)}
+            <div style={{ fontSize: 18, fontWeight: 900, color: nonProficientArmorPenalty ? "#f87171" : C.text, textAlign: "center", minWidth: 36, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
+              {formatModifier(unarmedToHit)}{nonProficientArmorPenalty ? " D" : ""}
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{unarmedDmg}</div>

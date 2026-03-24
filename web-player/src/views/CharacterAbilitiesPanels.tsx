@@ -11,6 +11,7 @@ export interface CharacterAbilitiesPanelsProps {
   prof?: ProficiencyMap | null;
   accentColor: string;
   stealthDisadvantage: boolean;
+  nonProficientArmorPenalty: boolean;
   mod: (score: number | null) => number;
   fmtMod: (value: number) => string;
 }
@@ -21,6 +22,7 @@ export function CharacterAbilitiesPanels({
   prof,
   accentColor,
   stealthDisadvantage,
+  nonProficientArmorPenalty,
   mod,
   fmtMod,
 }: CharacterAbilitiesPanelsProps) {
@@ -36,6 +38,7 @@ export function CharacterAbilitiesPanels({
               const m = mod(score);
               const isProfSave = prof ? hasNamedProficiency(prof.saves, ABILITY_FULL[k]) : false;
               const save = m + (isProfSave ? pb : 0);
+              const showSaveDisadvantage = nonProficientArmorPenalty && (k === "str" || k === "dex");
               return (
                 <div key={k} style={{ minWidth: 0 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "44px minmax(56px, 1fr) 40px 40px", columnGap: 10, alignItems: "center" }}>
@@ -46,8 +49,10 @@ export function CharacterAbilitiesPanels({
                       {score ?? "-"}
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: C.text }}>{fmtMod(m)}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: isProfSave ? accentColor : C.text, position: "relative" }}>
-                      {fmtMod(save)}
+                    <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: showSaveDisadvantage ? "#f87171" : isProfSave ? accentColor : C.text, position: "relative" }}>
+                      <span title={showSaveDisadvantage ? "Disadvantage while wearing armor or a shield without proficiency" : undefined}>
+                        {fmtMod(save)}{showSaveDisadvantage ? " D" : ""}
+                      </span>
                       {isProfSave && <span style={{ position: "absolute", top: -2, right: 0, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
                     </div>
                   </div>
@@ -65,7 +70,9 @@ export function CharacterAbilitiesPanels({
             const isProfSkill = prof ? hasNamedProficiency(prof.skills, name) : false;
             const bonus = mod(scores[abil]) + (isProfSkill ? pb : 0);
             const src = prof?.skills.find((s) => s.name.toLowerCase() === name.toLowerCase())?.source;
+            const showArmorPenalty = nonProficientArmorPenalty && (abil === "str" || abil === "dex");
             const showStealthDisadvantage = name === "Stealth" && stealthDisadvantage;
+            const showDisadvantage = showArmorPenalty || showStealthDisadvantage;
             return (
               <div
                 key={name}
@@ -104,9 +111,9 @@ export function CharacterAbilitiesPanels({
                   }}
                 >
                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                  {showStealthDisadvantage && (
+                  {showDisadvantage && (
                     <span
-                      title="Disadvantage on Stealth checks from equipped armor"
+                      title={showArmorPenalty ? "Disadvantage while wearing armor or a shield without proficiency" : "Disadvantage on Stealth checks from equipped armor"}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -133,10 +140,10 @@ export function CharacterAbilitiesPanels({
                     fontWeight: 700,
                     minWidth: 26,
                     textAlign: "right",
-                    color: showStealthDisadvantage ? "#f87171" : isProfSkill ? C.green : C.text,
+                    color: showDisadvantage ? "#f87171" : isProfSkill ? C.green : C.text,
                   }}
                 >
-                  {isProfSkill && src ? <Tooltip text={src}>{fmtMod(bonus)}</Tooltip> : fmtMod(bonus)}
+                  {isProfSkill && src ? <Tooltip text={src}>{fmtMod(bonus)}{showDisadvantage ? " D" : ""}</Tooltip> : `${fmtMod(bonus)}${showDisadvantage ? " D" : ""}`}
                 </span>
               </div>
             );
