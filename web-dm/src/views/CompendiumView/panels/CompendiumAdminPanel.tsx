@@ -68,8 +68,7 @@ export function CompendiumAdminPanel() {
         }
       >
         <div style={{ color: theme.colors.muted, lineHeight: 1.4 }}>
-          Upload a Fight Club–style compendium XML. The server converts it to JSON and stores it in{" "}
-          <code>server/data/compendium.json</code>. Re-importing a monster or spell with the same name (case-insensitive, ignoring trailing
+          Upload a Fight Club–style compendium XML. The server stores it in a local database. Re-importing an entry with the same name (case-insensitive, ignoring trailing
           <code>[...]</code>) will replace the existing entry.
           <br />
           <code>

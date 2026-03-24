@@ -1,15 +1,12 @@
 import * as React from "react";
 import { C, withAlpha } from "@/lib/theme";
 import { formatCr } from "@/lib/monsterPicker/utils";
+import { formatModifier } from "@/views/CharacterSheetUtils";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
-}
-
-function fmtMod(n: number): string {
-  return n >= 0 ? `+${n}` : `${n}`;
 }
 
 function readNumber(v: any): number | null {
@@ -175,8 +172,8 @@ function AbilityGroup({ keys, abilities, saves }: { keys: AbilityKey[]; abilitie
             <div key={k} style={{ display: "grid", gridTemplateColumns: cols, gap: 6, alignItems: "center" }}>
               <div style={{ fontSize: "var(--fs-small)", fontWeight: 900, textTransform: "uppercase", color: C.muted }}>{k}</div>
               <div style={{ padding: "5px 8px", borderRadius: 8, background: withAlpha("rgba(0,0,0,0.80)", 0.5), border: `1px solid ${C.panelBorder}`, fontWeight: 900, fontSize: "var(--fs-medium)", textAlign: "center", color: C.text, fontVariantNumeric: "tabular-nums", minWidth: 32 }}>{score}</div>
-              <div style={{ fontWeight: 900, fontSize: "var(--fs-medium)", textAlign: "center", color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtMod(mod)}</div>
-              <div style={{ fontWeight: 900, fontSize: "var(--fs-medium)", textAlign: "center", color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtMod(save)}</div>
+              <div style={{ fontWeight: 900, fontSize: "var(--fs-medium)", textAlign: "center", color: C.text, fontVariantNumeric: "tabular-nums" }}>{formatModifier(mod)}</div>
+              <div style={{ fontWeight: 900, fontSize: "var(--fs-medium)", textAlign: "center", color: C.text, fontVariantNumeric: "tabular-nums" }}>{formatModifier(save)}</div>
             </div>
           );
         })}

@@ -4,6 +4,7 @@ import { C } from "@/lib/theme";
 import { api } from "@/services/api";
 import { IconPlayer, IconConditionByKey } from "@/icons";
 import { useWs } from "@/services/ws";
+import { hpColor } from "@/views/CharacterSheetUtils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,18 +33,6 @@ export interface PartyMember {
   imageUrl: string | null;
   conditions: ConditionInstance[];
   characterData: Record<string, unknown> | null;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function hpColor(pct: number): string {
-  if (pct <= 0)  return "#6b7280";
-  if (pct < 25)  return "#f87171";
-  if (pct < 50)  return "#fb923c";
-  if (pct < 75)  return "#fbbf24";
-  return "#4ade80";
 }
 
 function hpLabel(pct: number): string {

@@ -1,13 +1,14 @@
 import React from "react";
 import { Panel } from "@/ui/Panel";
 import { Select } from "@/ui/Select";
-import { IconSpells, IconPencil, IconTrash, IconPlus } from "@/icons";
+import { IconSpells, IconPencil, IconTrash } from "@/icons";
 import { theme, withAlpha } from "@/theme/theme";
 import { titleCase } from "@/lib/format/titleCase";
 import { expandSchool } from "@/lib/format/expandSchool";
 import { useStore } from "@/store";
 import { useSpellSearch } from "@/views/CompendiumView/hooks/useSpellSearch";
 import { SpellFormModal, SpellForEdit } from "@/views/CompendiumView/panels/SpellFormModal";
+import { actionBtnStyle, togglePillStyle, BrowserAddButton } from "./browserParts";
 import { api } from "@/services/api";
 
 type SpellsPanelProps = {
@@ -117,21 +118,7 @@ export function SpellsPanel(props: SpellsPanelProps) {
               {busy ? "Loading…" : `${filtered.length}`}
             </div>
             {props.editable && (
-              <button
-                type="button"
-                title="New spell"
-                onClick={() => setFormTarget({ mode: "create" })}
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 28, height: 28, borderRadius: 8,
-                  border: `1px solid ${theme.colors.panelBorder}`,
-                  background: theme.colors.accentPrimary,
-                  color: theme.colors.textDark,
-                  cursor: "pointer",
-                }}
-              >
-                <IconPlus size={14} />
-              </button>
+              <BrowserAddButton title="New spell" onClick={() => setFormTarget({ mode: "create" })} />
             )}
           </div>
         }
@@ -183,20 +170,20 @@ export function SpellsPanel(props: SpellsPanelProps) {
                 key={label} type="button"
                 onClick={() => setActive(!active)}
                 title={`${active ? "Showing" : "Hiding"} ${title} component spells`}
-                style={togglePill(active, true)}
+                style={togglePillStyle(active, true)}
               >
                 {label}
               </button>
             )
           )}
-          <button type="button" onClick={() => setFilterConcentration(!filterConcentration)} style={togglePill(filterConcentration)}>
+          <button type="button" onClick={() => setFilterConcentration(!filterConcentration)} style={togglePillStyle(filterConcentration)}>
             Concentration
           </button>
-          <button type="button" onClick={() => setFilterRitual(!filterRitual)} style={togglePill(filterRitual)}>
+          <button type="button" onClick={() => setFilterRitual(!filterRitual)} style={togglePillStyle(filterRitual)}>
             Ritual
           </button>
           {hasActiveFilters && (
-            <button type="button" onClick={clearFilters} style={togglePill(false)}>
+            <button type="button" onClick={clearFilters} style={togglePillStyle(false)}>
               Clear
             </button>
           )}
@@ -356,34 +343,3 @@ export function SpellsPanel(props: SpellsPanelProps) {
   );
 }
 
-function togglePill(active: boolean, gold = false): React.CSSProperties {
-  const accent = gold ? theme.colors.accentPrimary : theme.colors.accentHighlight;
-  return {
-    padding: "4px 10px",
-    borderRadius: 999,
-    border: `1px solid ${active ? accent : theme.colors.panelBorder}`,
-    background: active ? withAlpha(accent, 0.18) : withAlpha(theme.colors.shadowColor, 0.12),
-    color: active ? accent : theme.colors.muted,
-    cursor: "pointer",
-    fontSize: "var(--fs-pill, 11px)",
-    fontWeight: 700,
-  };
-}
-
-function actionBtnStyle(color: string): React.CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 26,
-    height: 26,
-    padding: 0,
-    border: `1px solid ${withAlpha(color, 0.3)}`,
-    borderRadius: 6,
-    background: withAlpha(color, 0.1),
-    color,
-    cursor: "pointer",
-    fontSize: 11,
-    fontWeight: 700,
-  };
-}

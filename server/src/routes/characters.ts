@@ -2,13 +2,21 @@
 // Player-owned characters: campaign-agnostic CRUD + campaign assignment.
 
 import { z } from "zod";
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import type { ServerContext } from "../server/context.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
-import { rowToUserCharacter, USER_CHARACTER_COLS, rowToPlayer, PLAYER_COLS } from "../lib/db.js";
+import { rowToUserCharacter, USER_CHARACTER_COLS } from "../lib/db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import {
+  type Assignment,
+  getAssignments,
+  assignmentsToJson,
+  getAssignedPlayers,
+  broadcastPlayerCombatantChanges,
+  mergeLiveStats,
+} from "../services/characters.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP } from "../lib/imageHelpers.js";
 
 const CharacterBodyBase = z.object({
@@ -43,145 +51,22 @@ const UnassignBody = z.object({
   campaignId: z.string(),
 });
 
+const OverridesBody = z.object({
+  tempHp: z.number().int(),
+  acBonus: z.number().int(),
+  hpMaxBonus: z.number().int(),
+});
+
 export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
 
-  type Assignment = { id: string; campaign_id: string; player_id: string | null; campaign_name: string };
-
-  // Overlay ALL editable live fields from the players row so the player always
-  // sees exactly what the DM has set, not the stale user_characters snapshot.
-  function mergeLiveStats(
-    char: ReturnType<typeof rowToUserCharacter>,
-    assignments: Assignment[]
-  ) {
-    const playerIds = assignments.map((a) => a.player_id).filter(Boolean) as string[];
-    if (playerIds.length === 0) return char;
-    const liveRow = db
-      .prepare(
-        `SELECT player_name, character_name, class, species, level,
-                hp_current, hp_max, ac, speed,
-                str, dex, con, int, wis, cha,
-                color, image_url,
-                conditions_json, overrides_json, death_saves_json, shared_notes
-         FROM players
-         WHERE id IN (${playerIds.map(() => "?").join(",")})
-         ORDER BY updated_at DESC LIMIT 1`
-      )
-      .get(...playerIds) as {
-        player_name: string; character_name: string; class: string; species: string; level: number;
-        hp_current: number; hp_max: number; ac: number; speed: number | null;
-        str: number | null; dex: number | null; con: number | null;
-        int: number | null; wis: number | null; cha: number | null;
-        color: string | null; image_url: string | null;
-        conditions_json: string; overrides_json: string; death_saves_json: string | null;
-        shared_notes: string | null;
-      } | undefined;
-    if (!liveRow) return char;
-    const liveConditions = JSON.parse(liveRow.conditions_json || "[]") as Array<{
-      key: string;
-      casterId?: string | null;
-      casterName?: string | null;
-      sourceName?: string | null;
-      [k: string]: unknown;
-    }>;
-    const casterIds = [...new Set(
-      liveConditions
-        .map((cond) => (typeof cond.casterId === "string" && cond.casterId.trim() ? cond.casterId.trim() : ""))
-        .filter(Boolean)
-    )];
-    const casterNameById: Record<string, string> = {};
-    if (casterIds.length > 0) {
-      const combatantRows = db.prepare(
-        `SELECT c.id,
-                COALESCE(NULLIF(c.label, ''), NULLIF(p.character_name, ''), NULLIF(c.name, ''), NULLIF(c.base_type, ''), 'Combatant') AS display_name
-         FROM combatants c
-         LEFT JOIN players p ON c.base_type = 'player' AND p.id = c.base_id
-         WHERE c.id IN (${casterIds.map(() => "?").join(",")})`
-      ).all(...casterIds) as { id: string; display_name: string }[];
-      for (const row of combatantRows) {
-        casterNameById[row.id] = row.display_name;
-      }
-
-      const unresolvedCasterIds = casterIds.filter((id) => !casterNameById[id]);
-      if (unresolvedCasterIds.length > 0) {
-        const playerRows = db.prepare(
-          `SELECT id, character_name
-           FROM players
-           WHERE id IN (${unresolvedCasterIds.map(() => "?").join(",")})`
-        ).all(...unresolvedCasterIds) as { id: string; character_name: string }[];
-        for (const row of playerRows) {
-          casterNameById[row.id] = row.character_name;
-        }
-      }
-    }
-
-    return {
-      ...char,
-      playerName:  liveRow.player_name,
-      name:        liveRow.character_name,
-      className:   liveRow.class,
-      species:     liveRow.species,
-      level:       liveRow.level,
-      hpCurrent:   liveRow.hp_current,
-      hpMax:       liveRow.hp_max,
-      ac:          liveRow.ac,
-      speed:       liveRow.speed ?? char.speed,
-      strScore:    liveRow.str ?? char.strScore,
-      dexScore:    liveRow.dex ?? char.dexScore,
-      conScore:    liveRow.con ?? char.conScore,
-      intScore:    liveRow.int ?? char.intScore,
-      wisScore:    liveRow.wis ?? char.wisScore,
-      chaScore:    liveRow.cha ?? char.chaScore,
-      color:       liveRow.color ?? char.color,
-      imageUrl:    liveRow.image_url ?? char.imageUrl,
-      conditions:  liveConditions.map((cond) => {
-        const casterId = typeof cond.casterId === "string" ? cond.casterId : null;
-        const resolvedCasterName = casterId ? casterNameById[casterId] : null;
-        if (!resolvedCasterName) return cond;
-        return {
-          ...cond,
-          casterName: resolvedCasterName,
-          sourceName: resolvedCasterName,
-        };
-      }),
-      overrides:   JSON.parse(liveRow.overrides_json || '{"tempHp":0,"acBonus":0,"hpMaxBonus":0}') as {
-        tempHp: number; acBonus: number; hpMaxBonus: number;
-      },
-      deathSaves:  liveRow.death_saves_json
-        ? JSON.parse(liveRow.death_saves_json) as { success: number; fail: number }
-        : char.deathSaves,
-      sharedNotes: liveRow.shared_notes ?? char.sharedNotes,
-    };
-  }
-
-  function getAssignments(charId: string): Assignment[] {
-    return db
-      .prepare(`
-        SELECT cc.id, cc.campaign_id, cc.player_id, ca.name AS campaign_name
-        FROM character_campaigns cc
-        JOIN campaigns ca ON ca.id = cc.campaign_id
-        WHERE cc.character_id = ?
-      `)
-      .all(charId) as Assignment[];
-  }
-
-  function assignmentsToJson(assignments: Assignment[]) {
-    return assignments.map((a) => ({ id: a.id, campaignId: a.campaign_id, campaignName: a.campaign_name, playerId: a.player_id }));
-  }
-
-  function broadcastPlayerCombatantChanges(playerId: string) {
-    const encounterIds = (
-      db.prepare(
-        `SELECT DISTINCT encounter_id
-         FROM combatants
-         WHERE base_type = 'player' AND base_id = ?`
-      ).all(playerId) as { encounter_id: string }[]
-    ).map((r) => r.encounter_id);
-
-    for (const encounterId of encounterIds) {
-      ctx.broadcast("encounter:combatantsChanged", { encounterId });
-    }
+  /** Verifies ownership of a user_characters row. Returns null and sends 404 if not found. */
+  function requireUserChar(charId: string, userId: string, res: Response): { id: string } | null {
+    const row = db.prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
+      .get(charId, userId) as { id: string } | undefined;
+    if (!row) { res.status(404).json({ ok: false, message: "Not found" }); return null; }
+    return row;
   }
 
   // List all user-owned characters with campaign assignment info
@@ -193,8 +78,8 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
     const result = chars.map((c) => {
       const char = rowToUserCharacter(c);
-      const assignments = getAssignments(char.id);
-      return { ...mergeLiveStats(char, assignments), campaigns: assignmentsToJson(assignments) };
+      const assignments = getAssignments(db, char.id);
+      return { ...mergeLiveStats(db, char, assignments), campaigns: assignmentsToJson(assignments) };
     });
 
     res.json(result);
@@ -211,8 +96,8 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
 
     const char = rowToUserCharacter(row);
-    const assignments = getAssignments(char.id);
-    const merged = mergeLiveStats(char, assignments);
+    const assignments = getAssignments(db, char.id);
+    const merged = mergeLiveStats(db, char, assignments);
 
     // Collect campaign-level shared notes as a separate field (read-only for player)
     const campaignNotes: unknown[] = [];
@@ -314,11 +199,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     );
 
     // Sync all assigned campaign players rows with updated stats
-    const assignments = db
-      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
-      .all(charId) as { player_id: string; campaign_id: string }[];
-
-    for (const { player_id, campaign_id } of assignments) {
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       db.prepare(`
         UPDATE players SET
           character_name=?, class=?, species=?, level=?,
@@ -345,7 +226,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         t, player_id
       );
       ctx.broadcast("players:changed", { campaignId: campaign_id });
-      broadcastPlayerCombatantChanges(player_id);
+      broadcastPlayerCombatantChanges(db, ctx.broadcast, player_id);
     }
 
     const updated = db.prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE id = ?`).get(charId) as Record<string, unknown>;
@@ -356,25 +237,17 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.patch("/api/me/characters/:id/conditions", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
 
     const conditions = Array.isArray(req.body?.conditions) ? req.body.conditions : [];
     const conditionsJson = JSON.stringify(conditions);
     const t = now();
 
-    const assignments = db
-      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
-      .all(charId) as { player_id: string; campaign_id: string }[];
-
-    for (const { player_id, campaign_id } of assignments) {
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       db.prepare("UPDATE players SET conditions_json=?, updated_at=? WHERE id=?")
         .run(conditionsJson, t, player_id);
       ctx.broadcast("players:changed", { campaignId: campaign_id });
-      broadcastPlayerCombatantChanges(player_id);
+      broadcastPlayerCombatantChanges(db, ctx.broadcast, player_id);
     }
 
     res.json({ ok: true, conditions });
@@ -384,11 +257,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.patch("/api/me/characters/:id/deathSaves", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
 
     const { success = 0, fail = 0 } = (req.body ?? {}) as { success?: number; fail?: number };
     const deathSaves = {
@@ -401,38 +270,62 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     db.prepare("UPDATE user_characters SET death_saves_json=?, updated_at=? WHERE id=?")
       .run(deathSavesJson, t, charId);
 
-    const assignments = db
-      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
-      .all(charId) as { player_id: string; campaign_id: string }[];
-
-    for (const { player_id, campaign_id } of assignments) {
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       db.prepare("UPDATE players SET death_saves_json=?, updated_at=? WHERE id=?")
         .run(deathSavesJson, t, player_id);
       ctx.broadcast("players:changed", { campaignId: campaign_id });
-      broadcastPlayerCombatantChanges(player_id);
+      broadcastPlayerCombatantChanges(db, ctx.broadcast, player_id);
     }
 
     res.json({ ok: true, deathSaves });
+  });
+
+  // Player self-updates character sheet overrides.
+  app.patch("/api/me/characters/:id/overrides", requireAuth, (req, res) => {
+    const charId = requireParam(req, res, "id");
+    if (!charId) return;
+    const userId = (req as any).user.userId;
+    const existing = db
+      .prepare(`SELECT ${USER_CHARACTER_COLS} FROM user_characters WHERE id = ? AND user_id = ?`)
+      .get(charId, userId) as Record<string, unknown> | undefined;
+    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+
+    const ex = rowToUserCharacter(existing);
+    const parsed = parseBody(OverridesBody, req);
+    const overrides = {
+      tempHp: Math.max(0, Math.floor(Number(parsed.tempHp) || 0)),
+      acBonus: Math.floor(Number(parsed.acBonus) || 0),
+      hpMaxBonus: Math.floor(Number(parsed.hpMaxBonus) || 0),
+    };
+    const t = now();
+
+    const nextCharacterData = {
+      ...(ex.characterData ?? {}),
+      sheetOverrides: overrides,
+    };
+    db.prepare("UPDATE user_characters SET character_data_json = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+      .run(JSON.stringify(nextCharacterData), t, charId, userId);
+
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
+      db.prepare("UPDATE players SET overrides_json = ?, updated_at = ? WHERE id = ?")
+        .run(JSON.stringify(overrides), t, player_id);
+      ctx.broadcast("players:changed", { campaignId: campaign_id });
+      broadcastPlayerCombatantChanges(db, ctx.broadcast, player_id);
+    }
+
+    res.json({ ok: true, overrides });
   });
 
   // Toggle inspiration (writes to linked players overrides_json + broadcasts)
   app.patch("/api/me/characters/:id/inspiration", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
 
     const inspiration: boolean = typeof req.body?.inspiration === "boolean" ? req.body.inspiration : false;
     const t = now();
 
-    const assignments = db
-      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
-      .all(charId) as { player_id: string; campaign_id: string }[];
-
-    for (const { player_id, campaign_id } of assignments) {
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       const row = db.prepare("SELECT overrides_json FROM players WHERE id = ?")
         .get(player_id) as { overrides_json: string } | undefined;
       const overrides = JSON.parse(row?.overrides_json || "{}") as Record<string, unknown>;
@@ -449,11 +342,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.patch("/api/me/characters/:id/sharedNotes", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
 
     const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
     const t = now();
@@ -461,11 +350,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     db.prepare("UPDATE user_characters SET shared_notes=?, updated_at=? WHERE id=?")
       .run(sharedNotes, t, charId);
 
-    const assignments = db
-      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
-      .all(charId) as { player_id: string; campaign_id: string }[];
-
-    for (const { player_id, campaign_id } of assignments) {
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       db.prepare("UPDATE players SET shared_notes=?, updated_at=? WHERE id=?")
         .run(sharedNotes, t, player_id);
       ctx.broadcast("players:changed", { campaignId: campaign_id });
@@ -478,18 +363,9 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.delete("/api/me/characters/:id", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
 
-    // Broadcast players:changed for all assigned campaigns before deleting
-    const assignments = db
-      .prepare("SELECT player_id, campaign_id FROM character_campaigns WHERE character_id = ? AND player_id IS NOT NULL")
-      .all(charId) as { player_id: string; campaign_id: string }[];
-
-    for (const { player_id, campaign_id } of assignments) {
+    for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       db.prepare("DELETE FROM players WHERE id = ?").run(player_id);
       ctx.broadcast("players:changed", { campaignId: campaign_id });
     }
@@ -623,11 +499,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.post("/api/me/characters/:id/image", requireAuth, ctx.upload.single("image"), async (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
     if (!req.file) return res.status(400).json({ ok: false, message: "No file" });
     if (!ACCEPTED_IMAGE_TYPES.includes(req.file.mimetype)) {
       return res.status(400).json({ ok: false, message: "Unsupported image type" });
@@ -649,11 +521,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   app.delete("/api/me/characters/:id/image", requireAuth, (req, res) => {
     const charId = requireParam(req, res, "id");
     if (!charId) return;
-    const userId = (req as any).user.userId;
-    const existing = db
-      .prepare("SELECT id FROM user_characters WHERE id = ? AND user_id = ?")
-      .get(charId, userId) as { id: string } | undefined;
-    if (!existing) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!requireUserChar(charId, (req as any).user.userId, res)) return;
     const imagesDir = ctx.path.join(ctx.paths.dataDir, "character-images");
     const imgPath = ctx.path.join(imagesDir, `${charId}.webp`);
     try { if (ctx.fs.existsSync(imgPath)) ctx.fs.unlinkSync(imgPath); } catch { /* best-effort */ }

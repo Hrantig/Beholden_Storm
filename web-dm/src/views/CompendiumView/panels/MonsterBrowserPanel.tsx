@@ -2,13 +2,14 @@ import * as React from "react";
 import { Panel } from "@/ui/Panel";
 import { theme, withAlpha } from "@/theme/theme";
 import { api } from "@/services/api";
-import { IconPencil, IconTrash, IconPlus } from "@/icons";
+import { IconPencil, IconTrash } from "@/icons";
 import type { CompendiumMonsterRow, PreparedMonsterRow, SortMode } from "@/views/CampaignView/monsterPicker/types";
 import { useMonsterPickerRows } from "@/views/CampaignView/monsterPicker/hooks/useMonsterPickerRows";
 import { MonsterPickerFilters } from "@/views/CampaignView/monsterPicker/components/MonsterPickerFilters";
 import { useVirtualList } from "@/views/CampaignView/monsterPicker/hooks/useVirtualList";
 import { formatCr } from "@/views/CampaignView/monsterPicker/utils";
 import { MonsterFormModal, type MonsterForEdit } from "@/views/CompendiumView/panels/MonsterFormModal";
+import { actionBtnStyle, BrowserAddButton } from "./browserParts";
 
 const ROW_HEIGHT = 52;
 
@@ -71,16 +72,16 @@ function MonsterBrowserRow(props: {
             <>
               <span style={{ fontSize: 11, color: theme.colors.muted, marginRight: 2 }}>Delete?</span>
               <button type="button" onClick={props.onConfirmDelete} disabled={props.deleteBusy}
-                style={actionBtn(theme.colors.red)} title="Yes, delete">Yes</button>
+                style={actionBtnStyle(theme.colors.red)} title="Yes, delete">Yes</button>
               <button type="button" onClick={props.onCancelDelete}
-                style={actionBtn(theme.colors.muted)} title="Cancel">No</button>
+                style={actionBtnStyle(theme.colors.muted)} title="Cancel">No</button>
             </>
           ) : (
             <>
-              <button type="button" onClick={props.onEdit} style={actionBtn(theme.colors.muted)} title="Edit monster">
+              <button type="button" onClick={props.onEdit} style={actionBtnStyle(theme.colors.muted)} title="Edit monster">
                 <IconPencil size={13} />
               </button>
-              <button type="button" onClick={props.onDelete} style={actionBtn(theme.colors.muted)} title="Delete monster">
+              <button type="button" onClick={props.onDelete} style={actionBtnStyle(theme.colors.muted)} title="Delete monster">
                 <IconTrash size={13} />
               </button>
             </>
@@ -91,15 +92,6 @@ function MonsterBrowserRow(props: {
   );
 }
 
-function actionBtn(color: string): React.CSSProperties {
-  return {
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    width: 26, height: 26, padding: 0,
-    border: `1px solid ${withAlpha(color, 0.3)}`,
-    borderRadius: 6, background: withAlpha(color, 0.1),
-    color, cursor: "pointer", fontSize: 11, fontWeight: 700,
-  };
-}
 
 export function MonsterBrowserPanel(props: {
   selectedMonsterId: string | null;
@@ -208,21 +200,7 @@ export function MonsterBrowserPanel(props: {
               {loading ? "Loading…" : `${filteredRows.length.toLocaleString()} / ${baseRows.length.toLocaleString()}`}
             </div>
             {props.editable && (
-              <button
-                type="button"
-                title="New monster"
-                onClick={() => setShowCreateChoice(true)}
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 28, height: 28, borderRadius: 8,
-                  border: `1px solid ${theme.colors.panelBorder}`,
-                  background: theme.colors.accentPrimary,
-                  color: theme.colors.textDark,
-                  cursor: "pointer",
-                }}
-              >
-                <IconPlus size={14} />
-              </button>
+              <BrowserAddButton title="New monster" onClick={() => setShowCreateChoice(true)} />
             )}
           </div>
         }

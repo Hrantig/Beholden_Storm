@@ -1,18 +1,81 @@
 import React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { C, withAlpha } from "@/lib/theme";
+import { C } from "@/lib/theme";
 import {
   getBackgroundFeatChoices,
   getBackgroundFeatChoicesByRuleset,
   inferRulesetFromLabel,
   matchesRuleset,
+  matchesRulesetLabel,
   type BackgroundFeatChoiceEntry,
   type Ruleset,
 } from "@/lib/characterRules";
 import { api, jsonInit } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { invocationPrerequisitesMet, spellLooksLikeDamageSpell } from "@/views/CharacterSheetUtils";
+import {
+  ABILITY_NAME_TO_KEY,
+  ABILITY_KEYS,
+  ABILITY_LABELS,
+  ABILITY_SCORE_NAMES,
+  ALL_LANGUAGES,
+  ALL_SKILLS,
+  ALL_TOOLS,
+  MUSICAL_INSTRUMENTS,
+  POINT_BUY_BUDGET,
+  POINT_BUY_COSTS,
+  STANDARD_ARRAY,
+  STANDARD_55E_LANGUAGES,
+  WEAPON_MASTERY_KINDS,
+  WEAPON_MASTERY_KIND_SET,
+} from "@/views/CharacterCreatorConstants";
+import {
+  abilityMod,
+  abilityNamesToKeys,
+  calcHpMax,
+  classifyFeatSelection,
+  extractClassStartingEquipment,
+  featuresUpToLevel,
+  getCantripCount,
+  getClassFeatureTable,
+  getFeatChoiceOptions,
+  getMaxSlotLevel,
+  getSubclassLevel,
+  getSubclassList,
+  normalizeChoiceKey,
+  getWeaponMasteryOptions,
+  isSpellcaster,
+  parseRaceChoicesByRuleset,
+  parseSkillList,
+  parseStartingEquipmentOptions,
+  tableValueAtLevel,
+  wordOrNumberToInt,
+} from "@/views/CharacterCreatorUtils";
 import { Select } from "@/ui/Select";
-import { IconPlayer } from "@/icons";
+import { NavButtons, SpellPicker, StepHeader } from "@/views/CharacterCreatorParts";
+import {
+  detailBoxStyle,
+  headingStyle,
+  inputStyle,
+  labelStyle,
+  profChipStyle,
+  smallBtnStyle,
+  sourceTagStyle,
+  statLabelStyle,
+  statValueStyle,
+} from "@/views/CharacterCreatorStyles";
+import {
+  renderAbilityScoresStep,
+  renderCampaignsStep,
+  renderClassStep,
+  renderDerivedStatsStep,
+  renderIdentityStep,
+  renderLevelStep,
+  renderSpeciesStep,
+  renderSpellsStep,
+} from "@/views/CharacterCreatorStepPanels";
+import { normalizeInventoryItemLookupName } from "@/views/CharacterInventory";
+import type { ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -41,6 +104,14 @@ interface ItemSummary {
   rarity?: string | null;
   magic?: boolean;
   attunement?: boolean;
+  weight?: number | null;
+  value?: number | null;
+  ac?: number | null;
+  stealthDisadvantage?: boolean;
+  dmg1?: string | null;
+  dmg2?: string | null;
+  dmgType?: string | null;
+  properties?: string[];
 }
 interface RaceSummary { id: string; name: string; size: string | null; speed: number | null; ruleset?: Ruleset | null }
 interface RaceDetail {
@@ -117,6 +188,11 @@ interface InventoryItemSeed {
   equipState?: "backpack" | "mainhand-1h" | "mainhand-2h" | "offhand";
   notes?: string;
   source?: "compendium" | "custom";
+  itemId?: string;
+  type?: string | null;
+  rarity?: string | null;
+  magic?: boolean;
+  attunement?: boolean;
 }
 
 interface ClassFeatureEntry {
@@ -125,208 +201,7 @@ interface ClassFeatureEntry {
   text: string;
 }
 
-// Canonical pick lists mirrored from server/src/lib/proficiencyConstants.ts
-const ALL_TOOLS = [
-  "Alchemist's Supplies","Brewer's Supplies","Calligrapher's Supplies",
-  "Carpenter's Tools","Cartographer's Tools","Cobbler's Tools","Cook's Utensils",
-  "Glassblower's Tools","Jeweler's Tools","Leatherworker's Tools","Mason's Tools",
-  "Painter's Supplies","Potter's Tools","Smith's Tools","Tinker's Tools",
-  "Weaver's Tools","Woodcarver's Tools",
-  "Disguise Kit","Forgery Kit","Herbalism Kit","Navigator's Tools",
-  "Poisoner's Kit","Thieves' Tools",
-  "Dice Set","Dragonchess Set","Playing Card Set","Three-Dragon Ante Set",
-  "Bagpipes","Drum","Dulcimer","Flute","Lute","Lyre","Horn","Pan Flute","Shawm","Viol",
-  "Land Vehicles","Water Vehicles","Sea Vehicles",
-];
-const MUSICAL_INSTRUMENTS = [
-  "Bagpipes","Drum","Dulcimer","Flute","Lute","Lyre","Horn","Pan Flute","Shawm","Viol",
-];
-const ALL_SKILLS = [
-  "Acrobatics","Animal Handling","Arcana","Athletics","Deception",
-  "History","Insight","Intimidation","Investigation","Medicine",
-  "Nature","Perception","Performance","Persuasion","Religion",
-  "Sleight of Hand","Stealth","Survival",
-];
-const ALL_LANGUAGES = [
-  "Common","Dwarvish","Elvish","Giant","Gnomish","Goblin","Halfling","Orcish",
-  "Abyssal","Celestial","Draconic","Deep Speech","Infernal","Primordial","Sylvan","Undercommon",
-  "Sign Language","Thieves' Cant",
-];
-const WEAPON_MASTERY_KINDS = [
-  "Battleaxe","Blowgun","Club","Dagger","Dart","Flail","Glaive","Greataxe","Greatclub","Greatsword",
-  "Halberd","Hand Crossbow","Handaxe","Heavy Crossbow","Javelin","Lance","Light Crossbow","Light Hammer",
-  "Longbow","Longsword","Mace","Maul","Morningstar","Musket","Pike","Pistol","Quarterstaff","Rapier",
-  "Scimitar","Shortbow","Shortsword","Sickle","Sling","Spear","Trident","War Pick","Warhammer","Whip",
-] as const;
-const WEAPON_MASTERY_KIND_SET = new Set<string>(WEAPON_MASTERY_KINDS);
-interface Campaign { id: string; name: string }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
-const ABILITY_LABELS: Record<string, string> = { str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA" };
-const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
-const POINT_BUY_COSTS: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
-const POINT_BUY_BUDGET = 27;
-
-function abilityMod(score: number) { return Math.floor((score - 10) / 2); }
-
-const ABILITY_NAME_TO_KEY: Record<string, string> = {
-  strength: "str", dexterity: "dex", constitution: "con",
-  intelligence: "int", wisdom: "wis", charisma: "cha",
-};
-function abilityNamesToKeys(names: string[]): string[] {
-  return names.map(n => ABILITY_NAME_TO_KEY[n.toLowerCase()] ?? "").filter(Boolean);
-}
-
-function calcHpMax(hd: number, level: number, conMod: number): number {
-  if (level <= 0) return hd + conMod;
-  return hd + conMod + (level - 1) * (Math.floor(hd / 2) + 1 + conMod);
-}
-
-function getSubclassLevel(cls: ClassDetail | null): number | null {
-  if (!cls) return null;
-  for (const al of cls.autolevels) {
-    for (const f of al.features) {
-      if (/subclass/i.test(f.name) && !f.optional) return al.level;
-    }
-  }
-  return null;
-}
-
-function featuresUpToLevel(cls: ClassDetail, level: number) {
-  return cls.autolevels
-    .filter((al) => al.level != null && al.level <= level)
-    .flatMap((al) => al.features.filter((f) => !f.optional).map((f) => ({ ...f, level: al.level })));
-}
-
-function getSubclassList(cls: ClassDetail): string[] {
-  const names: string[] = [];
-  for (const al of cls.autolevels) {
-    for (const f of al.features) {
-      if (f.optional && /subclass:/i.test(f.name)) {
-        const label = f.name.replace(/^[^:]+:\s*/i, "").trim();
-        if (label && !names.includes(label)) names.push(label);
-      }
-    }
-  }
-  return names;
-}
-
-/**
- * Parse an embedded "Level | Count" table from feature text.
- * e.g. "Invocations Known:\nLevel | Invocations\n1 | 1\n2 | 3\n..."
- * Returns sorted [level, count] pairs.
- */
-function parseLevelTable(text: string): [number, number][] {
-  const pairs: [number, number][] = [];
-  let inTable = false;
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (!inTable) {
-      // The header row has "Level" and "|" (but not all-numeric values)
-      if (/\blevel\b/i.test(line) && /\|/.test(line) && !/^\d/.test(line)) { inTable = true; }
-      continue;
-    }
-    const m = line.match(/^(\d+)\s*\|?\s*(\d+)/);
-    if (m) { pairs.push([parseInt(m[1]), parseInt(m[2])]); }
-    else if (line.length > 0 && !/^\d/.test(line)) { break; } // end of table
-  }
-  return pairs.sort((a, b) => a[0] - b[0]);
-}
-
-/** Get value from a parsed level table at a given character level (highest entry ≤ level). */
-function tableValueAtLevel(table: [number, number][], level: number): number {
-  let result = 0;
-  for (const [lvl, val] of table) { if (lvl <= level) result = val; }
-  return result;
-}
-
-/** Get the active slots array at a given character level (last autolevel ≤ level that has slots). */
-function getSlotsAtLevel(cls: ClassDetail, level: number): number[] | null {
-  let best: number[] | null = null;
-  for (const al of cls.autolevels) {
-    if (al.level != null && al.level <= level && al.slots != null) best = al.slots;
-  }
-  return best;
-}
-
-/** Number of cantrips at this level (first element of slots array). */
-function getCantripCount(cls: ClassDetail, level: number): number {
-  return getSlotsAtLevel(cls, level)?.[0] ?? 0;
-}
-
-/** Highest spell slot level available at this character level. */
-function getMaxSlotLevel(cls: ClassDetail, level: number): number {
-  const slots = getSlotsAtLevel(cls, level);
-  if (!slots) return 0;
-  for (let i = slots.length - 1; i >= 1; i--) { if (slots[i] > 0) return i; }
-  return 0;
-}
-
-/** True if class has any spell slots at any level. */
-function isSpellcaster(cls: ClassDetail): boolean {
-  return cls.autolevels.some((al) => al.slots != null && al.slots.slice(1).some((s) => s > 0));
-}
-
-/**
- * For a non-optional class feature whose name contains a keyword (e.g. "Invocation", "Pact Magic"),
- * find the first such feature text up to the given level and parse its level table.
- */
-function getClassFeatureTable(cls: ClassDetail, keyword: string, level: number): [number, number][] {
-  for (const al of cls.autolevels) {
-    if (al.level == null || al.level > level) continue;
-    for (const f of al.features) {
-      if (!f.optional && new RegExp(keyword, "i").test(f.name)) {
-        const t = parseLevelTable(f.text);
-        if (t.length > 0) return t;
-      }
-    }
-  }
-  return [];
-}
-
-const ABILITY_SCORE_NAMES = new Set([
-  "Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma",
-]);
-
-/** Parse proficiency string into a skill list, excluding ability score names (those become saving throws). */
-function parseSkillList(proficiency: string): string[] {
-  return proficiency.split(/[,;]/).map(s => s.trim()).filter(s => s && !ABILITY_SCORE_NAMES.has(s));
-}
-
-function normalizeChoiceKey(value: string): string {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-/**
- * Extract the minimum character level from an invocation prerequisite string.
- * e.g. "Prerequisite: Level 7+ Warlock" → 7
- * Returns 1 if no level prerequisite is found (always available).
- */
-function parseInvocationPrereqLevel(text: string): number {
-  const m = text.match(/Prerequisite[^:]*:.*?Level\s+(\d+)\+/i);
-  return m ? parseInt(m[1], 10) : 1;
-}
-
-// ---------------------------------------------------------------------------
-// Provenance tracking
-// ---------------------------------------------------------------------------
-
-export interface TaggedItem { name: string; source: string }
-export interface ProficiencyMap {
-  skills: TaggedItem[];
-  saves: TaggedItem[];
-  armor: TaggedItem[];
-  weapons: TaggedItem[];
-  tools: TaggedItem[];
-  languages: TaggedItem[];
-  masteries: TaggedItem[];
-  spells: TaggedItem[];        // cantrips + prepared spells
-  invocations: TaggedItem[];
-}
 
 /** Compile the full proficiency map with source tags from all wizard selections. */
 // ---------------------------------------------------------------------------
@@ -392,218 +267,6 @@ function parseFeatureGrants(text: string): FeatureGrants {
   return result;
 }
 
-function wordOrNumberToInt(value: string): number | null {
-  const lowered = value.trim().toLowerCase();
-  const numeric = Number.parseInt(lowered, 10);
-  if (Number.isFinite(numeric)) return numeric;
-  const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
-  return words[lowered] ?? null;
-}
-
-function baseWeaponKind(name: string): string {
-  return name.replace(/\s*\[[^\]]+\]\s*$/u, "").trim();
-}
-
-function getWeaponMasteryOptions(items: ItemSummary[]): string[] {
-  const kinds = new Set<string>();
-  for (const item of items) {
-    if (!/weapon/i.test(item.type ?? "")) continue;
-    if (item.magic || item.attunement || item.rarity) continue;
-    const kind = baseWeaponKind(item.name);
-    if (!WEAPON_MASTERY_KIND_SET.has(kind)) continue;
-    kinds.add(kind);
-  }
-  return [...kinds].sort((a, b) => a.localeCompare(b));
-}
-
-function getFeatChoiceOptions(choice: ParsedFeatChoice): string[] {
-  if (choice.type === "weapon_mastery") return [...WEAPON_MASTERY_KINDS];
-  if (choice.options && choice.options.length > 0) return [...choice.options].sort((a, b) => a.localeCompare(b));
-  const combined = new Set<string>();
-  for (const kind of choice.anyOf ?? []) {
-    if (kind === "skill") ALL_SKILLS.forEach((item) => combined.add(item));
-    if (kind === "tool") ALL_TOOLS.forEach((item) => combined.add(item));
-    if (kind === "language") ALL_LANGUAGES.forEach((item) => combined.add(item));
-  }
-  return [...combined].sort((a, b) => a.localeCompare(b));
-}
-
-function classifyFeatSelection(choice: ParsedFeatChoice, value: string): "skill" | "tool" | "language" | "weapon_mastery" | null {
-  if (choice.type === "weapon_mastery") return "weapon_mastery";
-  if (choice.anyOf?.length === 1) {
-    const only = choice.anyOf[0];
-    if (only === "skill" || only === "tool" || only === "language") return only;
-  }
-  if (ALL_SKILLS.includes(value)) return "skill";
-  if (ALL_TOOLS.includes(value)) return "tool";
-  if (ALL_LANGUAGES.includes(value)) return "language";
-  if (WEAPON_MASTERY_KIND_SET.has(value)) return "weapon_mastery";
-  return null;
-}
-
-interface RaceChoices {
-  hasChosenSize: boolean;
-  skillChoice: { count: number; from: string[] | null } | null;
-  toolChoice: { count: number; from: string[] | null } | null;
-  languageChoice: { count: number; from: string[] | null } | null;
-  hasFeatChoice: boolean;
-}
-
-function parseRaceChoices5e(traits: { name: string; text: string }[]): RaceChoices {
-  let skillChoice: RaceChoices["skillChoice"] = null;
-  let toolChoice: RaceChoices["toolChoice"] = null;
-  let languageChoice: RaceChoices["languageChoice"] = null;
-
-  for (const t of traits) {
-    const text = t.text;
-
-    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
-    if (skillListMatch) {
-      const from = skillListMatch[1]
-        .split(/,\s*|\s+or\s+/i)
-        .map((s) => s.trim())
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
-        .filter((s) => ALL_SKILLS.includes(s));
-      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
-    } else if (
-      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
-      /one skill of your choice/i.test(text)
-    ) {
-      if (!skillChoice) skillChoice = { count: 1, from: null };
-    }
-
-    if (/one tool proficiency of your choice/i.test(text)) {
-      if (!toolChoice) toolChoice = { count: 1, from: null };
-    }
-
-    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
-    if (langListMatch) {
-      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
-      const from = langListMatch[2]
-        .split(/[,\n\t]+/)
-        .map((s) => s.trim()).filter(Boolean)
-        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
-      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
-    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
-      if (!languageChoice) languageChoice = { count: 1, from: null };
-    }
-  }
-
-  return { hasChosenSize: false, skillChoice, toolChoice, languageChoice, hasFeatChoice: false };
-}
-
-function parseRaceChoices55e(traits: { name: string; text: string }[]): RaceChoices {
-  let hasChosenSize = false;
-  let skillChoice: RaceChoices["skillChoice"] = null;
-  let toolChoice: RaceChoices["toolChoice"] = null;
-  let languageChoice: RaceChoices["languageChoice"] = null;
-  let hasFeatChoice = false;
-
-  for (const t of traits) {
-    const text = t.text;
-
-    // Size choice
-    if (/^size$/i.test(t.name) && /chosen when you select/i.test(text)) hasChosenSize = true;
-
-    // Origin feat
-    if (/origin feat of your choice/i.test(text)) hasFeatChoice = true;
-
-    // Skill: "proficiency in the Insight, Perception, or Survival skill" → limited list
-    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
-    if (skillListMatch) {
-      const from = skillListMatch[1]
-        .split(/,\s*|\s+or\s+/i)
-        .map((s) => s.trim())
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
-        .filter((s) => ALL_SKILLS.includes(s));
-      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
-    } else if (
-      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
-      /one skill of your choice/i.test(text)
-    ) {
-      if (!skillChoice) skillChoice = { count: 1, from: null };
-    }
-
-    // Tool choice
-    if (/one tool proficiency of your choice/i.test(text)) {
-      if (!toolChoice) toolChoice = { count: 1, from: null };
-    }
-
-    // Language: "your choice of N of the following standard languages: X, Y, Z"
-    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
-    if (langListMatch) {
-      const count = wordOrNumberToInt(langListMatch[1]) ?? 1;
-      const from = langListMatch[2]
-        .split(/[,\n\t]+/)
-        .map((s) => s.trim()).filter(Boolean)
-        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
-      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
-    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
-      if (!languageChoice) languageChoice = { count: 1, from: null };
-    }
-  }
-  return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
-}
-
-function parseRaceChoicesByRuleset(ruleset: Ruleset, traits: { name: string; text: string }[]): RaceChoices {
-  return ruleset === "5.5e" ? parseRaceChoices55e(traits) : parseRaceChoices5e(traits);
-}
-
-interface StartingEquipmentOption {
-  id: string;
-  entries: string[];
-  text: string;
-}
-
-function parseStartingEquipmentOptions(equipment: string | undefined): StartingEquipmentOption[] {
-  if (!equipment) return [];
-  const normalized = equipment
-    .replace(/\r/g, "")
-    .replace(/Choose\s+A\s+or\s+8/gi, "Choose A or B")
-    .replace(/\(8\)/g, "(B)")
-    .replace(/•/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const matches = [...normalized.matchAll(/\(([A-Z])\)\s*([\s\S]*?)(?=(?:;\s*or\s*\([A-Z]\))|(?:;\s*\([A-Z]\))|$)/g)];
-  return matches.map((match) => ({
-    id: match[1] ?? "",
-    text: (match[2] ?? "").trim().replace(/;$/, ""),
-    entries: splitEquipmentEntries((match[2] ?? "").trim()),
-  })).filter((option) => option.id && option.entries.length > 0);
-}
-
-function splitEquipmentEntries(text: string): string[] {
-  return text
-    .replace(/\s+or\s+$/i, "")
-    .replace(/\s+and\s+/gi, ", ")
-    .split(/\s*,\s*/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function extractClassStartingEquipment(classDetail: ClassDetail | null): string {
-  if (!classDetail) return "";
-  for (const al of classDetail.autolevels) {
-    if (al.level !== 1) continue;
-    for (const f of al.features) {
-      const match = f.text.match(/Starting Equipment:\s*([^\n]+)/i);
-      if (match?.[1]) return match[1].trim();
-    }
-  }
-  return "";
-}
-
-const STANDARD_55E_LANGUAGES = [
-  "Common Sign Language",
-  "Draconic",
-  "Dwarvish",
-  "Elvish",
-  "Giant",
-  "Gnomish",
-  "Goblin",
-  "Halfling",
-  "Orc",
-];
 
 function getCore55eLanguageChoice(raceDetail: RaceDetail | null, ruleset: Ruleset | null) {
   if (ruleset !== "5.5e") return null;
@@ -631,23 +294,73 @@ function getBackgroundGrantedToolSelections(form: FormState, bgDetail: BgDetail 
   return [...granted];
 }
 
-function buildEquipmentItems(optionId: string | null, equipmentText: string | undefined, prefix: string, grantedTools: string[]): InventoryItemSeed[] {
+function singularizeEquipmentName(name: string): string {
+  const trimmed = name.trim();
+  const irregular: Record<string, string> = {
+    daggers: "Dagger",
+  };
+  const lowered = trimmed.toLowerCase();
+  if (irregular[lowered]) return irregular[lowered];
+  if (/ies$/i.test(trimmed)) return `${trimmed.slice(0, -3)}y`;
+  if (/es$/i.test(trimmed) && /(ches|shes|sses|xes|zes)$/i.test(trimmed)) return trimmed.slice(0, -2);
+  if (/s$/i.test(trimmed) && !/ss$/i.test(trimmed)) return trimmed.slice(0, -1);
+  return trimmed;
+}
+
+function resolveStartingInventoryItem(name: string, items: ItemSummary[]): ItemSummary | null {
+  const normalized = normalizeInventoryItemLookupName(name);
+  const singularNormalized = normalizeInventoryItemLookupName(singularizeEquipmentName(name));
+  return items.find((item) => normalizeInventoryItemLookupName(item.name) === normalized)
+    ?? items.find((item) => normalizeInventoryItemLookupName(item.name) === singularNormalized)
+    ?? null;
+}
+
+function buildEquipmentItems(optionId: string | null, equipmentText: string | undefined, prefix: string, grantedTools: string[], itemIndex: ItemSummary[]): InventoryItemSeed[] {
   const options = parseStartingEquipmentOptions(equipmentText);
   const selected = options.find((option) => option.id === optionId);
   if (!selected) return [];
 
-  const items: InventoryItemSeed[] = [];
+  const seeds: InventoryItemSeed[] = [];
   let autoId = 1;
 
   function pushItem(name: string, quantity: number) {
     const trimmed = name.trim();
     if (!trimmed || quantity <= 0) return;
-    items.push({
-      id: `${prefix}-eq-${autoId++}`,
-      name: trimmed,
-      quantity,
+    const matched = resolveStartingInventoryItem(trimmed, itemIndex);
+    const canonicalName = matched ? matched.name.replace(/\s+\[(?:2024|5\.5e|5e)\]\s*$/i, "").trim() : trimmed;
+    const seedBase = {
+      name: canonicalName,
       equipped: false,
-      source: "custom",
+      source: matched ? "compendium" as const : "custom" as const,
+      itemId: matched?.id,
+      type: matched?.type ?? null,
+      rarity: matched?.rarity ?? null,
+      magic: matched?.magic ?? false,
+      attunement: matched?.attunement ?? false,
+      weight: matched?.weight ?? null,
+      value: matched?.value ?? null,
+      ac: matched?.ac ?? null,
+      stealthDisadvantage: matched?.stealthDisadvantage ?? false,
+      dmg1: matched?.dmg1 ?? null,
+      dmg2: matched?.dmg2 ?? null,
+      dmgType: matched?.dmgType ?? null,
+      properties: matched?.properties ?? [],
+    };
+    const isWeapon = Boolean(matched?.type && /weapon/i.test(matched.type));
+    if (isWeapon && quantity > 1) {
+      for (let index = 0; index < quantity; index += 1) {
+        seeds.push({
+          id: `${prefix}-eq-${autoId++}`,
+          ...seedBase,
+          quantity: 1,
+        });
+      }
+      return;
+    }
+    seeds.push({
+      id: `${prefix}-eq-${autoId++}`,
+      ...seedBase,
+      quantity,
     });
   }
 
@@ -687,21 +400,23 @@ function buildEquipmentItems(optionId: string | null, equipmentText: string | un
     pushItem(normalized, 1);
   }
 
-  return items;
+  return seeds;
 }
 
-function buildStartingInventory(form: FormState, bgDetail: BgDetail | null, classDetail: ClassDetail | null): InventoryItemSeed[] {
+function buildStartingInventory(form: FormState, bgDetail: BgDetail | null, classDetail: ClassDetail | null, itemIndex: ItemSummary[]): InventoryItemSeed[] {
   const bgItems = buildEquipmentItems(
     form.chosenBgEquipmentOption,
     bgDetail?.equipment,
     "bg",
     getBackgroundGrantedToolSelections(form, bgDetail),
+    itemIndex,
   );
   const classItems = buildEquipmentItems(
     form.chosenClassEquipmentOption,
     extractClassStartingEquipment(classDetail),
     "class",
     [],
+    itemIndex,
   );
   return [...classItems, ...bgItems];
 }
@@ -1185,94 +900,6 @@ function getPrimaryAbilityKeys(classDetail: ClassDetail | null): string[] {
   return [];
 }
 
-// ---------------------------------------------------------------------------
-// Shared sub-components
-// ---------------------------------------------------------------------------
-
-function StepHeader({ current, onStepClick }: { current: Step; onStepClick: (s: Step) => void }) {
-  const STEPS = ["Class", "Species", "Background", "Level", "Skills", "Spells", "Ability Scores", "Stats", "Identity", "Assign"];
-  return (
-    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 28 }}>
-      {STEPS.map((label, i) => {
-        const n = (i + 1) as Step;
-        const active = n === current;
-        const done = n < current;
-        return (
-          <button key={n} type="button"
-            onClick={() => onStepClick(n)}
-            style={{
-              padding: "5px 13px", borderRadius: 20,
-              background: active ? C.accentHl : done ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.06)",
-              color: active ? C.textDark : done ? C.accentHl : "rgba(160,180,220,0.50)",
-              fontWeight: active ? 700 : done ? 600 : 500,
-              fontSize: 12,
-              border: `1px solid ${active ? C.accentHl : done ? "rgba(56,182,255,0.35)" : "rgba(255,255,255,0.10)"}`,
-              cursor: active ? "default" : "pointer",
-              transition: "opacity 0.12s, background 0.12s",
-            }}>
-            {done ? "✓ " : `${n}. `}{label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function NavButtons({ step, onBack, onNext, nextLabel = "Next →", nextDisabled = false }: {
-  step: Step; onBack: () => void; onNext: () => void; nextLabel?: string; nextDisabled?: boolean;
-}) {
-  return (
-    <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "space-between" }}>
-      <button type="button" onClick={onBack} disabled={step === 1} style={btnStyle(false, step === 1)}>
-        ← Back
-      </button>
-      <button type="button" onClick={onNext} disabled={nextDisabled} style={btnStyle(true, nextDisabled)}>
-        {nextLabel}
-      </button>
-    </div>
-  );
-}
-
-function btnStyle(primary: boolean, disabled: boolean): React.CSSProperties {
-  return {
-    padding: "9px 22px", borderRadius: 8, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
-    border: primary ? "none" : "1px solid rgba(255,255,255,0.18)",
-    background: disabled
-      ? "rgba(255,255,255,0.06)"
-      : primary
-        ? C.accentHl
-        : "rgba(255,255,255,0.08)",
-    color: disabled ? "rgba(160,180,220,0.40)" : primary ? C.textDark : C.text,
-    fontSize: 14,
-    transition: "opacity 0.15s",
-  };
-}
-
-function CardGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
-      {children}
-    </div>
-  );
-}
-
-function SelectableCard({ selected, onClick, title, subtitle }: {
-  selected: boolean; onClick: () => void; title: string; subtitle?: string;
-}) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      padding: "13px 15px", borderRadius: 10, textAlign: "left",
-      border: `2px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-      background: selected ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
-      color: C.text, cursor: "pointer",
-      boxShadow: selected ? `0 0 0 1px ${C.accentHl}22` : "none",
-      transition: "border-color 0.12s, background 0.12s",
-    }}>
-      <div style={{ fontWeight: 700, fontSize: 14, color: selected ? C.accentHl : C.text }}>{title}</div>
-      {subtitle && <div style={{ color: selected ? "rgba(56,182,255,0.75)" : "rgba(160,180,220,0.6)", fontSize: 12, marginTop: 3 }}>{subtitle}</div>}
-    </button>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main view
@@ -1426,20 +1053,41 @@ export function CharacterCreatorView() {
     }
   }, [classDetail]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Drop any chosen invocations whose level prerequisite is no longer met
+  const eligibleInvocationIds = React.useMemo(() => {
+    const chosenCantripNames = classCantrips
+      .filter((spell) => form.chosenCantrips.includes(spell.id))
+      .map((spell) => spell.name);
+    const chosenDamageCantripNames = classCantrips
+      .filter((spell) => form.chosenCantrips.includes(spell.id) && spellLooksLikeDamageSpell(spell))
+      .map((spell) => spell.name);
+    const chosenInvocationNames = classInvocations
+      .filter((invocation) => form.chosenInvocations.includes(invocation.id))
+      .map((invocation) => invocation.name);
+
+    return new Set(
+      classInvocations
+        .filter((invocation) => matchesRulesetLabel(invocation.name, selectedRuleset))
+        .filter((invocation) =>
+          invocationPrerequisitesMet(invocation.text ?? "", {
+            level: form.level,
+            chosenCantripNames,
+            chosenDamageCantripNames,
+            chosenInvocationNames,
+          })
+        )
+        .map((invocation) => invocation.id)
+    );
+  }, [classCantrips, classInvocations, form.chosenCantrips, form.chosenInvocations, form.level, selectedRuleset]);
+
+  // Drop any chosen invocations whose prerequisites are no longer met
   React.useEffect(() => {
     if (classInvocations.length === 0) return;
     setForm((f) => {
-      const valid = new Set(
-        classInvocations
-          .filter((inv) => parseInvocationPrereqLevel(inv.text ?? "") <= f.level)
-          .map((inv) => inv.id)
-      );
-      const next = f.chosenInvocations.filter((id) => valid.has(id));
+      const next = f.chosenInvocations.filter((id) => eligibleInvocationIds.has(id));
       if (next.length === f.chosenInvocations.length) return f;
       return { ...f, chosenInvocations: next };
     });
-  }, [form.level, classInvocations]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [classInvocations, eligibleInvocationIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load race detail when selected — also reset race choices
   React.useEffect(() => {
@@ -1539,7 +1187,7 @@ export function CharacterCreatorView() {
       })();
       const startingInventory = isEditing
         ? undefined
-        : buildStartingInventory(form, bgDetail, classDetail);
+        : buildStartingInventory(form, bgDetail, classDetail, items);
       const body = {
         name: form.characterName.trim(),
         playerName: optionalText(form.playerName),
@@ -1699,123 +1347,35 @@ export function CharacterCreatorView() {
 
   // Step 1: Class
   function StepClass(): { main: React.ReactNode; side: React.ReactNode } {
-    const filtered = classSearch
-      ? classes.filter((c) => c.name.toLowerCase().includes(classSearch.toLowerCase()))
-      : classes;
-
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Choose a Class</h2>
-
-        {classes.length === 0
-          ? <p style={{ color: C.muted }}>No classes found. Ask your DM to upload a class compendium XML.</p>
-          : (
-            <>
-              <input
-                value={classSearch}
-                onChange={(e) => setClassSearch(e.target.value)}
-                placeholder="Search classes…"
-                style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
-              />
-              <div style={{
-                display: "grid", gridTemplateColumns: "1fr 1fr",
-                gap: 6, maxHeight: 340, overflowY: "auto", paddingRight: 4, marginBottom: 4,
-              }}>
-                {filtered.length === 0 && (
-                  <p style={{ color: C.muted, gridColumn: "1 / -1" }}>No matches.</p>
-                )}
-                {filtered.map((c) => {
-                  const sel = form.classId === c.id;
-                  return (
-                    <button type="button" key={c.id} onClick={() => setForm((f) => ({
-                      ...f,
-                      classId: c.id,
-                      ruleset: inferRulesetFromLabel(c.name),
-                      raceId: "",
-                      bgId: "",
-                      chosenRaceSkills: [],
-                      chosenRaceLanguages: [],
-                      chosenRaceTools: [],
-                      chosenRaceFeatId: null,
-                      chosenRaceSize: null,
-                      chosenBgSkills: [],
-                      chosenBgOriginFeatId: null,
-                      chosenBgTools: [],
-                      chosenBgLanguages: [],
-                      chosenBgEquipmentOption: null,
-                      chosenFeatOptions: {},
-                      bgAbilityMode: "split",
-                      bgAbilityBonuses: {},
-                    }))} style={{
-                      padding: "10px 13px", borderRadius: 8, textAlign: "left",
-                      border: `2px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                      background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
-                      color: sel ? C.accentHl : C.text, cursor: "pointer",
-                      fontWeight: sel ? 700 : 500, fontSize: 13,
-                      transition: "border-color 0.12s, background 0.12s",
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    }}>
-                      {c.name}
-                      {c.hd && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: 11, marginLeft: 6 }}>d{c.hd}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )
-        }
-
-        <NavButtons step={step} onBack={() => {}} onNext={() => setStep(2)}
-          nextDisabled={!form.classId} />
-      </div>
-    );
-
-    const side = classDetail ? (
-      <div style={detailBoxStyle}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: C.accentHl, marginBottom: 12 }}>{classDetail.name}</div>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
-          {classDetail.hd && (
-            <div><div style={statLabelStyle}>Hit Die</div><div style={statValueStyle}>d{classDetail.hd}</div></div>
-          )}
-          {(() => {
-            const keys = getPrimaryAbilityKeys(classDetail);
-            return keys.length > 0 ? (
-              <div><div style={statLabelStyle}>Primary</div><div style={statValueStyle}>{keys.map(k => ABILITY_LABELS[k]).join(" / ")}</div></div>
-            ) : null;
-          })()}
-          {classDetail.slotsReset && (
-            <div><div style={statLabelStyle}>Spell Reset</div><div style={statValueStyle}>{classDetail.slotsReset === "L" ? "Long Rest" : classDetail.slotsReset === "S" ? "Short Rest" : classDetail.slotsReset}</div></div>
-          )}
-        </div>
-        {classDetail.armor && (
-          <div style={{ marginBottom: 6 }}>
-            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Armor </span>
-            <span style={{ fontSize: 12 }}>{classDetail.armor}</span>
-          </div>
-        )}
-        {classDetail.weapons && (
-          <div style={{ marginBottom: 6 }}>
-            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Weapons </span>
-            <span style={{ fontSize: 12 }}>{classDetail.weapons}</span>
-          </div>
-        )}
-        {classDetail.numSkills > 0 && (
-          <div style={{ marginBottom: 10 }}>
-            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Skills </span>
-            <span style={{ fontSize: 12 }}>Choose {classDetail.numSkills} from: {parseSkillList(classDetail.proficiency).join(", ")}</span>
-          </div>
-        )}
-        {classDetail.description && (
-          <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.6, marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
-            {classDetail.description.slice(0, 500)}{classDetail.description.length > 500 ? "…" : ""}
-          </div>
-        )}
-      </div>
-    ) : (
-      <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a class to see its details.</div>
-    );
-
-    return { main, side };
+    return renderClassStep({
+      classes,
+      classSearch,
+      setClassSearch,
+      form,
+      onSelectClass: (classId) => setForm((f) => ({
+        ...f,
+        classId,
+        ruleset: inferRulesetFromLabel(classes.find((c) => c.id === classId)?.name ?? ""),
+        raceId: "",
+        bgId: "",
+        chosenRaceSkills: [],
+        chosenRaceLanguages: [],
+        chosenRaceTools: [],
+        chosenRaceFeatId: null,
+        chosenRaceSize: null,
+        chosenBgSkills: [],
+        chosenBgOriginFeatId: null,
+        chosenBgTools: [],
+        chosenBgLanguages: [],
+        chosenBgEquipmentOption: null,
+        chosenFeatOptions: {},
+        bgAbilityMode: "split",
+        bgAbilityBonuses: {},
+      })),
+      onNext: () => setStep(2),
+      classDetail,
+      abilityLabels: ABILITY_LABELS,
+    });
   }
 
   // Step 2: Species
@@ -1839,13 +1399,45 @@ export function CharacterCreatorView() {
     }
 
     const raceChoices = raceDetail
-      ? (raceDetail.parsedChoices ?? parseRaceChoicesByRuleset(selectedRuleset ?? "5e", raceDetail.traits, ALL_SKILLS))
+      ? (raceDetail.parsedChoices ?? parseRaceChoicesByRuleset(selectedRuleset ?? "5e", raceDetail.traits))
       : null;
     const { skillChoice, toolChoice, languageChoice } = raceChoices ?? { skillChoice: null, toolChoice: null, languageChoice: null };
     const originFeats = featSummaries.filter(f => /\borigin\b/i.test(f.name) && matchesRuleset(f, selectedRuleset));
     const filteredFeats = raceFeatSearch
       ? originFeats.filter(f => f.name.toLowerCase().includes(raceFeatSearch.toLowerCase()))
       : originFeats;
+
+    return renderSpeciesStep({
+      availableRaces,
+      filteredRaces: filtered,
+      raceSearch,
+      setRaceSearch,
+      selectedRaceId: form.raceId,
+      selectRace: (id) => set("raceId", id),
+      raceDetail,
+      raceChoices,
+      chosenRaceSize: form.chosenRaceSize,
+      selectRaceSize: (size) => setForm((f) => ({ ...f, chosenRaceSize: size })),
+      chosenRaceSkills: form.chosenRaceSkills,
+      chosenRaceTools: form.chosenRaceTools,
+      chosenRaceLanguages: form.chosenRaceLanguages,
+      toggleRacePick,
+      allSkills: ALL_SKILLS.map((skill) => skill.name),
+      allTools: ALL_TOOLS,
+      allLanguages: ALL_LANGUAGES,
+      raceFeatSearch,
+      setRaceFeatSearch,
+      filteredFeats,
+      chosenRaceFeatId: form.chosenRaceFeatId,
+      selectRaceFeat: (id, selected) => setForm((f) => ({
+        ...f,
+        chosenRaceFeatId: selected ? null : id,
+        chosenFeatOptions: Object.fromEntries(Object.entries(f.chosenFeatOptions).filter(([k]) => !k.startsWith("race:"))),
+      })),
+      raceFeatDetail,
+      onBack: () => setStep(1),
+      onNext: () => setStep(3),
+    });
 
     const main = (
       <div>
@@ -2489,142 +2081,26 @@ export function CharacterCreatorView() {
         return { ...f, chosenOptionals: next };
       });
     }
-
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Choose Level</h2>
-        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-          <label style={{ color: C.muted, fontWeight: 600 }}>Level</label>
-          <input type="number" min={1} max={20} value={form.level}
-            onChange={(e) => set("level", Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
-            style={{ ...inputStyle, width: 80 }} />
-        </div>
-
-        {showSubclass && (
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ ...labelStyle }}>Subclass</label>
-            <Select value={form.subclass} onChange={(e) => set("subclass", e.target.value)} style={{ width: 280 }}>
-              <option value="">— Choose subclass —</option>
-              {subclassList.map((s) => <option key={s} value={s}>{s}</option>)}
-            </Select>
-          </div>
-        )}
-
-        {/* Optional feature choices */}
-        {optGroups.map((grp) => {
-          const names = grp.features.map((f) => f.name);
-          const isPickOne = grp.features.length <= 4;
-          return (
-            <div key={grp.level} style={{ marginBottom: 20 }}>
-              <div style={{ ...labelStyle, marginBottom: 8 }}>
-                Level {grp.level} — {isPickOne ? "Choose one" : "Choose any"}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {grp.features.map((f) => {
-                  const chosen = form.chosenOptionals.includes(f.name);
-                  const grants = parseFeatureGrants(f.text);
-                  const grantBadges: { label: string; color: string }[] = [
-                    ...grants.armor.map(n    => ({ label: n,              color: "#a78bfa" })), // purple
-                    ...grants.weapons.map(n  => ({ label: n,              color: "#f87171" })), // red
-                    ...grants.tools.map(n    => ({ label: n,              color: "#fb923c" })), // orange
-                    ...grants.skills.map(n   => ({ label: n,              color: "#34d399" })), // green
-                    ...grants.languages.map(n => ({ label: n + " (lang)", color: "#60a5fa" })), // blue
-                  ];
-                  return (
-                    <button key={f.name} type="button"
-                      onClick={() => toggleOptional(f.name, isPickOne, names)}
-                      style={{
-                        textAlign: "left", padding: "11px 14px", borderRadius: 8, cursor: "pointer",
-                        border: `2px solid ${chosen ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                        background: chosen ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
-                        transition: "border-color 0.12s, background 0.12s",
-                      }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: chosen ? C.accentHl : C.text }}>
-                        {f.name}
-                      </div>
-                      {f.text && (
-                        <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>
-                          {f.text.replace(/Source:.*$/m, "").trim().slice(0, 140)}
-                          {f.text.length > 140 ? "…" : ""}
-                        </div>
-                      )}
-                      {grantBadges.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 7 }}>
-                          {grantBadges.map((b, i) => (
-                            <span key={i} style={{
-                              fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
-                              background: b.color + "22", border: `1px solid ${b.color}66`,
-                              color: b.color, letterSpacing: "0.02em",
-                            }}>
-                              {b.label}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-
-        {classEquipmentText && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ ...labelStyle, marginBottom: 8 }}>
-              Class Starting Equipment {classDetail && <span style={sourceTagStyle}>{classDetail.name}</span>}
-            </div>
-            {classEquipmentOptions.length > 0 && (
-              <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                {classEquipmentOptions.map((option) => {
-                  const selected = form.chosenClassEquipmentOption === option.id;
-                  return (
-                    <button key={option.id} type="button"
-                      onClick={() => setForm((f) => ({ ...f, chosenClassEquipmentOption: option.id }))}
-                      style={{
-                        padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 600,
-                        border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.15)"}`,
-                        background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
-                        color: selected ? C.accentHl : C.muted,
-                      }}>
-                      Option {option.id}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", lineHeight: 1.6 }}>
-              {classEquipmentText}
-            </div>
-            {form.chosenClassEquipmentOption && classEquipmentOptions.length > 0 && (
-              <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
-                Inventory will start with class option {form.chosenClassEquipmentOption}.
-              </div>
-            )}
-          </div>
-        )}
-
-        <NavButtons step={step} onBack={() => setStep(3)} onNext={() => setStep(5)}
-          nextDisabled={classEquipmentOptions.length > 0 && !form.chosenClassEquipmentOption} />
-      </div>
-    );
-
-    const side = (
-      <div style={{ ...detailBoxStyle, maxHeight: 600, overflowY: "auto" }}>
-        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: C.accentHl }}>Class Features — Level {form.level}</div>
-        {features.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>No features yet. Select a class first.</div>}
-        {features.map((f, i) => (
-          <div key={i} style={{ marginBottom: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>Lv{f.level} · {f.name}</div>
-            <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.4 }}>
-              {f.text.slice(0, 300)}{f.text.length > 300 ? "…" : ""}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-
-    return { main, side };
+    return renderLevelStep({
+      level: form.level,
+      setLevel: (level) => set("level", level),
+      subclass: form.subclass,
+      setSubclass: (value) => set("subclass", value),
+      showSubclass,
+      subclassList,
+      optGroups,
+      chosenOptionals: form.chosenOptionals,
+      toggleOptional,
+      parseFeatureGrants,
+      classEquipmentText,
+      classEquipmentOptions,
+      chosenClassEquipmentOption: form.chosenClassEquipmentOption,
+      chooseClassEquipmentOption: (id) => setForm((f) => ({ ...f, chosenClassEquipmentOption: id })),
+      className: classDetail?.name ?? null,
+      features,
+      onBack: () => setStep(3),
+      onNext: () => setStep(5),
+    });
   }
 
   // Step 5: Skills, languages, and feature-based picks
@@ -3117,50 +2593,26 @@ export function CharacterCreatorView() {
       });
     }
 
-    const hasAnything = isCaster || invocCount > 0;
-
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Spells</h2>
-
-        {isCaster && cantripCount > 0 && (
-          <SpellPicker
-            title="Cantrips" spells={classCantrips} chosen={form.chosenCantrips}
-            max={cantripCount} emptyMsg="No cantrips found in compendium for this class."
-            onToggle={(id) => toggleSpell(id, "chosenCantrips", cantripCount)}
-          />
-        )}
-
-        {invocCount > 0 && classInvocations.length > 0 && (
-          <SpellPicker
-            title="Eldritch Invocations" chosen={form.chosenInvocations}
-            spells={classInvocations.filter(
-              (inv) => parseInvocationPrereqLevel(inv.text ?? "") <= form.level
-            )}
-            max={invocCount} emptyMsg="No invocations available at this level."
-            onToggle={(id) => toggleSpell(id, "chosenInvocations", invocCount)}
-          />
-        )}
-
-        {isCaster && prepCount > 0 && maxSlotLvl > 0 && (
-          <SpellPicker
-            title={`Prepared Spells (up to level ${maxSlotLvl})`}
-            spells={classSpells.filter((s) => s.level != null && s.level <= maxSlotLvl)}
-            chosen={form.chosenSpells} max={prepCount}
-            emptyMsg="No spells found in compendium for this class."
-            onToggle={(id) => toggleSpell(id, "chosenSpells", prepCount)}
-          />
-        )}
-
-        {!hasAnything && (
-          <p style={{ color: C.muted, fontSize: 14 }}>This class has no spellcasting choices at this level.</p>
-        )}
-
-        <NavButtons step={step} onBack={() => setStep(5)} onNext={() => setStep(7)} />
-      </div>
-    );
-
-    return { main, side: SideSummaryCard() };
+    return renderSpellsStep({
+      isCaster,
+      cantripCount,
+      classCantrips,
+      chosenCantrips: form.chosenCantrips,
+      toggleCantrip: (id) => toggleSpell(id, "chosenCantrips", cantripCount),
+      invocCount,
+      classInvocations: classInvocations.filter((inv) => eligibleInvocationIds.has(inv.id)),
+      chosenInvocations: form.chosenInvocations,
+      toggleInvocation: (id) => toggleSpell(id, "chosenInvocations", invocCount),
+      invocationAllowed: (inv) => eligibleInvocationIds.has(inv.id),
+      prepCount,
+      maxSlotLevel: maxSlotLvl,
+      classSpells,
+      chosenSpells: form.chosenSpells,
+      toggleSpell: (id) => toggleSpell(id, "chosenSpells", prepCount),
+      onBack: () => setStep(5),
+      onNext: () => setStep(7),
+      side: SideSummaryCard(),
+    });
   }
 
   // Step 7: Ability Scores
@@ -3172,172 +2624,28 @@ export function CharacterCreatorView() {
     const bgBonuses = form.bgAbilityBonuses;
     const hasBgBonuses = Object.keys(bgBonuses).length > 0;
 
-    /** Label for each ability showing the base score + bg bonus annotation */
-    function AbilityLabel({ k }: { k: string }) {
-      const bonus = bgBonuses[k];
-      const isPrimary = primaryKeys.includes(k);
-      return (
-        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
-          <span style={{
-            color: isPrimary ? "#fbbf24" : C.muted,
-            fontSize: "var(--fs-small)", fontWeight: isPrimary ? 800 : 600,
-          }}>
-            {ABILITY_LABELS[k]}
-          </span>
-          {isPrimary && <span style={{ fontSize: 10, color: "#fbbf24", opacity: 0.75 }}>★ Primary</span>}
-          {bonus != null && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10,
-              background: "rgba(167,139,250,0.18)", border: "1px solid rgba(167,139,250,0.4)",
-              color: "#a78bfa",
-            }}>
-              +{bonus} {bgDetail?.name ?? "bg"}
-            </span>
-          )}
-        </div>
-      );
-    }
-
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Ability Scores</h2>
-
-        {hasBgBonuses && (
-          <div style={{ ...detailBoxStyle, marginBottom: 16, padding: "10px 14px" }}>
-            <span style={{ fontSize: 12, color: "#a78bfa" }}>
-              Background bonuses applied:{" "}
-              {Object.entries(bgBonuses).map(([k, v]) => `${ABILITY_LABELS[k]} +${v}`).join(", ")}
-            </span>
-          </div>
-        )}
-
-        {/* Method tabs */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-          {(["standard", "pointbuy", "manual"] as AbilityMethod[]).map((m) => (
-            <button key={m} type="button" onClick={() => set("abilityMethod", m)} style={{
-              padding: "7px 16px", borderRadius: 8, cursor: "pointer",
-              border: `1px solid ${form.abilityMethod === m ? C.accentHl : "rgba(255,255,255,0.14)"}`,
-              background: form.abilityMethod === m ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
-              color: form.abilityMethod === m ? C.accentHl : "rgba(160,180,220,0.7)",
-              fontWeight: form.abilityMethod === m ? 700 : 500, fontSize: 13,
-            }}>
-              {m === "standard" ? "Standard Array" : m === "pointbuy" ? "Point Buy" : "Manual"}
-            </button>
-          ))}
-        </div>
-
-        {form.abilityMethod === "standard" && (
-          <div>
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 12 }}>
-              Assign each value to one ability: {STANDARD_ARRAY.join(", ")}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {ABILITY_KEYS.map((k) => {
-                const assigned = form.standardAssign[k];
-                const baseVal = assigned >= 0 ? STANDARD_ARRAY[assigned] : undefined;
-                const totalVal = baseVal != null ? baseVal + (bgBonuses[k] ?? 0) : undefined;
-                return (
-                  <div key={k} style={{
-                    padding: "8px", borderRadius: 8,
-                    border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`,
-                    background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent",
-                  }}>
-                    <AbilityLabel k={k} />
-                    <Select value={assigned >= 0 ? String(assigned) : ""} onChange={(e) => {
-                      const idx = e.target.value === "" ? -1 : Number(e.target.value);
-                      setForm((f) => ({ ...f, standardAssign: { ...f.standardAssign, [k]: idx } }));
-                    }} style={{ width: "100%" }}>
-                      <option value="">—</option>
-                      {STANDARD_ARRAY.map((v, i) => (
-                        !usedIndices.includes(i) || i === assigned
-                          ? <option key={i} value={String(i)}>{v}</option>
-                          : null
-                      ))}
-                    </Select>
-                    <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2, textAlign: "center" }}>
-                      {totalVal != null
-                        ? <>
-                            {baseVal !== totalVal && <span style={{ color: "#a78bfa", marginRight: 4 }}>{totalVal}</span>}
-                            {`mod ${abilityMod(totalVal) >= 0 ? "+" : ""}${abilityMod(totalVal)}`}
-                          </>
-                        : null
-                      }
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {form.abilityMethod === "pointbuy" && (
-          <div>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-              <span style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Points remaining:</span>
-              <span style={{ fontWeight: 700, color: remaining < 0 ? C.red : C.accentHl }}>{remaining} / {POINT_BUY_BUDGET}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {ABILITY_KEYS.map((k) => {
-                const score = form.pbScores[k] ?? 8;
-                const total = score + (bgBonuses[k] ?? 0);
-                return (
-                  <div key={k} style={{
-                    textAlign: "center", padding: "8px", borderRadius: 8,
-                    border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`,
-                    background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent",
-                  }}>
-                    <AbilityLabel k={k} />
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
-                      <button type="button" disabled={score <= 8} onClick={() => setForm((f) => ({ ...f, pbScores: { ...f.pbScores, [k]: score - 1 } }))}
-                        style={{ ...smallBtnStyle, opacity: score <= 8 ? 0.4 : 1 }}>−</button>
-                      <span style={{ fontWeight: 700, minWidth: 24 }}>
-                        {score}
-                        {bgBonuses[k] ? <span style={{ color: "#a78bfa", fontSize: 11 }}> ({total})</span> : null}
-                      </span>
-                      <button type="button" disabled={score >= 15 || remaining < (POINT_BUY_COSTS[score + 1] ?? 99) - (POINT_BUY_COSTS[score] ?? 0)}
-                        onClick={() => setForm((f) => ({ ...f, pbScores: { ...f.pbScores, [k]: score + 1 } }))}
-                        style={{ ...smallBtnStyle, opacity: (score >= 15 || remaining < (POINT_BUY_COSTS[score + 1] ?? 99) - (POINT_BUY_COSTS[score] ?? 0)) ? 0.4 : 1 }}>+</button>
-                    </div>
-                    <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
-                      mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {form.abilityMethod === "manual" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-            {ABILITY_KEYS.map((k) => {
-              const score = form.manualScores[k] ?? 10;
-              const total = score + (bgBonuses[k] ?? 0);
-              return (
-                <div key={k} style={{
-                  padding: "8px", borderRadius: 8,
-                  border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`,
-                  background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent",
-                }}>
-                  <AbilityLabel k={k} />
-                  <input type="number" value={score}
-                    onChange={(e) => setForm((f) => ({ ...f, manualScores: { ...f.manualScores, [k]: Number(e.target.value) || 10 } }))}
-                    style={{ ...inputStyle, width: "100%" }} />
-                  <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
-                    {bgBonuses[k] ? <span style={{ color: "#a78bfa" }}>{total} · </span> : null}
-                    mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <NavButtons step={step} onBack={() => setStep(6)} onNext={() => setStep(8)} />
-      </div>
-    );
-
-    return { main, side: SideSummaryCard() };
+    return renderAbilityScoresStep({
+      form,
+      setAbilityMethod: (method) => set("abilityMethod", method),
+      setStandardAssign: (key, idx) => setForm((f) => ({ ...f, standardAssign: { ...f.standardAssign, [key]: idx } })),
+      setPointBuyScore: (key, score) => setForm((f) => ({ ...f, pbScores: { ...f.pbScores, [key]: score } })),
+      setManualScore: (key, score) => setForm((f) => ({ ...f, manualScores: { ...f.manualScores, [key]: score } })),
+      usedIndices,
+      remaining,
+      primaryKeys,
+      bgBonuses,
+      hasBgBonuses,
+      backgroundName: bgDetail?.name,
+      abilityLabels: ABILITY_LABELS,
+      abilityKeys: ABILITY_KEYS,
+      standardArray: STANDARD_ARRAY,
+      pointBuyBudget: POINT_BUY_BUDGET,
+      pointBuyCosts: POINT_BUY_COSTS,
+      abilityMod,
+      onBack: () => setStep(6),
+      onNext: () => setStep(8),
+      side: SideSummaryCard(),
+    });
   }
 
   // Step 8: Derived Stats
@@ -3346,234 +2654,71 @@ export function CharacterCreatorView() {
     const conMod = abilityMod(scores.con ?? 10);
     const dexMod = abilityMod(scores.dex ?? 10);
     const hd = classDetail?.hd ?? 8;
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Combat Stats</h2>
-        <p style={{ color: C.muted, marginBottom: 16 }}>Auto-calculated from your choices — override freely.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-          <div>
-            <label style={labelStyle}>HP Max</label>
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 4 }}>
-              d{hd} + {conMod >= 0 ? "+" : ""}{conMod} CON × lvl {form.level}
-            </div>
-            <input type="number" value={form.hpMax} onChange={(e) => set("hpMax", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-          </div>
-          <div>
-            <label style={labelStyle}>Armor Class</label>
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 4 }}>
-              10 + {dexMod >= 0 ? "+" : ""}{dexMod} DEX (base)
-            </div>
-            <input type="number" value={form.ac} onChange={(e) => set("ac", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-          </div>
-          <div>
-            <label style={labelStyle}>Speed (ft)</label>
-            <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 4 }}>
-              From species ({raceDetail?.speed ?? 30} ft)
-            </div>
-            <input type="number" value={form.speed} onChange={(e) => set("speed", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-          </div>
-        </div>
-        {/* Proficiency summary */}
-        {(() => {
-          const prof = buildProficiencyMapForRuleset(
-            selectedRuleset ?? "5e",
-            form, classDetail, raceDetail, bgDetail,
-            classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails,
-          );
-          const sections = [
-            { label: "Skills",      items: prof.skills },
-            { label: "Saves",       items: prof.saves },
-            { label: "Armor",       items: prof.armor },
-            { label: "Weapons",     items: prof.weapons },
-            { label: "Tools",       items: prof.tools },
-            { label: "Languages",   items: prof.languages },
-            { label: "Weapon Masteries", items: prof.masteries },
-            { label: "Spells",      items: prof.spells },
-            { label: "Invocations", items: prof.invocations },
-          ].filter((s) => s.items.length > 0);
-          if (sections.length === 0) return null;
-          return (
-            <div style={{ ...detailBoxStyle, marginTop: 24 }}>
-              <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 13 }}>Your Proficiencies</div>
-              {sections.map((s) => (
-                <div key={s.label} style={{ marginBottom: 10 }}>
-                  <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>{s.label}</span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                    {s.items.map((item, i) => (
-                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        <span style={profChipStyle}>{item.name}</span>
-                        <span style={sourceTagStyle}>{item.source}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
-        <NavButtons step={step} onBack={() => setStep(7)} onNext={() => setStep(9)} />
-      </div>
+    const prof = buildProficiencyMapForRuleset(
+      selectedRuleset ?? "5e",
+      form, classDetail, raceDetail, bgDetail,
+      classCantrips, classSpells, classInvocations, raceFeatDetail, classFeatDetails,
     );
+    const sections = [
+      { label: "Skills", items: prof.skills },
+      { label: "Saves", items: prof.saves },
+      { label: "Armor", items: prof.armor },
+      { label: "Weapons", items: prof.weapons },
+      { label: "Tools", items: prof.tools },
+      { label: "Languages", items: prof.languages },
+      { label: "Weapon Masteries", items: prof.masteries },
+      { label: "Spells", items: prof.spells },
+      { label: "Invocations", items: prof.invocations },
+    ].filter((s) => s.items.length > 0);
 
-    return { main, side: SideSummaryCard() };
+    return renderDerivedStatsStep({
+      level: form.level,
+      hpMax: form.hpMax,
+      ac: form.ac,
+      speed: form.speed,
+      setField: (key, value) => set(key, value as never),
+      hd,
+      conMod,
+      dexMod,
+      raceSpeed: raceDetail?.speed ?? 30,
+      sections,
+      onBack: () => setStep(7),
+      onNext: () => setStep(9),
+      side: SideSummaryCard(),
+    });
   }
 
   // Step 9: Identity
   function StepIdentity(): { main: React.ReactNode; side: React.ReactNode } {
-    const COLORS = ["#38b6ff", "#5ecb6b", "#f0a500", "#ff5d5d", "#a78bfa", "#fb923c", "#e879f9", "#94a3b8"];
-    const detailFields: Array<{ key: keyof FormState; label: string; placeholder: string }> = [
-      { key: "alignment", label: "Alignment", placeholder: "Chaotic Good" },
-      { key: "hair", label: "Hair", placeholder: "Black, braided" },
-      { key: "skin", label: "Skin", placeholder: "Tan, scarred" },
-      { key: "heightText", label: "Height", placeholder: "6'2\"" },
-      { key: "age", label: "Age", placeholder: "32" },
-      { key: "weight", label: "Weight", placeholder: "190 lb" },
-      { key: "gender", label: "Gender", placeholder: "Non-binary" },
-    ];
-
-    function handlePortraitChange(e: React.ChangeEvent<HTMLInputElement>) {
-      const file = e.target.files?.[0];
-      e.target.value = "";
-      if (!file) return;
-      setPortraitFile(file);
-      const url = URL.createObjectURL(file);
-      setPortraitPreview(url);
-    }
-
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Character Identity</h2>
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
-
-          {/* Portrait picker */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <input ref={portraitInputRef} type="file" accept="image/*" onChange={handlePortraitChange} style={{ display: "none" }} />
-            <div
-              onClick={() => portraitInputRef.current?.click()}
-              style={{
-                width: 110, height: 110, borderRadius: 12, cursor: "pointer",
-                border: `2px dashed ${portraitPreview ? C.accentHl : "rgba(255,255,255,0.25)"}`,
-                background: portraitPreview ? "#000" : "rgba(255,255,255,0.04)",
-                overflow: "hidden", position: "relative",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-              title="Click to set portrait"
-            >
-              {portraitPreview
-                ? <img src={portraitPreview} alt="Portrait" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <IconPlayer size={48} style={{ opacity: 0.3 }} />
-              }
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "rgba(0,0,0,0)",
-                display: "flex", alignItems: "flex-end", justifyContent: "center",
-                paddingBottom: 6,
-              }}>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", background: "rgba(0,0,0,0.55)", padding: "2px 6px", borderRadius: 4 }}>
-                  {portraitPreview ? "Change" : "Add photo"}
-                </span>
-              </div>
-            </div>
-            {portraitPreview && (
-              <button type="button" onClick={() => { setPortraitFile(null); setPortraitPreview(null); }}
-                style={{ fontSize: 11, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>
-                Remove
-              </button>
-            )}
-          </div>
-
-          {/* Name + color */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 220 }}>
-            <div>
-              <label style={labelStyle}>Character Name *</label>
-              <input
-                value={form.characterName}
-                onChange={(e) => set("characterName", e.target.value)}
-                placeholder="Thraxil the Destroyer"
-                style={{ ...inputStyle, width: "100%" }}
-              />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-              {detailFields.map(({ key, label, placeholder }) => (
-                <div key={key}>
-                  <label style={labelStyle}>{label}</label>
-                  <input
-                    value={(form[key] as string) ?? ""}
-                    onChange={(e) => set(key, e.target.value)}
-                    placeholder={placeholder}
-                    style={{ ...inputStyle, width: "100%" }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <label style={labelStyle}>Color</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => set("color", c)} style={{
-                    width: 30, height: 30, borderRadius: "50%", background: c,
-                    border: `3px solid ${form.color === c ? C.text : "transparent"}`,
-                    cursor: "pointer", padding: 0,
-                    boxShadow: form.color === c ? `0 0 0 1px ${c}` : "none",
-                  }} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        <NavButtons step={step} onBack={() => setStep(8)} onNext={() => setStep(10)}
-          nextDisabled={!form.characterName.trim()} />
-      </div>
-    );
-
-    return { main, side: SideSummaryCard() };
+    return renderIdentityStep({
+      form,
+      setField: (key, value) => set(key as keyof FormState, value as never),
+      portraitInputRef,
+      portraitPreview,
+      setPortraitFile,
+      setPortraitPreview,
+      onBack: () => setStep(8),
+      onNext: () => setStep(10),
+      side: SideSummaryCard(),
+    });
   }
 
   // Step 10: Campaigns
   function StepCampaigns(): { main: React.ReactNode; side: React.ReactNode } {
-    const main = (
-      <div>
-        <h2 style={headingStyle}>Assign to Campaigns</h2>
-        <p style={{ color: C.muted, marginBottom: 16 }}>Optional — you can assign later from your home page.</p>
-        {campaigns.length === 0 && <p style={{ color: C.muted }}>You're not a member of any campaigns yet.</p>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-          {campaigns.map((c) => {
-            const checked = form.campaignIds.includes(c.id);
-            return (
-              <label key={c.id} style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "11px 15px",
-                borderRadius: 8, cursor: "pointer",
-                border: `2px solid ${checked ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                background: checked ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
-                transition: "border-color 0.12s, background 0.12s",
-              }}>
-                <input type="checkbox" checked={checked} onChange={(e) => {
-                  setForm((f) => ({
-                    ...f,
-                    campaignIds: e.target.checked
-                      ? [...f.campaignIds, c.id]
-                      : f.campaignIds.filter((id) => id !== c.id),
-                  }));
-                }} style={{ accentColor: C.accentHl, width: 16, height: 16 }} />
-                <span style={{ fontWeight: 600 }}>{c.name}</span>
-              </label>
-            );
-          })}
-        </div>
-
-        {error && <div style={{ color: C.red, marginBottom: 10 }}>{error}</div>}
-
-        <div style={{ display: "flex", gap: 10, justifyContent: "space-between" }}>
-          <button type="button" onClick={() => setStep(9)} style={btnStyle(false, false)}>← Back</button>
-          <button type="button" onClick={handleSubmit} disabled={busy} style={btnStyle(true, busy)}>
-            {busy ? "Saving…" : isEditing ? "Save Changes ✓" : "Create Character ✓"}
-          </button>
-        </div>
-      </div>
-    );
-
-    return { main, side: SideSummaryCard() };
+    return renderCampaignsStep({
+      campaigns,
+      selectedCampaignIds: form.campaignIds,
+      toggleCampaign: (id, checked) => setForm((f) => ({
+        ...f,
+        campaignIds: checked ? [...f.campaignIds, id] : f.campaignIds.filter((campaignId) => campaignId !== id),
+      })),
+      error,
+      busy,
+      isEditing,
+      onBack: () => setStep(9),
+      onSubmit: handleSubmit,
+      side: SideSummaryCard(),
+    });
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -3608,123 +2753,3 @@ export function CharacterCreatorView() {
 }
 
 // ---------------------------------------------------------------------------
-// SpellPicker — module-level so its identity is stable across renders.
-// Must NOT be defined inside CharacterCreatorView: it has useState, so calling
-// it conditionally as a plain function would violate Rules of Hooks.
-// ---------------------------------------------------------------------------
-
-function SpellPicker({ title, spells, chosen, max, emptyMsg, onToggle }: {
-  title: string;
-  spells: SpellSummary[];
-  chosen: string[];
-  max: number;
-  emptyMsg: string;
-  onToggle: (id: string) => void;
-}) {
-  const [q, setQ] = React.useState("");
-  const filtered = q ? spells.filter((s) => s.name.toLowerCase().includes(q.toLowerCase())) : spells;
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-        <div style={{ ...labelStyle, margin: 0 }}>{title}</div>
-        <span style={{ fontSize: 12, color: chosen.length >= max ? C.accentHl : C.muted }}>
-          {chosen.length} / {max}
-        </span>
-      </div>
-      {spells.length === 0
-        ? <p style={{ color: C.muted, fontSize: 12 }}>{emptyMsg}</p>
-        : <>
-          <input
-            value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search…"
-            style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
-          />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 200, overflowY: "auto", padding: "2px 0" }}>
-            {filtered.map((sp) => {
-              const sel = chosen.includes(sp.id);
-              const locked = !sel && chosen.length >= max;
-              return (
-                <button key={sp.id} type="button" disabled={locked}
-                  onClick={() => onToggle(sp.id)}
-                  style={{
-                    padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: locked ? "default" : "pointer",
-                    border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
-                    background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
-                    color: sel ? C.accentHl : locked ? "rgba(160,180,220,0.35)" : C.text,
-                    fontWeight: sel ? 700 : 400,
-                  }}>
-                  {sp.name}
-                  {sp.level != null && sp.level > 0
-                    ? <span style={{ color: "rgba(160,180,220,0.5)", marginLeft: 4 }}>(L{sp.level})</span>
-                    : null}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      }
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shared styles
-// ---------------------------------------------------------------------------
-
-const headingStyle: React.CSSProperties = {
-  fontWeight: 900, fontSize: "var(--fs-large)", margin: "0 0 16px",
-};
-
-const detailBoxStyle: React.CSSProperties = {
-  marginTop: 14, padding: "14px 16px", borderRadius: 10,
-  background: "rgba(56,182,255,0.06)",
-  border: "1px solid rgba(56,182,255,0.20)",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "rgba(0,0,0,0.35)", color: C.text,
-  border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8,
-  padding: "8px 11px", outline: "none", fontSize: 14,
-};
-
-const labelStyle: React.CSSProperties = {
-  color: C.muted, fontSize: "var(--fs-small)", display: "block", marginBottom: 6, fontWeight: 600,
-};
-
-const smallBtnStyle: React.CSSProperties = {
-  width: 28, height: 28, borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.08)", color: C.text, cursor: "pointer",
-  display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
-};
-
-/** Uppercase label above a key stat value (Hit Die, Saves, etc.). */
-const statLabelStyle: React.CSSProperties = {
-  color: "rgba(160,180,220,0.5)",
-  fontSize: 10, fontWeight: 700,
-  textTransform: "uppercase", letterSpacing: 0.6,
-  marginBottom: 3,
-};
-
-/** Value beneath a stat label. */
-const statValueStyle: React.CSSProperties = {
-  color: C.text,
-  fontSize: 14, fontWeight: 700,
-};
-
-/** A chip showing a proficiency name. */
-const profChipStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 600,
-  background: "rgba(255,255,255,0.07)",
-  border: "1px solid rgba(255,255,255,0.16)",
-  borderRadius: 4, padding: "2px 8px",
-  color: C.text,
-};
-
-/** A tiny source-attribution badge shown after a proficiency chip. */
-const sourceTagStyle: React.CSSProperties = {
-  fontSize: 10,
-  background: "rgba(56,182,255,0.12)",
-  border: "1px solid rgba(56,182,255,0.25)",
-  borderRadius: 4, padding: "2px 6px",
-  color: C.accentHl, fontWeight: 500,
-};

@@ -8,6 +8,13 @@ import { useConfirm } from "@/confirm/ConfirmContext";
 
 type PlayerDrawerState = Exclude<Extract<DrawerState, { type: "createPlayer"; campaignId: string } | { type: "editPlayer"; playerId: string }>, null>;
 
+const DEFAULT_PLAYER_FORM: PlayerFormState = {
+  playerName: "", characterName: "", clazz: "", species: "",
+  lvl: "1", ac: "10", speed: "30",
+  pStr: "10", pDex: "10", pCon: "10", pInt: "10", pWis: "10", pCha: "10",
+  hpMax: "10", hpCur: "10",
+};
+
 export function PlayerDrawer(props: {
   drawer: PlayerDrawerState;
   close: () => void;
@@ -16,23 +23,7 @@ export function PlayerDrawer(props: {
   const { state } = useStore();
   const confirm = useConfirm();
 
-  const [form, setForm] = React.useState<PlayerFormState>({
-    playerName: "",
-    characterName: "",
-    clazz: "",
-    species: "",
-    lvl: "1",
-    ac: "10",
-    speed: "30",
-    pStr: "10",
-    pDex: "10",
-    pCon: "10",
-    pInt: "10",
-    pWis: "10",
-    pCha: "10",
-    hpMax: "10",
-    hpCur: "10"
-  });
+  const [form, setForm] = React.useState<PlayerFormState>(DEFAULT_PLAYER_FORM);
 
   // Pending image for create mode (held locally until player is created).
   const [pendingImage, setPendingImage] = React.useState<{ file: File; previewUrl: string } | null>(null);
@@ -46,23 +37,7 @@ export function PlayerDrawer(props: {
     });
 
     const d = props.drawer;
-    setForm({
-      playerName: "",
-      characterName: "",
-      clazz: "",
-      species: "",
-      lvl: "1",
-      ac: "10",
-      speed: "30",
-      pStr: "10",
-      pDex: "10",
-      pCon: "10",
-      pInt: "10",
-      pWis: "10",
-      pCha: "10",
-      hpMax: "10",
-      hpCur: "10"
-    });
+    setForm(DEFAULT_PLAYER_FORM);
 
     if (d.type !== "editPlayer") return;
     const p = state.players.find((x) => x.id === d.playerId);

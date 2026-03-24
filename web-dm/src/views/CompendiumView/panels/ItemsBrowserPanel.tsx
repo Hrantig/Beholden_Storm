@@ -1,47 +1,17 @@
 import React from "react";
 import { Panel } from "@/ui/Panel";
 import { Select } from "@/ui/Select";
-import { IconChest, IconPencil, IconTrash, IconPlus } from "@/icons";
+import { IconChest, IconPencil, IconTrash } from "@/icons";
 import { theme, withAlpha } from "@/theme/theme";
 import { useItemSearch, type ItemSearchRow } from "@/views/CompendiumView/hooks/useItemSearch";
 import { ItemFormModal, type ItemForEdit } from "@/views/CompendiumView/panels/ItemFormModal";
 import { useVirtualList } from "@/views/CampaignView/monsterPicker/hooks/useVirtualList";
 import { api } from "@/services/api";
 import { titleCase } from "@/lib/format/titleCase";
+import { MagicBadge, RarityDot } from "@/views/CampaignView/components/ItemPickerModalParts";
+import { actionBtnStyle, togglePillStyle, BrowserAddButton } from "./browserParts";
 
 const ROW_HEIGHT = 52;
-
-function rarityColor(rarity: string | null): string {
-  switch ((rarity ?? "").toLowerCase()) {
-    case "common":    return theme.colors.muted;
-    case "uncommon":  return "#1eff00";
-    case "rare":      return "#0070dd";
-    case "very rare": return "#a335ee";
-    case "legendary": return "#ff8000";
-    case "artifact":  return "#e6cc80";
-    default:          return theme.colors.muted;
-  }
-}
-
-function RarityDot({ rarity }: { rarity: string | null }) {
-  const c = rarityColor(rarity);
-  return (
-    <span style={{ width: 7, height: 7, borderRadius: "50%", background: c, display: "inline-block", flexShrink: 0 }} />
-  );
-}
-
-function MagicBadge() {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 3,
-      fontSize: 11, fontWeight: 700, color: "#a78bfa",
-      border: "1px solid #6d28d966", borderRadius: 6,
-      padding: "1px 6px", lineHeight: 1.4, whiteSpace: "nowrap",
-    }}>
-      ✦ Magic
-    </span>
-  );
-}
 
 type Props = {
   editable?: boolean;
@@ -119,21 +89,7 @@ export function ItemsBrowserPanel(props: Props) {
               {busy ? "Loading…" : `${rows.length}`}
             </div>
             {props.editable && (
-              <button
-                type="button"
-                title="New item"
-                onClick={() => setFormTarget({ mode: "create" })}
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 28, height: 28, borderRadius: 8,
-                  border: `1px solid ${theme.colors.panelBorder}`,
-                  background: theme.colors.accentPrimary,
-                  color: theme.colors.textDark,
-                  cursor: "pointer",
-                }}
-              >
-                <IconPlus size={14} />
-              </button>
+              <BrowserAddButton title="New item" onClick={() => setFormTarget({ mode: "create" })} />
             )}
           </div>
         }
@@ -171,14 +127,14 @@ export function ItemsBrowserPanel(props: Props) {
 
         {/* Attunement + Magic + Clear */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <button type="button" onClick={() => setFilterAttunement(!filterAttunement)} style={togglePill(filterAttunement)}>
+          <button type="button" onClick={() => setFilterAttunement(!filterAttunement)} style={togglePillStyle(filterAttunement)}>
             Attunement
           </button>
-          <button type="button" onClick={() => setFilterMagic(!filterMagic)} style={togglePill(filterMagic)}>
+          <button type="button" onClick={() => setFilterMagic(!filterMagic)} style={togglePillStyle(filterMagic)}>
             Magic
           </button>
           {hasActiveFilters && (
-            <button type="button" onClick={clearFilters} style={togglePill(false)}>
+            <button type="button" onClick={clearFilters} style={togglePillStyle(false)}>
               Clear
             </button>
           )}
@@ -339,22 +295,3 @@ function ItemRow(p: RowProps) {
   );
 }
 
-function togglePill(active: boolean): React.CSSProperties {
-  return {
-    padding: "4px 10px", borderRadius: 999,
-    border: `1px solid ${active ? theme.colors.accentHighlight : theme.colors.panelBorder}`,
-    background: active ? withAlpha(theme.colors.accentHighlight, 0.18) : withAlpha(theme.colors.shadowColor, 0.12),
-    color: active ? theme.colors.accentHighlight : theme.colors.muted,
-    cursor: "pointer", fontSize: "var(--fs-pill, 11px)", fontWeight: 700,
-  };
-}
-
-function actionBtnStyle(color: string): React.CSSProperties {
-  return {
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    width: 26, height: 26, padding: 0,
-    border: `1px solid ${withAlpha(color, 0.3)}`,
-    borderRadius: 6, background: withAlpha(color, 0.1),
-    color, cursor: "pointer", fontSize: 11, fontWeight: 700,
-  };
-}

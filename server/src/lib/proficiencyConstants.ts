@@ -362,7 +362,8 @@ export function parseBackgroundProficiencies(bg: {
     : parseBackgroundProficiencies5e(bg);
 }
 
-export function parseRaceChoices5e(traits: { name: string; text: string }[]): StructuredRaceChoices {
+/** Shared skill/tool/language scanning logic for both 5e and 5.5e race trait parsing. */
+function parseRaceChoicesCore(traits: { name: string; text: string }[]): Pick<StructuredRaceChoices, "skillChoice" | "toolChoice" | "languageChoice"> {
   let skillChoice: StructuredRaceChoices["skillChoice"] = null;
   let toolChoice: StructuredRaceChoices["toolChoice"] = null;
   let languageChoice: StructuredRaceChoices["languageChoice"] = null;
@@ -402,54 +403,18 @@ export function parseRaceChoices5e(traits: { name: string; text: string }[]): St
     }
   }
 
-  return { hasChosenSize: false, skillChoice, toolChoice, languageChoice, hasFeatChoice: false };
+  return { skillChoice, toolChoice, languageChoice };
+}
+
+export function parseRaceChoices5e(traits: { name: string; text: string }[]): StructuredRaceChoices {
+  const core = parseRaceChoicesCore(traits);
+  return { hasChosenSize: false, ...core, hasFeatChoice: false };
 }
 
 export function parseRaceChoices55e(traits: { name: string; text: string }[]): StructuredRaceChoices {
-  let hasChosenSize = false;
-  let skillChoice: StructuredRaceChoices["skillChoice"] = null;
-  let toolChoice: StructuredRaceChoices["toolChoice"] = null;
-  let languageChoice: StructuredRaceChoices["languageChoice"] = null;
-  let hasFeatChoice = false;
-
-  for (const t of traits) {
-    const text = t.text;
-    if (/^size$/i.test(t.name) && /chosen when you select/i.test(text)) hasChosenSize = true;
-    if (/origin feat of your choice/i.test(text)) hasFeatChoice = true;
-
-    const skillListMatch = text.match(/proficiency in the\s+([\w\s,]+?)\s+skills?\b/i);
-    if (skillListMatch) {
-      const from = (skillListMatch[1] ?? "")
-        .split(/,\s*|\s+or\s+/i)
-        .map((s) => s.trim())
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
-        .filter((s) => ALL_SKILLS.includes(s));
-      if (from.length > 0 && !skillChoice) skillChoice = { count: 1, from };
-    } else if (
-      /one skill proficiency|proficiency in one skill|gain proficiency in one skill of your choice/i.test(text) ||
-      /one skill of your choice/i.test(text)
-    ) {
-      if (!skillChoice) skillChoice = { count: 1, from: null };
-    }
-
-    if (/one tool proficiency of your choice/i.test(text)) {
-      if (!toolChoice) toolChoice = { count: 1, from: null };
-    }
-
-    const langListMatch = text.match(/your choice of (\w+)\s+of the following[^:]*languages?:\s*([^\n.]+)/i);
-    if (langListMatch) {
-      const count = wordOrNumberToInt(langListMatch[1] ?? "") ?? 1;
-      const from = (langListMatch[2] ?? "")
-        .split(/[,\n\t]+/)
-        .map((s) => s.trim()).filter(Boolean)
-        .map((s) => s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
-      if (!languageChoice) languageChoice = { count, from: from.length > 0 ? from : null };
-    } else if (/one(?:\s+extra)?\s+language.*(?:of your )?choice/i.test(text)) {
-      if (!languageChoice) languageChoice = { count: 1, from: null };
-    }
-  }
-
-  return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
+  const hasChosenSize = traits.some(t => /^size$/i.test(t.name) && /chosen when you select/i.test(t.text));
+  const hasFeatChoice = traits.some(t => /origin feat of your choice/i.test(t.text));
+  return { hasChosenSize, ...parseRaceChoicesCore(traits), hasFeatChoice };
 }
 
 export function parseRaceChoicesByRuleset(

@@ -1,23 +1,18 @@
 import React from "react";
 import { theme, withAlpha } from "@/theme/theme";
-import { api } from "@/services/api";
 import { Panel } from "@/ui/Panel";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { IconClose, IconPlus } from "@/icons";
 import { Modal } from "@/components/overlay/Modal";
-import type { CompendiumItemDetail, CompendiumItemRow } from "@/domain/types/compendium";
 import { titleCase } from "@/lib/format/titleCase";
 import { Select } from "@/ui/Select";
-import { useVirtualList } from "@/views/CampaignView/monsterPicker/hooks/useVirtualList";
 import {
   RARITY_ORDER, KNOWN_TYPES,
-  uniqSorted, sortedRarities, rarityChipColor,
-  searchStyle, fieldInput,
+  rarityChipColor, searchStyle, fieldInput,
   MagicBadge, RarityDot, FormField, CheckRow, Chip,
 } from "./ItemPickerModalParts";
-
-const ROW_HEIGHT = 52;
+import { useItemPicker } from "./useItemPicker";
 
 export type AddItemPayload =
   | { source: "compendium"; itemId: string; qty: number }
@@ -28,15 +23,18 @@ export function ItemPickerModal(props: {
   onClose: () => void;
   onAdd: (payload: AddItemPayload) => void;
 }) {
-  const [rows, setRows] = React.useState<CompendiumItemRow[]>([]);
-  const [loading, setLoading] = React.useState(false);
-
-  const [q, setQ] = React.useState("");
-  const [rarity, setRarity] = React.useState("");
-  const [type, setType] = React.useState("");
-  const [magicFilter, setMagicFilter] = React.useState<"" | "magic" | "nonmagic">("");
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [detail, setDetail] = React.useState<CompendiumItemDetail | null>(null);
+  const {
+    rows, loading,
+    q, setQ,
+    rarity, setRarity, rarityOptions,
+    type, setType, typeOptions,
+    magicFilter, setMagicFilter,
+    selectedId, setSelectedId,
+    detail,
+    filtered,
+    vl,
+    ROW_HEIGHT,
+  } = useItemPicker(props.isOpen);
 
   const [qty, setQty] = React.useState(1);
   const [createMode, setCreateMode] = React.useState(false);
@@ -47,56 +45,15 @@ export function ItemPickerModal(props: {
   const [customMagic, setCustomMagic] = React.useState(false);
   const [customText, setCustomText] = React.useState("");
 
-  React.useEffect(() => {
-    if (!props.isOpen) return;
-    let alive = true;
-    setLoading(true);
-    api<CompendiumItemRow[]>("/api/compendium/items")
-      .then((r) => { if (alive) setRows(r); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [props.isOpen]);
-
+  // Reset custom-form state when modal closes
   React.useEffect(() => {
     if (props.isOpen) return;
-    setQ(""); setRarity(""); setType(""); setMagicFilter("");
-    setQty(1); setSelectedId(null); setDetail(null); setCreateMode(false);
+    setQty(1); setCreateMode(false);
     setCustomName(""); setCustomRarity(""); setCustomType("");
     setCustomAttune(false); setCustomMagic(false); setCustomText("");
   }, [props.isOpen]);
 
-  React.useEffect(() => {
-    if (!props.isOpen || !selectedId) { setDetail(null); return; }
-    let alive = true;
-    api<CompendiumItemDetail>(`/api/compendium/items/${selectedId}`)
-      .then((d) => { if (alive) setDetail(d); })
-      .catch(() => { if (alive) setDetail(null); });
-    return () => { alive = false; };
-  }, [props.isOpen, selectedId]);
-
-  const vl = useVirtualList({ isEnabled: true, rowHeight: ROW_HEIGHT, overscan: 6 });
-
-  const rarityOptions = React.useMemo(() =>
-    sortedRarities(rows.map((r) => (r.rarity ?? "").trim())), [rows]);
-
-  const typeOptions = React.useMemo(() =>
-    uniqSorted(rows.map((r) => (r.type ?? "").trim())), [rows]);
-
-  const filtered = React.useMemo(() => {
-    const ql = q.trim().toLowerCase();
-    return rows
-      .filter((r) => !rarity || r.rarity === rarity)
-      .filter((r) => !type || r.type === type)
-      .filter((r) => !magicFilter || (magicFilter === "magic" ? r.magic : !r.magic))
-      .filter((r) => !ql || r.name.toLowerCase().includes(ql));
-  }, [rows, q, rarity, type, magicFilter]);
-
   const { start, end, padTop, padBottom } = vl.getRange(filtered.length);
-
-  React.useEffect(() => {
-    const el = vl.scrollRef.current;
-    if (el) el.scrollTop = 0;
-  }, [q, rarity, type, magicFilter]);
 
   function addSelected() {
     if (!selectedId) return;
@@ -147,7 +104,6 @@ export function ItemPickerModal(props: {
           style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
           bodyStyle={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}
         >
-          {/* Search */}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -155,7 +111,6 @@ export function ItemPickerModal(props: {
             style={searchStyle()}
           />
 
-          {/* Rarity + Type + Magic — 3-column grid */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             <Select value={rarity} onChange={(e) => setRarity(e.target.value)} style={{ width: "100%" }}>
               <option value="">All Rarities</option>
@@ -176,12 +131,10 @@ export function ItemPickerModal(props: {
             </Select>
           </div>
 
-          {/* Count */}
           <div style={{ fontSize: 12, color: theme.colors.muted }}>
             {loading ? "Loading…" : `${filtered.length} of ${rows.length}`}
           </div>
 
-          {/* Virtual list */}
           <div
             ref={vl.scrollRef}
             onScroll={vl.onScroll}
@@ -246,7 +199,6 @@ export function ItemPickerModal(props: {
           }
           actions={
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {/* Qty stepper */}
               <div style={{ display: "flex", alignItems: "center", border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 8, overflow: "hidden" }}>
                 <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))}
                   style={{ width: 28, height: 28, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>−</button>
@@ -281,7 +233,6 @@ export function ItemPickerModal(props: {
           bodyStyle={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}
         >
           {createMode ? (
-            /* ── Create form ── */
             <>
               <FormField label="Name *">
                 <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Item name" style={fieldInput()} />
@@ -312,7 +263,6 @@ export function ItemPickerModal(props: {
               </FormField>
             </>
           ) : detail ? (
-            /* ── Detail view ── */
             <>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 {detail.magic && <MagicBadge />}

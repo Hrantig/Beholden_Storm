@@ -5,15 +5,7 @@ import { parseAttackFromText } from "../../lib/attacks.js";
 import { normalizeHp } from "./normalizeHp.js";
 import { parseBackgroundProficiencies, parseRaceChoicesByRuleset } from "../../lib/proficiencyConstants.js";
 import { parseFeat } from "../../lib/featParser.js";
-
-type Ruleset = "5e" | "5.5e";
-
-function inferRuleset(...values: Array<unknown>): Ruleset {
-  const text = values
-    .map((value) => String(value ?? ""))
-    .join("\n");
-  return /\[(?:2024|5\.5e)\]|\((?:2024|5\.5e)\)|\b2024\b|\b5\.5e\b/i.test(text) ? "5.5e" : "5e";
-}
+import { inferRuleset } from "../../lib/inferRuleset.js";
 
 function extractLabeledLine(text: string, labelPattern: RegExp): string | null {
   for (const rawLine of text.split(/\r?\n/)) {

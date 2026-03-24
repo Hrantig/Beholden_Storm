@@ -5,42 +5,9 @@ import { api } from "@/services/api";
 import { IconPlayer, IconShield, IconSpeed, IconInitiative, IconHeart, IconConditionByKey } from "@/icons";
 import { useWs } from "@/services/ws";
 import type { PartyMember } from "./CampaignPartyView";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-type AbilKey = "str" | "dex" | "con" | "int" | "wis" | "cha";
-
-const ABILITY_LABELS: Record<AbilKey, string> = {
-  str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA",
-};
-
-const ALL_SKILLS: { name: string; abil: AbilKey }[] = [
-  { name: "Acrobatics",      abil: "dex" }, { name: "Animal Handling", abil: "wis" },
-  { name: "Arcana",          abil: "int" }, { name: "Athletics",       abil: "str" },
-  { name: "Deception",       abil: "cha" }, { name: "History",         abil: "int" },
-  { name: "Insight",         abil: "wis" }, { name: "Intimidation",    abil: "cha" },
-  { name: "Investigation",   abil: "int" }, { name: "Medicine",        abil: "wis" },
-  { name: "Nature",          abil: "int" }, { name: "Perception",      abil: "wis" },
-  { name: "Performance",     abil: "cha" }, { name: "Persuasion",      abil: "cha" },
-  { name: "Religion",        abil: "int" }, { name: "Sleight of Hand", abil: "dex" },
-  { name: "Stealth",         abil: "dex" }, { name: "Survival",        abil: "wis" },
-];
-
-function mod(score: number | null): number { return Math.floor(((score ?? 10) - 10) / 2); }
-function fmtMod(n: number): string { return (n >= 0 ? "+" : "") + n; }
-function profBonus(level: number): number { return Math.ceil(level / 4) + 1; }
-function isProfIn(list: { name: string }[], name: string): boolean {
-  return list.some((s) => s.name.toLowerCase() === name.toLowerCase());
-}
-function hpColor(pct: number): string {
-  if (pct <= 0) return "#6b7280";
-  if (pct < 25) return "#f87171";
-  if (pct < 50) return "#fb923c";
-  if (pct < 75) return "#fbbf24";
-  return "#4ade80";
-}
+import type { AbilKey } from "@/views/CharacterSheetTypes";
+import { ABILITY_LABELS, ALL_SKILLS } from "@/views/CharacterSheetConstants";
+import { abilityMod, formatModifier, hasNamedProficiency, hpColor, proficiencyBonus } from "@/views/CharacterSheetUtils";
 
 // ---------------------------------------------------------------------------
 // Mini sub-components
@@ -136,7 +103,7 @@ export function PartyMemberView() {
   const m = member;
   const cd = m.characterData as any;
   const prof = cd?.proficiencies as { skills?: { name: string }[]; saves?: { name: string }[]; armor?: { name: string }[]; weapons?: { name: string }[]; tools?: { name: string }[]; languages?: { name: string }[] } | undefined;
-  const pb = profBonus(m.level);
+  const pb = proficiencyBonus(m.level);
   const color = m.color ?? C.accentHl;
   const hpC = hpColor(m.hpPercent);
 
@@ -145,7 +112,7 @@ export function PartyMemberView() {
     int: m.intScore, wis: m.wisScore, cha: m.chaScore,
   };
 
-  const passivePerc = 10 + mod(m.wisScore) + (prof && isProfIn(prof.skills ?? [], "Perception") ? pb : 0);
+  const passivePerc = 10 + abilityMod(m.wisScore) + (prof && hasNamedProficiency(prof.skills ?? [], "Perception") ? pb : 0);
   const spells: string[] = cd?.chosenSpells ?? [];
   const cantrips: string[] = cd?.chosenCantrips ?? [];
   const invocations: string[] = cd?.chosenInvocations ?? [];
@@ -209,7 +176,7 @@ export function PartyMemberView() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5, marginBottom: 10 }}>
                 <MiniStat label="AC" value={String(m.ac)} accent={color} icon={<IconShield size={10} />} />
                 <MiniStat label="Speed" value={m.speed ? `${m.speed}ft` : "—"} icon={<IconSpeed size={10} />} />
-                <MiniStat label="Init" value={fmtMod(mod(m.dexScore))} accent={color} icon={<IconInitiative size={10} />} />
+                <MiniStat label="Init" value={formatModifier(abilityMod(m.dexScore))} accent={color} icon={<IconInitiative size={10} />} />
                 <MiniStat label="Prof" value={`+${pb}`} accent={color} />
                 <MiniStat label="Pass.Perc" value={String(passivePerc)} />
                 <MiniStat label="HD" value={cd?.hd ? `d${cd.hd}` : "—"} />
@@ -238,8 +205,8 @@ export function PartyMemberView() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
                 {(Object.keys(ABILITY_LABELS) as AbilKey[]).map((k) => {
                   const score = scores[k];
-                  const m_ = mod(score);
-                  const saveProf = isProfIn(prof?.saves ?? [], ABILITY_LABELS[k]);
+                  const m_ = abilityMod(score);
+                  const saveProf = hasNamedProficiency(prof?.saves ?? [], ABILITY_LABELS[k]);
                   return (
                     <div key={k} style={{
                       display: "flex", flexDirection: "column", alignItems: "center",
@@ -248,7 +215,7 @@ export function PartyMemberView() {
                       <span style={{ fontSize: 9, fontWeight: 800, color: "rgba(160,180,220,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{ABILITY_LABELS[k]}</span>
                       <span style={{ fontSize: 20, fontWeight: 900, color: C.text, lineHeight: 1.1 }}>{score ?? "—"}</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color }}>
-                        {fmtMod(saveProf ? m_ + pb : m_)}
+                        {formatModifier(saveProf ? m_ + pb : m_)}
                         {saveProf && <span style={{ fontSize: 8, color, marginLeft: 2 }}>★</span>}
                       </span>
                     </div>
@@ -263,14 +230,14 @@ export function PartyMemberView() {
                 <SectionLabel>Skills</SectionLabel>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {ALL_SKILLS.map(({ name, abil }) => {
-                    const proficient = isProfIn(prof.skills ?? [], name);
+                    const proficient = hasNamedProficiency(prof.skills ?? [], name);
                     const score_ = scores[abil];
-                    const bonus = mod(score_) + (proficient ? pb : 0);
+                    const bonus = abilityMod(score_) + (proficient ? pb : 0);
                     return (
                       <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, opacity: proficient ? 1 : 0.45 }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: proficient ? color : "rgba(255,255,255,0.12)", border: `1px solid ${proficient ? color : "rgba(255,255,255,0.2)"}` }} />
                         <span style={{ flex: 1, color: C.text }}>{name}</span>
-                        <span style={{ fontWeight: 700, color: proficient ? color : C.muted, minWidth: 24, textAlign: "right" }}>{fmtMod(bonus)}</span>
+                        <span style={{ fontWeight: 700, color: proficient ? color : C.muted, minWidth: 24, textAlign: "right" }}>{formatModifier(bonus)}</span>
                         <span style={{ fontSize: 10, color: "rgba(160,180,220,0.35)", width: 22 }}>{ABILITY_LABELS[abil]}</span>
                       </div>
                     );
