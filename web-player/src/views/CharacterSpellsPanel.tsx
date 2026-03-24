@@ -3,6 +3,7 @@ import { api } from "@/services/api";
 import { C } from "@/lib/theme";
 import { Panel, PanelTitle } from "@/views/CharacterViewParts";
 import { type InventoryItem, getEquipState, parseItemSpells } from "@/views/CharacterInventory";
+import type { GrantedSpellCast, ResourceCounter } from "@/views/CharacterSheetTypes";
 
 interface ClassCounterDef {
   name: string;
@@ -118,8 +119,10 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
 // RichSpellsPanel
 // ---------------------------------------------------------------------------
 
-export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, spellcastingBlocked = false }: {
+export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, onResourceChange, spellcastingBlocked = false }: {
   spells: { name: string; source: string }[];
+  grantedSpells?: GrantedSpellCast[];
+  resources?: ResourceCounter[];
   pb: number;
   intScore: number | null;
   wisScore: number | null;
@@ -131,6 +134,7 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
   preparedSpells: string[];
   onSlotsChange: (next: Record<string, number>) => Promise<void>;
   onPreparedChange: (next: string[]) => Promise<void>;
+  onResourceChange?: (key: string, delta: number) => Promise<void> | void;
   spellcastingBlocked?: boolean;
 }) {
   const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
@@ -142,10 +146,15 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
     searchName: sp.name.replace(/\s*\[.+\]$/, "").trim(),
     key: sp.name.toLowerCase().replace(/[^a-z0-9]/g, ""),
   })), [spells]);
+  const grantedEntries = React.useMemo(() => grantedSpells.map((sp) => ({
+    ...sp,
+    searchName: sp.spellName.replace(/\s*\[.+\]$/, "").trim(),
+    key: sp.key.toLowerCase().replace(/[^a-z0-9]/g, ""),
+  })), [grantedSpells]);
 
-  const entryKeysStr = entries.map((e) => e.key).join(",");
+  const entryKeysStr = [...entries.map((e) => e.key), ...grantedEntries.map((e) => e.key)].join(",");
   React.useEffect(() => {
-    for (const e of entries) {
+    for (const e of [...entries, ...grantedEntries]) {
       if (details[e.key]) continue;
       api<{ id: string; name: string; level: number | null }[]>(
         `/api/spells/search?q=${encodeURIComponent(e.searchName)}&limit=5`
@@ -178,10 +187,13 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
   const levelSlots = classDetail?.autolevels.find((al) => al.level === charLevel)?.slots ?? null;
   const maxSpellSlotLevel = highestAvailableSlotLevel(levelSlots);
 
-  // Group by spell level
+  const isPactMagic = classDetail?.slotsReset === "S";
+
+  // Group by spell level; for Pact Magic, all leveled spells are always cast at the current slot level
   const groups = new Map<number, typeof entries>();
   for (const e of entries) {
-    const level = details[e.key]?.level ?? -1;
+    const baseLevel = details[e.key]?.level ?? -1;
+    const level = (isPactMagic && baseLevel > 0 && maxSpellSlotLevel > 0) ? maxSpellSlotLevel : baseLevel;
     if (!groups.has(level)) groups.set(level, []);
     groups.get(level)!.push(e);
   }
@@ -259,6 +271,87 @@ export function RichSpellsPanel({ spells, pb, intScore, wisScore, chaScore, acce
           ))}
         </div>
       </div>
+
+      {grantedEntries.length > 0 && (
+        <div style={{ marginBottom: 18, opacity: spellcastingBlocked ? 0.65 : 1 }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            paddingBottom: 5, borderBottom: "1px solid rgba(96,165,250,0.25)", marginBottom: 8,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#60a5fa", textTransform: "uppercase", letterSpacing: 1 }}>
+              Granted Spells
+            </div>
+          </div>
+          {grantedEntries.map((entry) => {
+            const detail = details[entry.key];
+            const resource = entry.resourceKey ? resources.find((item) => item.key === entry.resourceKey) : null;
+            return (
+              <div
+                key={entry.key}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 0",
+                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  cursor: detail ? "pointer" : "default",
+                }}
+                onClick={(ev) => {
+                  if ((ev.target as HTMLElement).closest("button")) return;
+                  if (detail) setSelectedSpell(detail);
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{entry.searchName}</div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{entry.sourceName}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>{entry.note}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {entry.mode === "at_will" ? (
+                    <div style={{
+                      padding: "5px 8px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(96,165,250,0.35)",
+                      background: "rgba(96,165,250,0.12)",
+                      color: "#93c5fd",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.07em",
+                    }}>
+                      At Will
+                    </div>
+                  ) : resource ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void onResourceChange?.(resource.key, -1)}
+                        disabled={resource.current <= 0}
+                        style={grantedSpellChargeBtn(resource.current > 0)}
+                      >
+                        -
+                      </button>
+                      <div style={{ textAlign: "center", minWidth: 58 }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{resource.current}/{resource.max}</div>
+                        <div style={{ fontSize: 9, color: C.muted }}>{resource.reset === "S" ? "Short Rest" : "Long Rest"}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void onResourceChange?.(resource.key, 1)}
+                        disabled={resource.current >= resource.max}
+                        style={grantedSpellChargeBtn(resource.current < resource.max)}
+                      >
+                        +
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ opacity: spellcastingBlocked ? 0.65 : 1 }}>
       {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupEntries]) => {
@@ -618,6 +711,20 @@ function abbrevTime(t: string): string {
   return t
     .replace(/1 action/i, "1A").replace(/1 bonus action/i, "1BA")
     .replace(/1 reaction/i, "1R").replace(/1 minute/i, "1 min");
+}
+
+function grantedSpellChargeBtn(enabled: boolean): React.CSSProperties {
+  return {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    padding: 0,
+    cursor: enabled ? "pointer" : "not-allowed",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: enabled ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.03)",
+    color: enabled ? C.text : C.muted,
+    fontWeight: 800,
+  };
 }
 
 const DMG_COLORS: Record<string, string> = {

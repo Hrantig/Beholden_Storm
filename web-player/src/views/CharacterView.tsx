@@ -21,6 +21,7 @@ import type {
   CharacterData,
   ClassFeatureEntry,
   ConditionInstance,
+  GrantedSpellCast,
   PlayerNote,
   ProficiencyMap,
   ResourceCounter,
@@ -299,6 +300,109 @@ function collectClassResources(classDetail: ClassRestDetail | null, level: numbe
   return Array.from(latest.values());
 }
 
+interface SpellGrantSource {
+  name: string;
+  text: string;
+}
+
+function abilityModFromScores(scores: Record<AbilKey, number | null>, abilityName: string): number {
+  const key = abilityName.trim().toLowerCase().slice(0, 3) as AbilKey;
+  return abilityMod(scores[key]);
+}
+
+function parseWordCount(value: string): number | null {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const direct = Number.parseInt(normalized, 10);
+  if (Number.isFinite(direct)) return direct;
+  const words: Record<string, number> = {
+    once: 1,
+    one: 1,
+    twice: 2,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+  };
+  return words[normalized] ?? null;
+}
+
+function buildGrantedSpellData(sources: SpellGrantSource[], scores: Record<AbilKey, number | null>): { spells: GrantedSpellCast[]; resources: ResourceCounter[] } {
+  const spells: GrantedSpellCast[] = [];
+  const resources: ResourceCounter[] = [];
+
+  for (const source of sources) {
+    const sourceName = String(source.name ?? "").trim();
+    const text = String(source.text ?? "")
+      .replace(/Source:.*$/gim, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!sourceName || !text || !/without expending a spell slot/i.test(text)) continue;
+
+    const spellMatch = text.match(/you can cast\s+([A-Z][A-Za-z' -]+?)\s+without expending a spell slot/i);
+    if (!spellMatch) continue;
+
+    const spellName = spellMatch[1].trim();
+    const reset = /finish a short rest/i.test(text) ? "S" : /finish a long rest/i.test(text) ? "L" : undefined;
+    const abilityCountMatch = text.match(/a number of times equal to your\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+modifier\s*\(minimum of once\)/i);
+    const fixedCountMatch = text.match(/\b(once|twice|one|two|three|four|five|six)\b[^.]*without expending a spell slot/i);
+
+    if (abilityCountMatch && reset) {
+      const max = Math.max(1, abilityModFromScores(scores, abilityCountMatch[1]));
+      const resourceKey = normalizeResourceKey(`${sourceName}:${spellName}`);
+      spells.push({
+        key: `granted-spell:${resourceKey}`,
+        spellName,
+        sourceName,
+        mode: "limited",
+        note: `Free cast ${max} time${max === 1 ? "" : "s"} per ${reset === "S" ? "Short Rest" : "Long Rest"}. No spell slot required.`,
+        resourceKey,
+        reset,
+      });
+      resources.push({
+        key: resourceKey,
+        name: `${spellName} (${sourceName})`,
+        current: max,
+        max,
+        reset,
+      });
+      continue;
+    }
+
+    if (fixedCountMatch && reset) {
+      const max = parseWordCount(fixedCountMatch[1]) ?? 1;
+      const resourceKey = normalizeResourceKey(`${sourceName}:${spellName}`);
+      spells.push({
+        key: `granted-spell:${resourceKey}`,
+        spellName,
+        sourceName,
+        mode: "limited",
+        note: `Free cast ${max} time${max === 1 ? "" : "s"} per ${reset === "S" ? "Short Rest" : "Long Rest"}. No spell slot required.`,
+        resourceKey,
+        reset,
+      });
+      resources.push({
+        key: resourceKey,
+        name: `${spellName} (${sourceName})`,
+        current: max,
+        max,
+        reset,
+      });
+      continue;
+    }
+
+    spells.push({
+      key: `granted-spell:${normalizeResourceKey(`${sourceName}:${spellName}`)}`,
+      spellName,
+      sourceName,
+      mode: "at_will",
+      note: "At will. Cast without expending a spell slot.",
+    });
+  }
+
+  return { spells, resources };
+}
+
 function mergeResourceState(saved: ResourceCounter[] | undefined, derived: ResourceCounter[]): ResourceCounter[] {
   const savedList = Array.isArray(saved) ? saved : [];
   const savedByKey = new Map(savedList.map((resource) => [resource.key || normalizeResourceKey(resource.name), resource]));
@@ -479,13 +583,28 @@ export function CharacterView() {
   const hitDieSize = hd ?? classDetail?.hd ?? null;
   const hitDiceMax = Math.max(0, char.level);
   const hitDiceCurrent = Math.max(0, Math.min(hitDiceMax, Math.floor(Number(char.characterData?.hitDiceCurrent ?? hitDiceMax) || 0)));
-  const classResources = mergeResourceState(char.characterData?.resources, collectClassResources(classDetail, char.level));
-  const classFeaturesList = normalizePlayerFeatures(char.characterData, char.level, classDetail, raceDetail, backgroundDetail, raceFeatDetail, invocationDetails);
-
   const scores: Record<AbilKey, number | null> = {
     str: char.strScore, dex: char.dexScore, con: char.conScore,
     int: char.intScore, wis: char.wisScore, cha: char.chaScore,
   };
+  const spellGrantSources: SpellGrantSource[] = [
+    ...(char.characterData?.classFeatures ?? []).map((feature) => ({ name: feature.name, text: feature.text })),
+    ...(raceDetail?.traits ?? []).map((trait) => ({ name: trait.name, text: trait.text })),
+    ...(backgroundDetail?.traits ?? []).map((trait) => ({ name: trait.name, text: trait.text })),
+    ...(raceFeatDetail && String(raceFeatDetail.text ?? "").trim()
+      ? [{ name: raceFeatDetail.name, text: String(raceFeatDetail.text ?? "") }]
+      : []),
+    ...invocationDetails.map((invocation) => ({
+      name: invocation.name.replace(/^Invocation:\s*/i, "").trim(),
+      text: invocation.text,
+    })),
+  ];
+  const grantedSpellData = buildGrantedSpellData(spellGrantSources, scores);
+  const classResourcesWithSpellCasts = mergeResourceState(char.characterData?.resources, [
+    ...collectClassResources(classDetail, char.level),
+    ...grantedSpellData.resources,
+  ]);
+  const classFeaturesList = normalizePlayerFeatures(char.characterData, char.level, classDetail, raceDetail, backgroundDetail, raceFeatDetail, invocationDetails);
 
   const accentColor = char.color ?? C.accentHl;
   const overrides = char.overrides ?? char.characterData?.sheetOverrides ?? { tempHp: 0, acBonus: 0, hpMaxBonus: 0 };
@@ -602,7 +721,7 @@ export function CharacterView() {
   }
 
   async function changeResourceCurrent(key: string, delta: number) {
-    const nextResources = classResources.map((resource) =>
+    const nextResources = classResourcesWithSpellCasts.map((resource) =>
       resource.key !== key
         ? resource
         : { ...resource, current: Math.max(0, Math.min(resource.max, resource.current + delta)) }
@@ -611,7 +730,7 @@ export function CharacterView() {
   }
 
   async function handleShortRest() {
-    const nextResources = classResources.map((resource) =>
+    const nextResources = classResourcesWithSpellCasts.map((resource) =>
       shouldResetOnRest(resource.reset, "short")
         ? { ...resource, current: resource.max }
         : resource
@@ -626,7 +745,7 @@ export function CharacterView() {
   }
 
   async function handleLongRest() {
-    const nextResources = classResources.map((resource) =>
+    const nextResources = classResourcesWithSpellCasts.map((resource) =>
       shouldResetOnRest(resource.reset, "long")
         ? { ...resource, current: resource.max }
         : resource
@@ -918,9 +1037,11 @@ export function CharacterView() {
             spellcastingBlocked={nonProficientArmorPenalty}
           />
           {/* Known / Prepared spells — rich table with inline slots */}
-          {prof && prof.spells.length > 0 && (
+          {((prof?.spells.length ?? 0) > 0 || grantedSpellData.spells.length > 0) && (
             <RichSpellsPanel
-              spells={prof.spells}
+              spells={prof?.spells ?? []}
+              grantedSpells={grantedSpellData.spells}
+              resources={classResourcesWithSpellCasts}
               pb={pb}
               intScore={char.intScore}
               wisScore={char.wisScore}
@@ -932,6 +1053,7 @@ export function CharacterView() {
               preparedSpells={char.characterData?.preparedSpells ?? []}
               onSlotsChange={saveUsedSpellSlots}
               onPreparedChange={savePreparedSpells}
+              onResourceChange={changeResourceCurrent}
               spellcastingBlocked={nonProficientArmorPenalty}
             />
           )}
@@ -957,7 +1079,7 @@ export function CharacterView() {
           hitDiceMax={hitDiceMax}
           hitDieSize={hitDieSize}
           hitDieConMod={conMod}
-          classResources={classResources}
+          classResources={classResourcesWithSpellCasts}
           playerNotesList={playerNotesList}
           allSharedNotes={allSharedNotes}
           classFeaturesList={classFeaturesList}

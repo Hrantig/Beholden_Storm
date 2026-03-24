@@ -39,6 +39,16 @@ export interface ResourceCounter {
   reset: string;
 }
 
+export interface GrantedSpellCast {
+  key: string;
+  spellName: string;
+  sourceName: string;
+  mode: "at_will" | "limited";
+  note: string;
+  resourceKey?: string;
+  reset?: string;
+}
+
 export interface ConditionInstance {
   key: string;
   casterId?: string | null;

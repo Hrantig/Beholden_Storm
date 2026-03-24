@@ -215,6 +215,7 @@ export function LevelUpView() {
   }, [classCantrips, cantripCount]);
 
   useEffect(() => {
+    if (maxSpellLevel === 0) return;
     setChosenSpells((prev) => {
       const next = prev
         .filter((id) => {
