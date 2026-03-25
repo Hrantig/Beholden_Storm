@@ -1,6 +1,6 @@
 import React from "react";
 import { C } from "@/lib/theme";
-import { inputStyle, labelStyle } from "@/views/character-creator/CharacterCreatorStyles";
+import { inputStyle, labelStyle } from "./CharacterCreatorStyles";
 import { extractPrerequisite, stripPrerequisiteLine } from "@/views/character/CharacterSheetUtils";
 
 function btnStyle(primary: boolean, disabled: boolean): React.CSSProperties {

@@ -1,4 +1,4 @@
-import { classifyFeatSelection } from "@/views/character-creator/CharacterCreatorUtils";
+import { classifyFeatSelection } from "./CharacterCreatorUtils";
 
 export interface FeatGrantTaggedEntry {
   name: string;

@@ -31,7 +31,7 @@ import {
   STANDARD_55E_LANGUAGES,
   WEAPON_MASTERY_KINDS,
   WEAPON_MASTERY_KIND_SET,
-} from "@/views/character-creator/CharacterCreatorConstants";
+} from "@/views/character-creator/constants/CharacterCreatorConstants";
 import {
   abilityMod,
   abilityNamesToKeys,
@@ -57,10 +57,9 @@ import {
   parseSkillList,
   parseStartingEquipmentOptions,
   tableValueAtLevel,
-} from "@/views/character-creator/CharacterCreatorUtils";
-import { collectFeatTaggedEntries } from "@/views/character-creator/FeatGrantUtils";
+} from "@/views/character-creator/utils/CharacterCreatorUtils";
 import { Select } from "@/ui/Select";
-import { NavButtons, SpellPicker, StepHeader } from "@/views/character-creator/CharacterCreatorParts";
+import { NavButtons, SpellPicker, StepHeader } from "@/views/character-creator/shared/CharacterCreatorParts";
 import {
   detailBoxStyle,
   headingStyle,
@@ -71,7 +70,7 @@ import {
   sourceTagStyle,
   statLabelStyle,
   statValueStyle,
-} from "@/views/character-creator/CharacterCreatorStyles";
+} from "@/views/character-creator/shared/CharacterCreatorStyles";
 import {
   renderAbilityScoresStep,
   renderCampaignsStep,
@@ -81,15 +80,15 @@ import {
   renderLevelStep,
   renderSpeciesStep,
   renderSpellsStep,
-} from "@/views/character-creator/CharacterCreatorStepPanels";
-import { duplicateLockedForStep5, getFeatChoiceOptionsForStep5, getFixedGrantsForStep5, getStep5ChoiceState } from "@/views/character-creator/CharacterCreatorStep5Utils";
-import { renderSkillsStep } from "@/views/character-creator/CharacterCreatorSkillsStep";
-import { renderBackgroundStep } from "@/views/character-creator/CharacterCreatorBackgroundStep";
+} from "@/views/character-creator/steps/CharacterCreatorStepPanels";
+import { duplicateLockedForStep5, getFeatChoiceOptionsForStep5, getFixedGrantsForStep5, getStep5ChoiceState } from "@/views/character-creator/utils/CharacterCreatorStep5Utils";
+import { renderSkillsStep } from "@/views/character-creator/steps/CharacterCreatorSkillsStep";
+import { renderBackgroundStep } from "@/views/character-creator/steps/CharacterCreatorBackgroundStep";
 import {
   buildProficiencyMap as buildProficiencyMapFromUtils,
   buildStartingInventory as buildStartingInventoryFromUtils,
   getWeaponMasteryChoice as getWeaponMasteryChoiceFromUtils,
-} from "@/views/character-creator/CharacterCreatorProficiencyUtils";
+} from "@/views/character-creator/utils/CharacterCreatorProficiencyUtils";
 import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 
 // ---------------------------------------------------------------------------
@@ -875,6 +874,21 @@ export function CharacterCreatorView() {
     setForm(f => ({ ...f, chosenBgTools: [], chosenBgLanguages: [], chosenBgOriginFeatId: null, chosenBgEquipmentOption: null, chosenFeatOptions: {}, bgAbilityMode: "split", bgAbilityBonuses: {} }));
     api<BgDetail>(`/api/compendium/backgrounds/${form.bgId}`).then(setBgDetail).catch(() => {});
   }, [form.bgId]);
+
+  // Auto-select directly-granted background feats (e.g. Charlatan → Skilled)
+  React.useEffect(() => {
+    if (!bgDetail) return;
+    const prof = bgDetail.proficiencies;
+    if (!prof || prof.featChoice > 0 || prof.feats.length === 0) return;
+    const grantedName = prof.feats[0]?.name;
+    if (!grantedName) return;
+    const match = featSummaries.find((f) =>
+      f.name.toLowerCase().startsWith(grantedName.toLowerCase())
+    );
+    if (match) {
+      setForm((f) => f.chosenBgOriginFeatId === match.id ? f : { ...f, chosenBgOriginFeatId: match.id });
+    }
+  }, [bgDetail, featSummaries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select the first equipment option when bgDetail loads
   React.useEffect(() => {

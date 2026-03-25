@@ -1,5 +1,5 @@
-import { ALL_LANGUAGES, ALL_SKILLS, ALL_TOOLS } from "@/views/character-creator/CharacterCreatorConstants";
-import { getFeatChoiceOptions, normalizeChoiceKey } from "@/views/character-creator/CharacterCreatorUtils";
+import { ALL_LANGUAGES, ALL_SKILLS, ALL_TOOLS } from "../constants/CharacterCreatorConstants";
+import { getFeatChoiceOptions, normalizeChoiceKey } from "./CharacterCreatorUtils";
 import { getBackgroundFeatChoices } from "@/lib/characterRules";
 
 export interface Step5FeatChoiceLike {

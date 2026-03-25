@@ -1,9 +1,9 @@
 import React from "react";
 import { C } from "@/lib/theme";
-import { ABILITY_NAME_TO_KEY, ALL_SKILLS, ALL_TOOLS } from "@/views/character-creator/CharacterCreatorConstants";
-import { NavButtons } from "@/views/character-creator/CharacterCreatorParts";
-import { detailBoxStyle, headingStyle, inputStyle, labelStyle, profChipStyle, sourceTagStyle } from "@/views/character-creator/CharacterCreatorStyles";
-import { abilityNamesToKeys, parseStartingEquipmentOptions } from "@/views/character-creator/CharacterCreatorUtils";
+import { ABILITY_NAME_TO_KEY, ALL_SKILLS, ALL_TOOLS } from "../constants/CharacterCreatorConstants";
+import { NavButtons } from "../shared/CharacterCreatorParts";
+import { detailBoxStyle, headingStyle, inputStyle, labelStyle, profChipStyle, sourceTagStyle } from "../shared/CharacterCreatorStyles";
+import { abilityNamesToKeys, parseStartingEquipmentOptions } from "../utils/CharacterCreatorUtils";
 
 type StepResult = { main: React.ReactNode; side: React.ReactNode };
 
@@ -158,6 +158,20 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {prof && prof.feats.length > 0 && prof.featChoice === 0 && (
+              <div>
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Feat </span>
+                  <span style={sourceTagStyle}>{bgDetail.name}</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {prof.feats.map((feat) => (
+                    <span key={feat.name} style={profChipStyle}>{feat.name}</span>
+                  ))}
                 </div>
               </div>
             )}

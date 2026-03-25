@@ -11,7 +11,7 @@ import {
   WEAPON_PROFICIENCY_OPTIONS,
   WEAPON_MASTERY_KINDS,
   WEAPON_MASTERY_KIND_SET,
-} from "@/views/character-creator/CharacterCreatorConstants";
+} from "../constants/CharacterCreatorConstants";
 
 export { abilityMod };
 

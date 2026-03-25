@@ -1,5 +1,5 @@
 {
-  "name": "@dmtool/web-dm",
+  "name": "@beholden/web-dm",
   "private": true,
   "type": "module",
   "scripts": {

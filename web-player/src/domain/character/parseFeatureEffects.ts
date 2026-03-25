@@ -294,7 +294,7 @@ function parseSpeedEffects(source: FeatureEffectSource, text: string, effects: F
     } satisfies SpeedEffect);
   }
 
-  for (const match of text.matchAll(/you have a (Fly|Swim|Climb|Burrow) Speed equal to your Speed/i)) {
+  for (const match of text.matchAll(/you have a (Fly|Swim|Climb|Burrow) Speed equal to your Speed/gi)) {
     effects.push({
       id: createFeatureEffectId(source, "speed", effects.length),
       type: "speed",

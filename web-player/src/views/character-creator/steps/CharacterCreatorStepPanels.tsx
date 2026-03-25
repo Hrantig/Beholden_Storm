@@ -1,7 +1,7 @@
 import React from "react";
 import { C } from "@/lib/theme";
-import { abilityNamesToKeys, parseSkillList } from "@/views/character-creator/CharacterCreatorUtils";
-import { NavButtons, SpellPicker } from "@/views/character-creator/CharacterCreatorParts";
+import { abilityNamesToKeys, parseSkillList } from "../utils/CharacterCreatorUtils";
+import { NavButtons, SpellPicker } from "../shared/CharacterCreatorParts";
 import {
   detailBoxStyle,
   headingStyle,
@@ -11,7 +11,7 @@ import {
   smallBtnStyle,
   sourceTagStyle,
   statLabelStyle, statValueStyle,
-} from "@/views/character-creator/CharacterCreatorStyles";
+} from "../shared/CharacterCreatorStyles";
 import { Select } from "@/ui/Select";
 
 interface ClassSummaryLike {

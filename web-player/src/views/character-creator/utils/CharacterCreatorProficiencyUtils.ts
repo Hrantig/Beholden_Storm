@@ -1,18 +1,18 @@
 import {
   buildEquipmentItems as buildEquipmentItemsFromUtils,
   getBackgroundGrantedToolSelections as getBackgroundGrantedToolSelectionsFromUtils,
-} from "@/views/character-creator/CharacterCreatorEquipmentUtils";
-import { collectFeatTaggedEntries } from "@/views/character-creator/FeatGrantUtils";
+} from "./CharacterCreatorEquipmentUtils";
+import { collectFeatTaggedEntries } from "./FeatGrantUtils";
 import {
   ABILITY_SCORE_NAMES,
   ALL_LANGUAGES,
   STANDARD_55E_LANGUAGES,
-} from "@/views/character-creator/CharacterCreatorConstants";
+} from "../constants/CharacterCreatorConstants";
 import {
   classifyFeatSelection,
   extractClassStartingEquipment,
   getClassExpertiseChoices,
-} from "@/views/character-creator/CharacterCreatorUtils";
+} from "./CharacterCreatorUtils";
 import {
   dedupeTaggedItems,
   normalizeArmorProficiencyName,

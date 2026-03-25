@@ -1,10 +1,10 @@
 import React from "react";
 import { C } from "@/lib/theme";
-import { normalizeChoiceKey } from "@/views/character-creator/CharacterCreatorUtils";
-import { ALL_LANGUAGES, ALL_SKILLS } from "@/views/character-creator/CharacterCreatorConstants";
-import { NavButtons } from "@/views/character-creator/CharacterCreatorParts";
-import { detailBoxStyle, headingStyle, labelStyle, profChipStyle, sourceTagStyle } from "@/views/character-creator/CharacterCreatorStyles";
-import { renderChoiceChipGroup, renderClassFeatSingleChoicePanel } from "@/views/character-creator/CharacterCreatorStepPanels";
+import { normalizeChoiceKey } from "../utils/CharacterCreatorUtils";
+import { ALL_LANGUAGES, ALL_SKILLS } from "../constants/CharacterCreatorConstants";
+import { NavButtons } from "../shared/CharacterCreatorParts";
+import { detailBoxStyle, headingStyle, labelStyle, profChipStyle, sourceTagStyle } from "../shared/CharacterCreatorStyles";
+import { renderChoiceChipGroup, renderClassFeatSingleChoicePanel } from "./CharacterCreatorStepPanels";
 import {
   duplicateLockedForStep5,
   getFeatChoiceOptionsForStep5,
@@ -16,7 +16,7 @@ import {
   type Step5ParsedFeatLike,
   type Step5ChoiceState,
   type Step5WeaponMasteryChoiceLike,
-} from "@/views/character-creator/CharacterCreatorStep5Utils";
+} from "../utils/CharacterCreatorStep5Utils";
 
 type StepResult = { main: React.ReactNode; side: React.ReactNode };
 

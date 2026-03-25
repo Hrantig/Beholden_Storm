@@ -1,5 +1,5 @@
 import type { ParsedFeatChoiceLike } from "@/lib/characterRules";
-import { parseStartingEquipmentOptions } from "@/views/character-creator/CharacterCreatorUtils";
+import { parseStartingEquipmentOptions } from "./CharacterCreatorUtils";
 import { normalizeInventoryItemLookupName } from "@/views/character/CharacterInventory";
 
 export interface ItemSummaryLike {
