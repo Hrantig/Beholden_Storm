@@ -105,9 +105,50 @@ function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentC
   );
 }
 
+interface ReadonlyTagRowProps {
+  label: string;
+  color: string;
+  items: string[];
+}
+
+function ReadonlyTagRow({ label, color, items }: ReadonlyTagRowProps) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, marginBottom: 5 }}>
+        {label}
+      </div>
+      {items.length === 0 ? (
+        <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>None</span>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {items.map((item) => (
+            <span
+              key={item}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                fontSize: 11,
+                fontWeight: 700,
+                color,
+                background: `${color}18`,
+                border: `1px solid ${color}44`,
+                borderRadius: 999,
+                padding: "2px 8px",
+              }}
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface CharacterDefensesPanelProps {
   resistances: string[];
   immunities: string[];
+  senses: string[];
   customResistances: string[];
   customImmunities: string[];
   accentColor: string;
@@ -118,6 +159,7 @@ export interface CharacterDefensesPanelProps {
 export function CharacterDefensesPanel({
   resistances,
   immunities,
+  senses,
   customResistances,
   customImmunities,
   accentColor,
@@ -125,7 +167,7 @@ export function CharacterDefensesPanel({
   onCustomImmunitiesChange,
 }: CharacterDefensesPanelProps) {
   const hasAnything = resistances.length > 0 || immunities.length > 0 ||
-    customResistances.length > 0 || customImmunities.length > 0;
+    senses.length > 0 || customResistances.length > 0 || customImmunities.length > 0;
 
   // Always render the panel so users can add custom ones
   void hasAnything;
@@ -150,6 +192,11 @@ export function CharacterDefensesPanel({
           accentColor={accentColor}
           onAdd={(v) => onCustomImmunitiesChange([...customImmunities, v])}
           onRemove={(v) => onCustomImmunitiesChange(customImmunities.filter((x) => x !== v))}
+        />
+        <ReadonlyTagRow
+          label="Senses"
+          color="#fbbf24"
+          items={senses}
         />
       </div>
     </CollapsiblePanel>

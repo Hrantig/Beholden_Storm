@@ -21,6 +21,7 @@ import {
 import {
   type CharacterDataLike,
   type CompendiumItemDetail,
+  type EquipState,
   type InventoryContainer,
   type InventoryItem,
   type InventoryPickerPayload,
@@ -50,11 +51,10 @@ interface InventoryPanelCharacter {
   strScore: number | null;
 }
 
-interface InventoryPanelCharacterData extends CharacterDataLike {
+type InventoryPanelCharacterData = CharacterDataLike & {
   inventory?: InventoryItem[];
   inventoryContainers?: InventoryContainer[];
-  proficiencies?: unknown;
-}
+};
 
 type PersistPayload = {
   inventory: InventoryItem[];

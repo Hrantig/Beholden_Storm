@@ -69,26 +69,6 @@ export function getPassiveScore(skillBonus: number): number {
   return 10 + skillBonus;
 }
 
-export function getUnarmoredDefenseAc(args: {
-  className?: string | null;
-  dexScore?: number | null;
-  conScore?: number | null;
-  wisScore?: number | null;
-  shieldEquipped?: boolean;
-  armorEquipped?: boolean;
-}): number | null {
-  if (args.armorEquipped) return null;
-  const className = String(args.className ?? "");
-  const dexMod = abilityMod(args.dexScore);
-  if (/barbarian/i.test(className)) {
-    return 10 + dexMod + abilityMod(args.conScore);
-  }
-  if (/monk/i.test(className) && !args.shieldEquipped) {
-    return 10 + dexMod + abilityMod(args.wisScore);
-  }
-  return null;
-}
-
 export function normalizeWeaponProficiencyName(name: string): string {
   const normalized = String(name ?? "").trim();
   if (!normalized) return normalized;

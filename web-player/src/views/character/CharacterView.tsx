@@ -12,7 +12,18 @@ import { CharacterAbilitiesPanels, CharacterProficienciesPanel } from "@/views/c
 import { CharacterCombatPanels } from "@/views/character/CharacterCombatPanels";
 import { CharacterHudPanel } from "@/views/character/CharacterHudPanel";
 import { InventoryPanel } from "@/views/character/CharacterInventoryPanel";
-import { buildGrantedSpellData, parseDefenses, type SpellGrantSource } from "@/views/character/CharacterRuleParsers";
+import {
+  buildGrantedSpellDataFromEffects,
+  collectSensesFromEffects,
+  collectDefensesFromEffects,
+  deriveArmorClassBonusFromEffects,
+  deriveHitPointMaxBonusFromEffects,
+  deriveModifierBonusFromEffects,
+  deriveSpeedBonusFromEffects,
+  deriveUnarmoredDefenseFromEffects,
+  parseFeatureEffects,
+  type ParseFeatureEffectsInput,
+} from "@/domain/character/parseFeatureEffects";
 import { CharacterDefensesPanel } from "@/views/character/CharacterDefensesPanel";
 import { SpellSlotsPanel, RichSpellsPanel, ItemSpellsPanel } from "@/views/character/CharacterSpellsPanel";
 import { CharacterSupportPanels } from "@/views/character/CharacterSupportPanels";
@@ -24,7 +35,6 @@ import {
   getPassiveScore,
   getSaveBonus,
   getSkillBonus,
-  getUnarmoredDefenseAc,
   normalizeArmorProficiencyName,
   normalizeLanguageName,
   normalizeResourceKey,
@@ -132,6 +142,12 @@ interface FeatFeatureDetail {
   text?: string | null;
 }
 
+interface LevelUpFeatDetail {
+  level: number;
+  featId: string;
+  feat: FeatFeatureDetail;
+}
+
 interface InvocationFeatureDetail {
   id: string;
   name: string;
@@ -169,6 +185,7 @@ function normalizePlayerFeatures(
   backgroundDetail: BackgroundFeatureDetail | null,
   bgOriginFeatDetail: FeatFeatureDetail | null,
   raceFeatDetail: FeatFeatureDetail | null,
+  levelUpFeatDetails: LevelUpFeatDetail[],
   invocationDetails: InvocationFeatureDetail[],
 ): ClassFeatureEntry[] {
   const saved = charData?.classFeatures ?? [];
@@ -265,7 +282,16 @@ function normalizePlayerFeatures(
       id: bgOriginFeatDetail.name,
       name: bgOriginFeatDetail.name,
       text: String(bgOriginFeatDetail.text ?? "").trim(),
-    });
+    }, { force: true });
+  }
+
+  for (const entry of levelUpFeatDetails) {
+    if (!String(entry.feat.text ?? "").trim()) continue;
+    addFeature({
+      id: `levelupfeat:${entry.level}:${entry.featId}`,
+      name: entry.feat.name,
+      text: String(entry.feat.text ?? "").trim(),
+    }, { force: true });
   }
 
   for (const invocation of invocationDetails) {
@@ -382,6 +408,7 @@ export function CharacterView() {
   const [backgroundDetail, setBackgroundDetail] = useState<BackgroundFeatureDetail | null>(null);
   const [bgOriginFeatDetail, setBgOriginFeatDetail] = useState<FeatFeatureDetail | null>(null);
   const [raceFeatDetail, setRaceFeatDetail] = useState<FeatFeatureDetail | null>(null);
+  const [levelUpFeatDetails, setLevelUpFeatDetails] = useState<LevelUpFeatDetail[]>([]);
   const [invocationDetails, setInvocationDetails] = useState<InvocationFeatureDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -480,6 +507,32 @@ export function CharacterView() {
   }, [char?.characterData?.chosenBgOriginFeatId]);
 
   useEffect(() => {
+    const entries = Array.isArray(char?.characterData?.chosenLevelUpFeats)
+      ? char.characterData.chosenLevelUpFeats.filter((entry): entry is { level: number; featId: string } =>
+          typeof entry?.level === "number" && typeof entry?.featId === "string" && entry.featId.trim().length > 0
+        )
+      : [];
+    if (entries.length === 0) {
+      setLevelUpFeatDetails([]);
+      return;
+    }
+    let alive = true;
+    Promise.all(
+      entries.map(async ({ level, featId }) => {
+        const detail = await api<FeatFeatureDetail>(`/api/compendium/feats/${encodeURIComponent(featId)}`);
+        return { level, featId, feat: detail } satisfies LevelUpFeatDetail;
+      })
+    )
+      .then((details) => {
+        if (alive) setLevelUpFeatDetails(details);
+      })
+      .catch(() => {
+        if (alive) setLevelUpFeatDetails([]);
+      });
+    return () => { alive = false; };
+  }, [char?.characterData?.chosenLevelUpFeats]);
+
+  useEffect(() => {
     const invocationIds = Array.isArray(char?.characterData?.chosenInvocations)
       ? char.characterData.chosenInvocations.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : [];
@@ -559,31 +612,49 @@ export function CharacterView() {
     str: char.strScore, dex: char.dexScore, con: char.conScore,
     int: char.intScore, wis: char.wisScore, cha: char.chaScore,
   };
-  const hasSavedBgOriginFeat = Boolean(
-    bgOriginFeatDetail
-    && char.characterData?.classFeatures?.some((feature) => feature.name === bgOriginFeatDetail.name)
+  const classFeaturesList = normalizePlayerFeatures(
+    char.characterData,
+    char.level,
+    classDetail,
+    raceDetail,
+    backgroundDetail,
+    bgOriginFeatDetail,
+    raceFeatDetail,
+    levelUpFeatDetails,
+    invocationDetails,
   );
-  const classFeaturesList = normalizePlayerFeatures(char.characterData, char.level, classDetail, raceDetail, backgroundDetail, bgOriginFeatDetail, raceFeatDetail, invocationDetails);
-  const spellGrantSources: SpellGrantSource[] = [
-    ...classFeaturesList.map((feature) => ({ name: feature.name, text: feature.text })),
-    ...(raceDetail?.traits ?? []).map((trait) => ({ name: trait.name, text: trait.text })),
-    ...(backgroundDetail?.traits ?? []).map((trait) => ({ name: trait.name, text: trait.text })),
-    ...(!hasSavedBgOriginFeat && bgOriginFeatDetail && String(bgOriginFeatDetail.text ?? "").trim()
-      ? [{ name: bgOriginFeatDetail.name, text: String(bgOriginFeatDetail.text ?? "") }]
-      : []),
-    ...(raceFeatDetail && String(raceFeatDetail.text ?? "").trim()
-      ? [{ name: raceFeatDetail.name, text: String(raceFeatDetail.text ?? "") }]
-      : []),
+  const parsedFeatureEffects = [
+    ...classFeaturesList.map((feature, index) =>
+      parseFeatureEffects({
+        source: { id: `class-feature:${index}:${feature.id}`, kind: "class", name: feature.name, text: feature.text },
+        text: feature.text,
+      } satisfies ParseFeatureEffectsInput)
+    ),
+    ...(raceDetail?.traits ?? []).map((trait, index) =>
+      parseFeatureEffects({
+        source: { id: `race-trait:${index}:${trait.name}`, kind: "species", name: trait.name, text: trait.text },
+        text: trait.text,
+      } satisfies ParseFeatureEffectsInput)
+    ),
+    ...(backgroundDetail?.traits ?? []).map((trait, index) =>
+      parseFeatureEffects({
+        source: { id: `background-trait:${index}:${trait.name}`, kind: "background", name: trait.name, text: trait.text },
+        text: trait.text,
+      } satisfies ParseFeatureEffectsInput)
+    ),
   ];
-  const grantedSpellData = buildGrantedSpellData(spellGrantSources, scores);
+  const grantedSpellData = buildGrantedSpellDataFromEffects(parsedFeatureEffects, scores);
   const classResourcesWithSpellCasts = mergeResourceState(char.characterData?.resources, [
     ...collectClassResources(classDetail, char.level),
     ...grantedSpellData.resources,
   ]);
-  const parsedDefenses = parseDefenses([
-    ...(raceDetail?.traits ?? []).map((t) => ({ name: t.name, text: t.text ?? "" })),
-    ...(classFeaturesList.map((f) => ({ name: f.name, text: f.text }))),
-  ]);
+  const effectDefenses = collectDefensesFromEffects(parsedFeatureEffects);
+  const effectSenses = collectSensesFromEffects(parsedFeatureEffects);
+  const parsedDefenses = {
+    resistances: effectDefenses.resistances,
+    immunities: effectDefenses.immunities,
+    vulnerabilities: [] as string[],
+  };
   const preparedSpellLimit = classDetail ? getPreparedSpellCount(classDetail, char.level, char.characterData?.subclass ?? "") : 0;
   const preparedSpells = (() => {
     const saved = Array.isArray(char.characterData?.preparedSpells) ? char.characterData.preparedSpells : [];
@@ -593,7 +664,8 @@ export function CharacterView() {
 
   const accentColor = char.color ?? C.accentHl;
   const overrides: SheetOverrides = char.overrides ?? char.characterData?.sheetOverrides ?? { tempHp: 0, acBonus: 0, hpMaxBonus: 0 };
-  const effectiveHpMax = Math.max(1, char.hpMax + (overrides.hpMaxBonus ?? 0));
+  const featureHpMaxBonus = deriveHitPointMaxBonusFromEffects(parsedFeatureEffects, { level: char.level, scores });
+  const effectiveHpMax = Math.max(1, char.hpMax + featureHpMaxBonus + (overrides.hpMaxBonus ?? 0));
   const xpEarned = char.characterData?.xp ?? 0;
   const xpNeeded = XP_TO_LEVEL[char.level + 1] ?? 0;
   const inventory = char.characterData?.inventory ?? [];
@@ -627,21 +699,32 @@ export function CharacterView() {
     if (t.includes("medium")) return wornArmor.ac + Math.min(2, dexMod);
     return wornArmor.ac + dexMod; // light armor
   })();
-  const unarmoredDefenseAc = getUnarmoredDefenseAc({
-    className: char.className,
-    dexScore: char.dexScore,
-    conScore: char.conScore,
-    wisScore: char.wisScore,
-    shieldEquipped: Boolean(wornShield),
+  const unarmoredDefenseAc = deriveUnarmoredDefenseFromEffects(parsedFeatureEffects, scoresByAbility, {
     armorEquipped: Boolean(wornArmor),
+    shieldEquipped: Boolean(wornShield),
   });
-  const effectiveAc = Math.max(char.ac, wornArmorAc ?? 0, unarmoredDefenseAc ?? 0) + (overrides.acBonus ?? 0) + shieldBonus;
+  const featureAcBonus = deriveArmorClassBonusFromEffects(parsedFeatureEffects, {
+    armorEquipped: Boolean(wornArmor),
+    level: char.level,
+    scores: scoresByAbility,
+  });
+  const effectiveAc = Math.max(char.ac, wornArmorAc ?? 0, unarmoredDefenseAc ?? 0) + featureAcBonus + (overrides.acBonus ?? 0) + shieldBonus;
+  const speedBonus = deriveSpeedBonusFromEffects(parsedFeatureEffects, {
+    armorState: wornArmor && /\bheavy armor\b/i.test(wornArmor.type ?? "") ? "any" : "not_heavy",
+  });
+  const effectiveSpeed = char.speed + speedBonus;
   const tempHp = overrides.tempHp ?? 0;
   const hpPct = effectiveHpMax > 0 ? Math.max(0, Math.min(1, char.hpCurrent / effectiveHpMax)) : 0;
   const tempPct = effectiveHpMax > 0 ? Math.min(1 - hpPct, tempHp / effectiveHpMax) : 0;
-  const passivePerc = getPassiveScore(getSkillBonus("Perception", "wis", scoresByAbility, char.level, prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades }));
-  const passiveInv  = getPassiveScore(getSkillBonus("Investigation", "int", scoresByAbility, char.level, prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades }));
-  const initiativeBonus = getInitiativeBonus(char.dexScore, char.level, { jackOfAllTrades: hasJackOfAllTrades });
+  const passiveScoreBonus = deriveModifierBonusFromEffects(parsedFeatureEffects, "passive_score", {
+    level: char.level,
+    scores: scoresByAbility,
+  });
+  const passivePerc = getPassiveScore(getSkillBonus("Perception", "wis", scoresByAbility, char.level, prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades })) + passiveScoreBonus;
+  const passiveInv  = getPassiveScore(getSkillBonus("Investigation", "int", scoresByAbility, char.level, prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades })) + passiveScoreBonus;
+  const initiativeBonus = getInitiativeBonus(char.dexScore, char.level, { jackOfAllTrades: hasJackOfAllTrades })
+    + deriveModifierBonusFromEffects(parsedFeatureEffects, "initiative", { level: char.level, scores: scoresByAbility });
+  const senses = effectSenses.map((sense) => `${sense.kind[0].toUpperCase()}${sense.kind.slice(1)} ${sense.range} ft.`);
   const editableOverrideFields: EditableSheetOverrideField[] = [
     { key: "tempHp", label: "Temp HP", help: "Current temporary hit points." },
     { key: "acBonus", label: "AC Bonus", help: "Bonus applied on top of normal armor class." },
@@ -1040,6 +1123,7 @@ export function CharacterView() {
           <CharacterDefensesPanel
             resistances={parsedDefenses.resistances}
             immunities={parsedDefenses.immunities}
+            senses={senses}
             customResistances={char.characterData?.customResistances ?? []}
             customImmunities={char.characterData?.customImmunities ?? []}
             accentColor={accentColor}
@@ -1056,7 +1140,7 @@ export function CharacterView() {
 
           <CharacterCombatPanels
             effectiveAc={effectiveAc}
-            speed={char.speed}
+            speed={effectiveSpeed}
             level={char.level}
             className={char.className}
             initiativeBonus={initiativeBonus}

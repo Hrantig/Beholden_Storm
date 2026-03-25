@@ -405,7 +405,7 @@ export function renderSpeciesStep({
   selectRace: (id: string) => void;
   raceDetail: RaceDetailLike | null;
   raceChoices: RaceChoiceSetLike | null;
-  chosenRaceSize: string;
+  chosenRaceSize: string | null;
   selectRaceSize: (size: string) => void;
   chosenRaceSkills: string[];
   chosenRaceTools: string[];
@@ -718,7 +718,7 @@ export function renderIdentityStep({
   onNext,
   side,
 }: {
-  form: Record<string, unknown>;
+  form: Record<string, unknown> & { [key: string]: unknown };
   setField: (key: string, value: string) => void;
   portraitInputRef: React.RefObject<HTMLInputElement | null>;
   portraitPreview: string | null;
@@ -753,7 +753,7 @@ export function renderIdentityStep({
       <h2 style={headingStyle}>Character Identity</h2>
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <input ref={portraitInputRef} type="file" accept="image/*" onChange={handlePortraitChange} style={{ display: "none" }} />
+          <input ref={portraitInputRef as React.RefObject<HTMLInputElement>} type="file" accept="image/*" onChange={handlePortraitChange} style={{ display: "none" }} />
           <div
             onClick={() => portraitInputRef.current?.click()}
             style={{
@@ -956,6 +956,9 @@ export function renderLevelStep({
   chooseClassEquipmentOption,
   className,
   features,
+  levelUpFeatChoices,
+  chooseLevelUpFeat,
+  levelUpFeatConflict,
   onBack,
   onNext,
 }: {
@@ -975,6 +978,9 @@ export function renderLevelStep({
   chooseClassEquipmentOption: (id: string) => void;
   className: string | null;
   features: Array<{ level: number; name: string; text: string }>;
+  levelUpFeatChoices: Array<{ level: number; selectedFeatId: string | null; options: Array<{ id: string; name: string }> }>;
+  chooseLevelUpFeat: (level: number, featId: string) => void;
+  levelUpFeatConflict: boolean;
   onBack: () => void;
   onNext: () => void;
 }): { main: React.ReactNode; side: React.ReactNode } {
@@ -1101,7 +1107,39 @@ export function renderLevelStep({
         </div>
       )}
 
-      <NavButtons step={4} onBack={onBack} onNext={onNext} nextDisabled={classEquipmentOptions.length > 0 && !chosenClassEquipmentOption} />
+      {levelUpFeatChoices.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Level-Up Feats</div>
+          <div style={{ color: C.muted, fontSize: 12, marginBottom: 10 }}>
+            Choose feats for each Ability Score Improvement level included in this starting level.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {levelUpFeatChoices.map((choice) => (
+              <div key={choice.level}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.accentHl, marginBottom: 6 }}>Level {choice.level}</div>
+                <Select value={choice.selectedFeatId ?? ""} onChange={(e) => chooseLevelUpFeat(choice.level, e.target.value)} style={{ width: "100%", maxWidth: 380 }}>
+                  <option value="">- Choose feat -</option>
+                  {choice.options.map((feat) => (
+                    <option key={feat.id} value={feat.id}>{feat.name}</option>
+                  ))}
+                </Select>
+              </div>
+            ))}
+          </div>
+          {levelUpFeatConflict && (
+            <div style={{ color: C.red, fontSize: 12, marginTop: 10 }}>
+              A non-repeatable feat has been selected more than once.
+            </div>
+          )}
+        </div>
+      )}
+
+      <NavButtons
+        step={4}
+        onBack={onBack}
+        onNext={onNext}
+        nextDisabled={(classEquipmentOptions.length > 0 && !chosenClassEquipmentOption) || levelUpFeatChoices.some((choice) => !choice.selectedFeatId) || levelUpFeatConflict}
+      />
     </div>
   );
 

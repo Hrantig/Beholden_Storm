@@ -1,5 +1,6 @@
-import { classifyFeatSelection } from "@/views/character-creator/CharacterCreatorUtils";
+import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 import { featPrerequisitesMet, invocationPrerequisitesMet, spellLooksLikeDamageSpell } from "@/views/character/CharacterSheetUtils";
+import { collectFeatTaggedEntries } from "@/views/character-creator/FeatGrantUtils";
 
 export interface LevelUpTaggedEntry {
   name: string;
@@ -18,6 +19,9 @@ export interface LevelUpFeatChoiceLike {
   options: string[] | null;
   anyOf?: string[];
   amount?: number | null;
+  level?: number | null;
+  linkedTo?: string | null;
+  distinct?: boolean;
   note?: string | null;
 }
 
@@ -35,7 +39,9 @@ export interface LevelUpFeatDetailLike {
       savingThrows: string[];
       spells: string[];
       cantrips: string[];
+      abilityIncreases?: Record<string, number>;
     };
+    choices?: LevelUpFeatChoiceLike[];
   };
 }
 
@@ -104,19 +110,7 @@ export interface LevelUpFeatSummaryLike {
   name: string;
 }
 
-export interface LevelUpFeatPrereqProfLike {
-  spells?: LevelUpTaggedEntry[];
-  invocations?: LevelUpTaggedEntry[];
-  expertise?: LevelUpTaggedEntry[];
-  skills?: LevelUpTaggedEntry[];
-  tools?: LevelUpTaggedEntry[];
-  languages?: LevelUpTaggedEntry[];
-  armor?: LevelUpTaggedEntry[];
-  weapons?: LevelUpTaggedEntry[];
-  saves?: LevelUpTaggedEntry[];
-  masteries?: LevelUpTaggedEntry[];
-  [k: string]: unknown;
-}
+export type LevelUpFeatPrereqProfLike = ProficiencyMap;
 
 export interface DeriveAllowedInvocationIdsArgs {
   classCantrips: LevelUpSpellLike[];
@@ -166,6 +160,9 @@ export interface DeriveLevelUpValidationArgs {
     id: string;
     name: string;
     text?: string | null;
+    parsed?: {
+      repeatable?: boolean;
+    };
   } | null;
   featChoiceEntries: LevelUpFeatChoiceLike[];
   chosenFeatOptions: Record<string, string[]>;
@@ -177,6 +174,7 @@ export interface DeriveLevelUpValidationArgs {
   featSearch: string;
   featSummaries: LevelUpFeatSummaryLike[];
   hpGain: number | null;
+  existingLevelUpFeats?: Array<{ level: number; featId: string }>;
 }
 
 export function deriveAllowedInvocationIds(args: DeriveAllowedInvocationIdsArgs): Set<string> {
@@ -210,7 +208,7 @@ export function deriveFeatAbilityBonuses(args: DeriveFeatAbilityBonusesArgs): Re
   const bonusMap: Record<string, number> = {};
   if (!chosenFeatDetail) return bonusMap;
 
-  for (const [key, value] of Object.entries(chosenFeatDetail.parsed.grants.abilityIncreases)) {
+  for (const [key, value] of Object.entries(chosenFeatDetail.parsed.grants.abilityIncreases ?? {})) {
     const abilityKey = key.toLowerCase().slice(0, 3);
     bonusMap[abilityKey] = (bonusMap[abilityKey] ?? 0) + value;
   }
@@ -256,7 +254,7 @@ export function deriveLevelUpValidation(args: DeriveLevelUpValidationArgs) {
   const {
     isAsiLevel, asiMode, asiStats, needsSubclassChoice, subclass, cantripCount, chosenCantrips, spellcaster,
     prepCount, chosenSpells, invocCount, chosenInvocations, expertiseChoices, chosenExpertise, chosenFeatDetail,
-    featChoiceEntries, chosenFeatOptions, nextLevel, className, level, scores, prof, featSearch, featSummaries, hpGain,
+    featChoiceEntries, chosenFeatOptions, nextLevel, className, level, scores, prof, featSearch, featSummaries, hpGain, existingLevelUpFeats,
   } = args;
 
   const availableFeatSummaries = featSummaries.filter(
@@ -276,6 +274,9 @@ export function deriveLevelUpValidation(args: DeriveLevelUpValidationArgs) {
         spellcaster,
       })
     : false;
+  const featRepeatableValid = !chosenFeatDetail
+    || chosenFeatDetail.parsed?.repeatable
+    || !(existingLevelUpFeats ?? []).some((entry) => entry.featId === chosenFeatDetail.id);
 
   const asiTotal = Object.values(asiStats).reduce((sum, value) => sum + value, 0);
   const asiValid =
@@ -293,9 +294,11 @@ export function deriveLevelUpValidation(args: DeriveLevelUpValidationArgs) {
     (
       Boolean(chosenFeatDetail) &&
       featPrereqsMet &&
-      featChoiceEntries.every(
-        (choice) => (chosenFeatOptions[`levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`] ?? []).length === choice.count
-      )
+      featRepeatableValid &&
+      featChoiceEntries.every((choice) => {
+        if (!chosenFeatDetail) return false;
+        return (chosenFeatOptions[`levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`] ?? []).length === choice.count;
+      })
     );
   const canConfirm =
     hpGain !== null &&
@@ -311,6 +314,7 @@ export function deriveLevelUpValidation(args: DeriveLevelUpValidationArgs) {
     availableFeatSummaries,
     filteredFeatSummaries,
     featPrereqsMet,
+    featRepeatableValid,
     asiTotal,
     asiValid,
     subclassValid,
@@ -349,36 +353,13 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
   );
 
   const selectedFeatEntries = chosenFeatDetail
-    ? {
-        skills: chosenFeatDetail.parsed.grants.skills.map((name) => ({ name, source: featSourceLabel })),
-        tools: chosenFeatDetail.parsed.grants.tools.map((name) => ({ name, source: featSourceLabel })),
-        languages: chosenFeatDetail.parsed.grants.languages.map((name) => ({ name, source: featSourceLabel })),
-        armor: chosenFeatDetail.parsed.grants.armor.map((name) => ({ name, source: featSourceLabel })),
-        weapons: chosenFeatDetail.parsed.grants.weapons.map((name) => ({ name, source: featSourceLabel })),
-        saves: chosenFeatDetail.parsed.grants.savingThrows.map((name) => ({ name, source: featSourceLabel })),
-        masteries: [] as LevelUpTaggedEntry[],
-        spells: [
-          ...chosenFeatDetail.parsed.grants.cantrips.map((name) => ({ name, source: featSourceLabel })),
-          ...chosenFeatDetail.parsed.grants.spells.map((name) => ({ name, source: featSourceLabel })),
-        ],
-        expertise: [] as LevelUpTaggedEntry[],
-      }
+    ? collectFeatTaggedEntries({
+        feat: chosenFeatDetail,
+        sourceLabel: featSourceLabel,
+        selectedChoices: chosenFeatOptions,
+        getChoiceKey: (choice) => `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`,
+      })
     : null;
-
-  if (chosenFeatDetail && selectedFeatEntries) {
-    for (const choice of featChoiceEntries) {
-      const selected = chosenFeatOptions[`levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`] ?? [];
-      for (const name of selected) {
-        const kind = classifyFeatSelection(choice, name);
-        if (kind === "skill") selectedFeatEntries.skills.push({ name, source: featSourceLabel });
-        else if (kind === "tool") selectedFeatEntries.tools.push({ name, source: featSourceLabel });
-        else if (kind === "language") selectedFeatEntries.languages.push({ name, source: featSourceLabel });
-        else if (kind === "weapon_mastery") selectedFeatEntries.masteries.push({ name, source: featSourceLabel });
-        if (choice.type === "expertise") selectedFeatEntries.expertise.push({ name, source: featSourceLabel });
-        if (choice.type === "spell" || choice.type === "spell_list") selectedFeatEntries.spells.push({ name, source: featSourceLabel });
-      }
-    }
-  }
 
   const nextChosenFeatOptions = {
     ...((char.characterData?.chosenFeatOptions ?? {}) as Record<string, string[]>),

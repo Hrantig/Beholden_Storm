@@ -63,7 +63,8 @@ export type ScalingDice =
 
 export interface EffectGate {
   duration?: EffectDuration;
-  armorState?: "any" | "no_armor" | "not_heavy";
+  /** "not_unarmored" = armor must be worn (Defense fighting style, etc.) */
+  armorState?: "any" | "no_armor" | "not_heavy" | "not_unarmored";
   shieldAllowed?: boolean;
   weaponTag?: "melee" | "ranged" | "finesse" | "light" | "simple" | "martial";
   attackAbility?: AbilKey;
@@ -243,7 +244,29 @@ export interface NarrativeEffect extends FeatureEffectBase {
   description: string;
 }
 
+/**
+ * Represents an ability score bonus granted by a feat or feature.
+ *
+ * mode "fixed"  — a specific ability is increased (e.g. Actor: +1 CHA).
+ * mode "choice" — the player picks from a constrained set (chooseFrom) or
+ *                 any ability (chooseFrom undefined); used for feats like
+ *                 Athlete (+1 STR or DEX) and ASI free-choice.
+ */
+export interface AbilityScoreEffect extends FeatureEffectBase {
+  type: "ability_score";
+  mode: "fixed" | "choice";
+  /** Set when mode === "fixed": which ability receives the bonus. */
+  ability?: AbilKey;
+  /** Set when mode === "choice" and the options are restricted (e.g. [str, dex]). */
+  chooseFrom?: AbilKey[];
+  /** How many abilities the player improves (default 1). */
+  choiceCount: number;
+  /** Points added to each chosen ability. */
+  amount: number;
+}
+
 export type FeatureEffect =
+  | AbilityScoreEffect
   | ResourceGrantEffect
   | SpellGrantEffect
   | ProficiencyGrantEffect
@@ -267,6 +290,7 @@ export interface ParsedFeatureEffects {
 }
 
 export const FEATURE_EFFECT_PRIORITIES: Record<FeatureEffect["type"], number> = {
+  ability_score: 5,
   proficiency_grant: 10,
   weapon_mastery: 20,
   resource_grant: 30,

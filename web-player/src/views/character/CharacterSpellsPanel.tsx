@@ -2,7 +2,7 @@ import React from "react";
 import { api } from "@/services/api";
 import { C } from "@/lib/theme";
 import { CollapsiblePanel } from "@/views/character/CharacterViewParts";
-import { type InventoryItem, getEquipState, parseItemSpells } from "@/views/character/CharacterInventory";
+import { type InventoryItem, type ParsedItemSpell, getEquipState, parseItemSpells } from "@/views/character/CharacterInventory";
 import type { GrantedSpellCast, ResourceCounter } from "@/views/character/CharacterSheetTypes";
 
 interface ClassCounterDef {
@@ -519,27 +519,6 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
 }
 
 // ---------------------------------------------------------------------------
-// ItemSpellsPanel
-// ---------------------------------------------------------------------------
-
-interface FetchedSpellDetail {
-  id: string;
-  name: string;
-  level: number | null;
-  school: string | null;
-  time: string | null;
-  range: string | null;
-  components: string | null;
-  duration: string | null;
-  concentration: number | boolean;
-  ritual: number | boolean;
-  classes: string | null;
-  text: string | string[];
-  damage: { dice: string; type: string } | null;
-  save: string | null;
-}
-
-// ---------------------------------------------------------------------------
 // SpellDrawer
 // ---------------------------------------------------------------------------
 
@@ -556,7 +535,7 @@ function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
   const isRitual = Boolean(spell.ritual);
   const levelLabel = spell.level === 0 ? "Cantrip" : `${ORDINALS[spell.level ?? 0] ?? `Level ${spell.level}`} spell`;
   const scaledDamage = getScaledSpellDamage(spell, charLevel ?? 1, maxSlotLevel ?? Math.max(1, spell.level ?? 1));
-  const dmgColor = scaledDamage ? (DMG_COLORS[scaledDamage.type] ?? C.text) : null;
+  const dmgColor = scaledDamage ? (DMG_COLORS[scaledDamage.type] ?? C.text) : undefined;
 
   return (
     <>

@@ -17,6 +17,9 @@ export interface LevelUpFeatChoice {
   options: string[] | null;
   anyOf?: string[];
   amount?: number | null;
+  level?: number | null;
+  linkedTo?: string | null;
+  distinct?: boolean;
   note?: string | null;
 }
 
@@ -178,14 +181,16 @@ export function FeatSelectionSection(props: {
   onChooseFeat: (featId: string) => void;
   chosenFeatDetail: LevelUpFeatDetail | null;
   featPrereqsMet: boolean;
+  featRepeatableValid: boolean;
   featChoiceEntries: LevelUpFeatChoice[];
+  featChoiceOptionsByKey: Record<string, string[]>;
   chosenFeatOptions: Record<string, string[]>;
   nextLevel: number;
   onToggleFeatOption: (choiceKey: string, option: string, count: number) => void;
 }) {
   const {
     accentColor, featSearch, onFeatSearchChange, chosenFeatId, filteredFeatSummaries, onChooseFeat,
-    chosenFeatDetail, featPrereqsMet, featChoiceEntries, chosenFeatOptions, nextLevel, onToggleFeatOption,
+    chosenFeatDetail, featPrereqsMet, featRepeatableValid, featChoiceEntries, featChoiceOptionsByKey, chosenFeatOptions, nextLevel, onToggleFeatOption,
   } = props;
 
   return (
@@ -258,6 +263,11 @@ export function FeatSelectionSection(props: {
               Prerequisite not met. This feat can't be chosen right now.
             </div>
           )}
+          {featPrereqsMet && !featRepeatableValid && (
+            <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, fontWeight: 800 }}>
+              This feat has already been taken and isn't repeatable.
+            </div>
+          )}
           {chosenFeatDetail.text && (
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
               {stripPrerequisiteLine(chosenFeatDetail.text).replace(/Source:.*$/ms, "").trim()}
@@ -271,21 +281,32 @@ export function FeatSelectionSection(props: {
           {featChoiceEntries.map((choice) => {
             const choiceKey = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
             const selected = chosenFeatOptions[choiceKey] ?? [];
-            const options = getFeatChoiceOptions(choice);
+            const options = featChoiceOptionsByKey[choiceKey] ?? getFeatChoiceOptions(choice);
             return (
               <div key={choiceKey}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>
-                    {choice.type === "ability_score" ? "Ability Score Choice" : chosenFeatDetail.name}
+                    {choice.type === "ability_score"
+                      ? "Ability Score Choice"
+                      : choice.type === "spell_list"
+                        ? "Spell List Choice"
+                        : choice.type === "spell"
+                          ? "Spell Choice"
+                          : chosenFeatDetail.name}
                   </div>
                   <div style={{ fontSize: 12, color: selected.length >= choice.count ? accentColor : C.muted }}>
                     {selected.length} / {choice.count}
                   </div>
                 </div>
+                {choice.type === "spell" && options.length === 0 && (
+                  <div style={{ marginBottom: 8, fontSize: 11, color: C.muted }}>
+                    {choice.linkedTo ? "Choose the spell list first." : "No eligible spell options found."}
+                  </div>
+                )}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {options.map((option) => {
                     const isSelected = selected.includes(option);
-                    const blocked = !featPrereqsMet || (!isSelected && selected.length >= choice.count);
+                    const blocked = !featPrereqsMet || !featRepeatableValid || (!isSelected && selected.length >= choice.count);
                     return (
                       <ChoiceBtn
                         key={option}

@@ -3,9 +3,12 @@ import { abilityMod } from "@/views/character/CharacterSheetUtils";
 import {
   ABILITY_NAME_TO_KEY,
   ABILITY_SCORE_NAMES,
+  ARMOR_PROFICIENCY_OPTIONS,
   ALL_LANGUAGES,
   ALL_SKILLS,
   ALL_TOOLS,
+  SAVING_THROW_OPTIONS,
+  WEAPON_PROFICIENCY_OPTIONS,
   WEAPON_MASTERY_KINDS,
   WEAPON_MASTERY_KIND_SET,
 } from "@/views/character-creator/CharacterCreatorConstants";
@@ -316,6 +319,9 @@ export function getFeatChoiceOptions(choice: CreatorParsedFeatChoiceLike): strin
     if (kind === "skill") SKILL_NAMES.forEach((item) => combined.add(item));
     if (kind === "tool") ALL_TOOLS.forEach((item) => combined.add(item));
     if (kind === "language") ALL_LANGUAGES.forEach((item) => combined.add(item));
+    if (kind === "armor") ARMOR_PROFICIENCY_OPTIONS.forEach((item) => combined.add(item));
+    if (kind === "weapon") WEAPON_PROFICIENCY_OPTIONS.forEach((item) => combined.add(item));
+    if (kind === "saving_throw" || kind === "save") SAVING_THROW_OPTIONS.forEach((item) => combined.add(item));
   }
   return [...combined].sort((a, b) => a.localeCompare(b));
 }
@@ -323,15 +329,20 @@ export function getFeatChoiceOptions(choice: CreatorParsedFeatChoiceLike): strin
 export function classifyFeatSelection(
   choice: CreatorParsedFeatChoiceLike,
   value: string,
-): "skill" | "tool" | "language" | "weapon_mastery" | null {
+): "skill" | "tool" | "language" | "armor" | "weapon" | "saving_throw" | "weapon_mastery" | null {
   if (choice.type === "weapon_mastery") return "weapon_mastery";
   if (choice.anyOf?.length === 1) {
     const only = choice.anyOf[0];
     if (only === "skill" || only === "tool" || only === "language") return only;
+    if (only === "armor" || only === "weapon") return only;
+    if (only === "saving_throw" || only === "save") return "saving_throw";
   }
   if (SKILL_NAMES.includes(value)) return "skill";
   if (ALL_TOOLS.includes(value)) return "tool";
   if (ALL_LANGUAGES.includes(value)) return "language";
+  if (ARMOR_PROFICIENCY_OPTIONS.some((item) => item.toLowerCase() === value.toLowerCase())) return "armor";
+  if (WEAPON_PROFICIENCY_OPTIONS.some((item) => item.toLowerCase() === value.toLowerCase())) return "weapon";
+  if (SAVING_THROW_OPTIONS.some((item) => item.toLowerCase() === value.toLowerCase())) return "saving_throw";
   if (WEAPON_MASTERY_KIND_SET.has(value)) return "weapon_mastery";
   return null;
 }

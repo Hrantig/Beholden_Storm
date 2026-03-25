@@ -9,6 +9,9 @@ export interface Step5FeatChoiceLike {
   options: string[] | null;
   anyOf?: string[];
   amount?: number | null;
+  level?: number | null;
+  linkedTo?: string | null;
+  distinct?: boolean;
   note?: string | null;
 }
 
@@ -25,6 +28,7 @@ export interface Step5ParsedFeatLike {
 
 export interface Step5BackgroundFeatLike {
   name: string;
+  text?: string;
   parsed: Step5ParsedFeatLike;
 }
 
@@ -83,6 +87,7 @@ export interface Step5ChoiceStateArgs {
   classFeatChoices: Step5ClassFeatChoiceLike[];
   classFeatDetails: Record<string, Step5BackgroundFeatLike>;
   raceFeatDetail: Step5BackgroundFeatLike | null;
+  levelUpFeatDetails: Array<{ level: number; featId: string; feat: Step5BackgroundFeatLike }>;
   classLanguageChoice: Step5LanguageChoiceLike | null;
   coreLanguageChoice: Step5LanguageChoiceLike | null;
   classExpertiseChoices: Step5ClassExpertiseChoiceLike[];
@@ -95,8 +100,10 @@ export interface Step5ChoiceState {
   raceFeatChoices: Step5EntryWithChoice[];
   selectedClassFeatEntries: Array<{ choice: Step5ClassFeatChoiceLike; detail: Step5BackgroundFeatLike }>;
   classSelectedFeatChoices: Step5EntryWithChoice[];
+  allFeatChoices: Step5EntryWithChoice[];
   missingClassFeatChoices: boolean;
   missingClassExpertiseChoices: boolean;
+  missingFeatOptionSelections: boolean;
   missingCoreLanguages: boolean;
   missingClassLanguages: boolean;
   hasAnything: boolean;
@@ -144,6 +151,7 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
     classFeatChoices,
     classFeatDetails,
     raceFeatDetail,
+    levelUpFeatDetails,
     classLanguageChoice,
     coreLanguageChoice,
     classExpertiseChoices,
@@ -167,7 +175,9 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
         parsedChoice.type === "proficiency" ||
         parsedChoice.type === "weapon_mastery" ||
         parsedChoice.type === "expertise" ||
-        parsedChoice.type === "ability_score"
+        parsedChoice.type === "ability_score" ||
+        parsedChoice.type === "spell" ||
+        parsedChoice.type === "spell_list"
       )
       .map((parsedChoice) => ({
         featName: detail.name,
@@ -188,7 +198,9 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
           choice.type === "proficiency" ||
           choice.type === "weapon_mastery" ||
           choice.type === "expertise" ||
-          choice.type === "ability_score"
+          choice.type === "ability_score" ||
+          choice.type === "spell" ||
+          choice.type === "spell_list"
         )
         .map((choice) => ({
           featName: raceFeatDetail.name,
@@ -197,6 +209,24 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
           key: `race:${raceFeatDetail.name}:${choice.id}`,
         }))
     : [];
+  const levelUpFeatChoices: Step5EntryWithChoice[] = levelUpFeatDetails.flatMap(({ level, featId, feat }) =>
+    feat.parsed.choices
+      .filter((choice) =>
+        choice.type === "proficiency" ||
+        choice.type === "weapon_mastery" ||
+        choice.type === "expertise" ||
+        choice.type === "ability_score" ||
+        choice.type === "spell" ||
+        choice.type === "spell_list"
+      )
+      .map((choice) => ({
+        featName: feat.name,
+        feat: feat.parsed,
+        choice,
+        key: `levelupfeat:${level}:${featId}:${choice.id}`,
+        sourceLabel: `Level ${level}`,
+      }))
+  );
 
   const chosenBgFeatSkills = selectedFeatOptionsMatching(form.chosenFeatOptions, bgFeatChoices, "skill");
   const chosenBgFeatTools = selectedFeatOptionsMatching(form.chosenFeatOptions, bgFeatChoices, "tool");
@@ -207,6 +237,9 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
   const chosenClassFeatSkills = selectedFeatOptionsMatching(form.chosenFeatOptions, classSelectedFeatChoices, "skill");
   const chosenClassFeatTools = selectedFeatOptionsMatching(form.chosenFeatOptions, classSelectedFeatChoices, "tool");
   const chosenClassFeatLanguages = selectedFeatOptionsMatching(form.chosenFeatOptions, classSelectedFeatChoices, "language");
+  const chosenLevelUpFeatSkills = selectedFeatOptionsMatching(form.chosenFeatOptions, levelUpFeatChoices, "skill");
+  const chosenLevelUpFeatTools = selectedFeatOptionsMatching(form.chosenFeatOptions, levelUpFeatChoices, "tool");
+  const chosenLevelUpFeatLanguages = selectedFeatOptionsMatching(form.chosenFeatOptions, levelUpFeatChoices, "language");
 
   const takenSkillKeys = new Set<string>(
     [
@@ -216,6 +249,7 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
       ...chosenBgFeatSkills,
       ...chosenRaceFeatSkills,
       ...chosenClassFeatSkills,
+      ...chosenLevelUpFeatSkills,
     ].map(normalizeChoiceKey)
   );
   const takenToolKeys = new Set<string>(
@@ -226,6 +260,7 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
       ...chosenBgFeatTools,
       ...chosenRaceFeatTools,
       ...chosenClassFeatTools,
+      ...chosenLevelUpFeatTools,
     ].map(normalizeChoiceKey)
   );
   const takenLanguageKeys = new Set<string>(
@@ -239,6 +274,7 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
       ...chosenBgFeatLanguages,
       ...chosenRaceFeatLanguages,
       ...chosenClassFeatLanguages,
+      ...chosenLevelUpFeatLanguages,
     ].map(normalizeChoiceKey)
   );
   const takenExpertiseKeys = new Set<string>(
@@ -247,13 +283,16 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
       ...bgFeatChoices.flatMap(({ key, choice }) => (choice.type === "expertise" ? (form.chosenFeatOptions[key] ?? []) : [])),
       ...raceFeatChoices.flatMap(({ key, choice }) => (choice.type === "expertise" ? (form.chosenFeatOptions[key] ?? []) : [])),
       ...classSelectedFeatChoices.flatMap(({ key, choice }) => (choice.type === "expertise" ? (form.chosenFeatOptions[key] ?? []) : [])),
+      ...levelUpFeatChoices.flatMap(({ key, choice }) => (choice.type === "expertise" ? (form.chosenFeatOptions[key] ?? []) : [])),
     ].map(normalizeChoiceKey)
   );
 
   const missingClassFeatChoices = classFeatChoices.some((choice) => !form.chosenClassFeatIds[choice.featureName]);
   const missingClassExpertiseChoices = classExpertiseChoices.some((choice) => (form.chosenFeatOptions[choice.key] ?? []).length < choice.count);
-  const missingCoreLanguages = Boolean(coreLanguageChoice) && form.chosenRaceLanguages.length < coreLanguageChoice.choose;
-  const missingClassLanguages = Boolean(classLanguageChoice) && form.chosenClassLanguages.length < classLanguageChoice.choose;
+  const allFeatChoices = [...bgFeatChoices, ...raceFeatChoices, ...classSelectedFeatChoices, ...levelUpFeatChoices];
+  const missingFeatOptionSelections = allFeatChoices.some(({ key, choice }) => (form.chosenFeatOptions[key] ?? []).length < choice.count);
+  const missingCoreLanguages = form.chosenRaceLanguages.length < (coreLanguageChoice?.choose ?? 0);
+  const missingClassLanguages = form.chosenClassLanguages.length < (classLanguageChoice?.choose ?? 0);
   const hasAnything =
     classFeatChoices.length > 0 ||
     classSelectedFeatChoices.length > 0 ||
@@ -273,8 +312,10 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
     raceFeatChoices,
     selectedClassFeatEntries,
     classSelectedFeatChoices,
+    allFeatChoices,
     missingClassFeatChoices,
     missingClassExpertiseChoices,
+    missingFeatOptionSelections,
     missingCoreLanguages,
     missingClassLanguages,
     hasAnything,

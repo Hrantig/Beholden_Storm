@@ -25,6 +25,29 @@ export const ALL_LANGUAGES = [
   "Sign Language","Thieves' Cant",
 ];
 
+export const ARMOR_PROFICIENCY_OPTIONS = [
+  "Light Armor",
+  "Medium Armor",
+  "Heavy Armor",
+  "Shield",
+  "Shields",
+];
+
+export const WEAPON_PROFICIENCY_OPTIONS = [
+  "Simple Weapons",
+  "Martial Weapons",
+  "Improvised Weapons",
+];
+
+export const SAVING_THROW_OPTIONS = [
+  "Strength",
+  "Dexterity",
+  "Constitution",
+  "Intelligence",
+  "Wisdom",
+  "Charisma",
+];
+
 export const WEAPON_MASTERY_KINDS = [
   "Battleaxe","Blowgun","Club","Dagger","Dart","Flail","Glaive","Greataxe","Greatclub","Greatsword",
   "Halberd","Hand Crossbow","Handaxe","Heavy Crossbow","Javelin","Lance","Light Crossbow","Light Hammer",

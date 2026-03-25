@@ -78,7 +78,7 @@ export interface CharacterHudPanelProps {
   hpAmount: string;
   hd: number | null;
   lastRoll: number | null;
-  hpInputRef: React.RefObject<HTMLInputElement | null>;
+  hpInputRef: React.RefObject<HTMLInputElement>;
   setHpError: (value: string | null) => void;
   setLastRoll: (value: number | null) => void;
   setHpAmount: (value: string) => void;

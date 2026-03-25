@@ -4,6 +4,7 @@ import { api, jsonInit } from "@/services/api";
 import { C } from "@/lib/theme";
 import { rollDiceExpr } from "@/lib/dice";
 import { abilityMod, formatModifier } from "@/views/character/CharacterSheetUtils";
+import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 import {
   getCantripCount,
   getClassExpertiseChoices,
@@ -53,6 +54,9 @@ interface ParsedFeatChoice {
   options: string[] | null;
   anyOf?: string[];
   amount?: number | null;
+  level?: number | null;
+  linkedTo?: string | null;
+  distinct?: boolean;
   note?: string | null;
 }
 
@@ -135,6 +139,7 @@ const ABILITY_LABELS: Record<string, string> = {
 
 // Spell slot columns: index 1–9 map to spell levels
 const SLOT_LABELS = ["Cantrips", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+const FEAT_SPELL_LIST_NAMES = new Set(["Artificer", "Bard", "Cleric", "Druid", "Paladin", "Ranger", "Sorcerer", "Warlock", "Wizard"]);
 
 // ---------------------------------------------------------------------------
 // Component
@@ -171,9 +176,11 @@ export function LevelUpView() {
   const [chosenFeatId, setChosenFeatId] = useState<string>("");
   const [chosenFeatDetail, setChosenFeatDetail] = useState<FeatDetail | null>(null);
   const [chosenFeatOptions, setChosenFeatOptions] = useState<Record<string, string[]>>({});
+  const [featSpellChoiceOptions, setFeatSpellChoiceOptions] = useState<Record<string, SpellSummary[]>>({});
   const [classCantrips, setClassCantrips] = useState<SpellSummary[]>([]);
   const [classSpells, setClassSpells] = useState<SpellSummary[]>([]);
   const [classInvocations, setClassInvocations] = useState<SpellSummary[]>([]);
+  const nextLevel = (char?.level ?? 0) + 1;
 
   // -------------------------------------------------------------------------
   // Load character + class
@@ -236,8 +243,6 @@ export function LevelUpView() {
       .catch(() => setChosenFeatDetail(null));
   }, [chosenFeatId]);
 
-  const nextLevel = (char?.level ?? 0) + 1;
-
   const hd = classDetail?.hd ?? 8;
   const conScore = char?.conScore ?? 10;
   const conMod = abilityMod(conScore);
@@ -258,11 +263,23 @@ export function LevelUpView() {
   const maxSpellLevel = classDetail ? getMaxSlotLevel(classDetail, nextLevel, subclass) : 0;
   const spellcaster = classDetail ? isSpellcaster(classDetail, nextLevel, subclass) : false;
   const expertiseChoices = classDetail ? getClassExpertiseChoices(classDetail, nextLevel) : [];
-  const proficientSkills = Array.isArray(char?.characterData?.proficiencies?.skills)
-    ? char.characterData?.proficiencies?.skills.map((entry) => entry.name)
+  const charProficiencies: ProficiencyMap = {
+    skills: Array.isArray(char?.characterData?.proficiencies?.skills) ? char.characterData.proficiencies.skills : [],
+    expertise: Array.isArray(char?.characterData?.proficiencies?.expertise) ? char.characterData.proficiencies.expertise : [],
+    saves: Array.isArray(char?.characterData?.proficiencies?.saves) ? char.characterData.proficiencies.saves : [],
+    tools: Array.isArray(char?.characterData?.proficiencies?.tools) ? char.characterData.proficiencies.tools : [],
+    languages: Array.isArray(char?.characterData?.proficiencies?.languages) ? char.characterData.proficiencies.languages : [],
+    armor: Array.isArray(char?.characterData?.proficiencies?.armor) ? char.characterData.proficiencies.armor : [],
+    weapons: Array.isArray(char?.characterData?.proficiencies?.weapons) ? char.characterData.proficiencies.weapons : [],
+    spells: Array.isArray(char?.characterData?.proficiencies?.spells) ? char.characterData.proficiencies.spells : [],
+    invocations: Array.isArray(char?.characterData?.proficiencies?.invocations) ? char.characterData.proficiencies.invocations : [],
+    masteries: Array.isArray(char?.characterData?.proficiencies?.masteries) ? char.characterData.proficiencies.masteries : [],
+  };
+  const proficientSkills = Array.isArray(charProficiencies?.skills)
+    ? charProficiencies.skills.map((entry) => entry.name)
     : [];
-  const existingExpertise = Array.isArray(char?.characterData?.proficiencies?.expertise)
-    ? char.characterData?.proficiencies?.expertise.map((entry) => entry.name)
+  const existingExpertise = Array.isArray(charProficiencies?.expertise)
+    ? charProficiencies.expertise.map((entry) => entry.name)
     : [];
   const featChoiceEntries = React.useMemo(
     () => (chosenFeatDetail?.parsed.choices ?? []).filter((choice) => choice.type !== "damage_type"),
@@ -327,20 +344,93 @@ export function LevelUpView() {
   useEffect(() => {
     if (!chosenFeatDetail) {
       setChosenFeatOptions({});
+      setFeatSpellChoiceOptions({});
       return;
     }
+  }, [chosenFeatDetail]);
+
+  useEffect(() => {
+    if (!chosenFeatDetail) {
+      setFeatSpellChoiceOptions({});
+      return;
+    }
+    let alive = true;
+    const spellChoices = featChoiceEntries.filter((choice) => choice.type === "spell");
+    if (spellChoices.length === 0) {
+      setFeatSpellChoiceOptions({});
+      return;
+    }
+    Promise.all(
+      spellChoices.map(async (choice) => {
+        const choiceKey = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
+        const linkedChoiceKey = choice.linkedTo ? `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.linkedTo}` : null;
+        const listNames = linkedChoiceKey
+          ? (chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
+          : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
+        if (listNames.length === 0) return [choiceKey, []] as const;
+
+        const groups = await Promise.all(
+          listNames.map(async (listName) => {
+            const encoded = encodeURIComponent(listName);
+            if ((choice.level ?? 0) === 0) {
+              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=0&limit=200`).catch(() => []);
+            }
+            if (typeof choice.level === "number" && /\bat or below\b/i.test(choice.note ?? "")) {
+              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&minLevel=1&maxLevel=${choice.level}&limit=300`).catch(() => []);
+            }
+            if (typeof choice.level === "number") {
+              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=${choice.level}&limit=300`).catch(() => []);
+            }
+            return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&limit=300`).catch(() => []);
+          })
+        );
+
+        const byName = new Map<string, SpellSummary>();
+        for (const spell of groups.flat()) {
+          if (!spell?.name) continue;
+          byName.set(spell.name.toLowerCase(), spell);
+        }
+        return [choiceKey, Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))] as const;
+      })
+    ).then((entries) => {
+      if (alive) setFeatSpellChoiceOptions(Object.fromEntries(entries));
+    }).catch(() => {
+      if (alive) setFeatSpellChoiceOptions({});
+    });
+    return () => { alive = false; };
+  }, [chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel]);
+
+  const featChoiceOptionsByKey = React.useMemo(() => {
+    const entries: Array<[string, string[]]> = [];
+    for (const choice of featChoiceEntries) {
+      const key = `levelupfeat:${nextLevel}:${chosenFeatDetail?.id ?? ""}:${choice.id}`;
+      if (choice.type === "spell") {
+        const spellOptions = featSpellChoiceOptions[key] ?? [];
+        const resolved = spellOptions.length > 0
+          ? spellOptions.map((spell) => spell.name)
+          : getFeatChoiceOptions(choice);
+        entries.push([key, resolved]);
+      } else {
+        entries.push([key, getFeatChoiceOptions(choice)]);
+      }
+    }
+    return Object.fromEntries(entries);
+  }, [chosenFeatDetail?.id, featChoiceEntries, featSpellChoiceOptions, nextLevel]);
+
+  useEffect(() => {
+    if (!chosenFeatDetail) return;
     setChosenFeatOptions((prev) => {
       const next: Record<string, string[]> = {};
       for (const choice of chosenFeatDetail.parsed.choices) {
         const key = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
-        const options = getFeatChoiceOptions(choice);
+        const options = featChoiceOptionsByKey[key] ?? [];
         next[key] = (prev[key] ?? [])
           .filter((value) => options.includes(value))
           .slice(0, choice.count);
       }
       return next;
     });
-  }, [chosenFeatDetail, nextLevel]);
+  }, [chosenFeatDetail, featChoiceOptionsByKey, nextLevel]);
 
   const hpGain = deriveHpGain(hpChoice, hpAverage, rolledHp, manualHp);
   const featAbilityBonuses = React.useMemo(
@@ -358,7 +448,7 @@ export function LevelUpView() {
     () => derivePreviewScores({ baseScores, asiStats, asiMode, featAbilityBonuses }),
     [baseScores, asiStats, asiMode, featAbilityBonuses]
   );
-  const { filteredFeatSummaries, featPrereqsMet, asiTotal, canConfirm } = React.useMemo(
+  const { filteredFeatSummaries, featPrereqsMet, featRepeatableValid, asiTotal, canConfirm } = React.useMemo(
     () =>
       deriveLevelUpValidation({
         isAsiLevel,
@@ -382,10 +472,11 @@ export function LevelUpView() {
         className: classDetail?.name ?? char?.className,
         level: nextLevel,
         scores: baseScores,
-        prof: (char?.characterData?.proficiencies as Character["characterData"]["proficiencies"]) ?? undefined,
+        prof: charProficiencies,
         featSearch,
         featSummaries,
         hpGain,
+        existingLevelUpFeats: char?.characterData?.chosenLevelUpFeats ?? [],
       }),
     [
       isAsiLevel,
@@ -656,9 +747,11 @@ export function LevelUpView() {
               }}
               chosenFeatDetail={chosenFeatDetail}
               featPrereqsMet={featPrereqsMet}
+              featRepeatableValid={featRepeatableValid}
               featChoiceEntries={featChoiceEntries}
-              chosenFeatOptions={chosenFeatOptions}
-              nextLevel={nextLevel}
+                featChoiceOptionsByKey={featChoiceOptionsByKey}
+                chosenFeatOptions={chosenFeatOptions}
+                nextLevel={nextLevel}
               onToggleFeatOption={(choiceKey, option, count) => {
                 setChosenFeatOptions((prev) => {
                   const current = prev[choiceKey] ?? [];
