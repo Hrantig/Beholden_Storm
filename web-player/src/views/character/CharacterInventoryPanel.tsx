@@ -6,8 +6,7 @@ import { Select } from "@/ui/Select";
 import { useVirtualList } from "@/lib/monsterPicker/useVirtualList";
 import { useItemSearch } from "@/views/CompendiumView/hooks/useItemSearch";
 import {
-  Panel,
-  PanelTitle,
+  CollapsiblePanel,
   addBtnStyle,
   cancelBtnStyle,
   inventoryCheckboxLabel,
@@ -18,7 +17,7 @@ import {
   inventoryRarityColor,
   panelHeaderAddBtn,
   toggleFilterPill,
-} from "@/views/CharacterViewParts";
+} from "@/views/character/CharacterViewParts";
 import {
   type CharacterDataLike,
   type CompendiumItemDetail,
@@ -34,6 +33,7 @@ import {
   getEquipState,
   hasArmorProficiency,
   hasStealthDisadvantage,
+  hasWeaponMastery,
   isArmorItem,
   isCurrencyItem,
   isRangedWeapon,
@@ -42,8 +42,9 @@ import {
   normalizeInventoryItemLookupName,
   parseChargesMax,
   parseItemSpells,
+  parseWeaponMastery,
   totalInventoryWeight,
-} from "@/views/CharacterInventory";
+} from "@/views/character/CharacterInventory";
 
 interface InventoryPanelCharacter {
   strScore: number | null;
@@ -208,6 +209,43 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
       return changed ? next : prev;
     });
   }, [itemIndex]);
+
+  useEffect(() => {
+    const missingDescriptionItems = items.filter((item) => item.itemId && item.source !== "custom" && !String(item.description ?? "").trim());
+    if (missingDescriptionItems.length === 0) return;
+    let alive = true;
+    (async () => {
+      try {
+        const details = await Promise.all(
+          missingDescriptionItems.map(async (item) => {
+            const detail = await api<CompendiumItemDetail>(`/api/compendium/items/${item.itemId}`);
+            const description = Array.isArray(detail.text) ? detail.text.join("\n\n") : String(detail.text ?? "");
+            return [item.id, description.trim()] as const;
+          })
+        );
+        if (!alive) return;
+        const descriptionByItemId = new Map(details);
+        const updatedItems = items.map((item) => {
+          const description = descriptionByItemId.get(item.id);
+          if (!description) return item;
+          return {
+            ...item,
+            description,
+            chargesMax: item.chargesMax ?? parseChargesMax(description) ?? null,
+            charges: item.charges ?? (item.chargesMax ?? parseChargesMax(description) ?? null),
+          };
+        });
+        const changed = updatedItems.some((item, index) => item !== items[index]);
+        if (!changed) return;
+        const normalizedContainers = normalizeContainers(containers);
+        setItems(updatedItems);
+        await onSave({ inventory: updatedItems, inventoryContainers: normalizedContainers });
+      } catch {
+        // Ignore hydration failures; inventory still works without enriched descriptions.
+      }
+    })();
+    return () => { alive = false; };
+  }, [items, containers, onSave]);
 
   useEffect(() => {
     if (!expandedItemId) {
@@ -389,7 +427,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
     if (!item || !isWeaponItem(item)) return;
     const state = getEquipState(item);
     if (state === "backpack" || state === "offhand") {
-      await setEquipStateFor(id, "mainhand-1h");
+      await setEquipStateFor(id, !item.dmg1 && item.dmg2 ? "mainhand-2h" : "mainhand-1h");
       return;
     }
     if (state === "mainhand-1h" && canUseTwoHands(item)) {
@@ -496,20 +534,12 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
     : items.filter((it) => it.attuned).length;
 
   return (
-    <Panel>
-      <PanelTitle color={accentColor} actions={
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          title="Add item"
-          style={panelHeaderAddBtn(accentColor)}
-        >
-          +
-        </button>
-      }>
-        Inventory
-        {saving && <span style={{ fontSize: 9, color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}
-      </PanelTitle>
+    <CollapsiblePanel
+      title={<>Inventory{saving && <span style={{ fontSize: 9, color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}</>}
+      color={accentColor}
+      storageKey="inventory"
+      actions={<button type="button" onClick={() => setPickerOpen(true)} title="Add item" style={panelHeaderAddBtn(accentColor)}>+</button>}
+    >
 
       <div style={{
         display: "flex",
@@ -816,7 +846,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
           }}
         />
       ) : null}
-    </Panel>
+    </CollapsiblePanel>
   );
 }
 
@@ -840,12 +870,8 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
   const mainLabel = state === "mainhand-2h" ? "2H" : "1H";
   const equipped = state !== "backpack";
   const lacksArmorProficiency = equipped && (isArmor || isShieldItem(item)) && !hasArmorProficiency(item, charData?.proficiencies as any);
-  const stateLabel =
-    state === "mainhand-2h" ? "Main Hand (2H)"
-      : state === "mainhand-1h" ? "Main Hand (1H)"
-      : state === "offhand" ? "Offhand"
-      : state === "worn" ? "Equipped"
-      : null;
+  const mastery = isWeapon ? parseWeaponMastery(item) : null;
+  const mastered = isWeapon && hasWeaponMastery(item, charData?.proficiencies as any);
   const meta = [
     item.rarity ? titleCase(item.rarity) : null,
     item.type ?? null,
@@ -934,9 +960,52 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                 A
               </span>
             )}
+            {mastered && mastery && (
+              <span
+                title={`Weapon Mastery: ${mastery.name}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  border: "1px solid rgba(251,191,36,0.45)",
+                  background: "rgba(251,191,36,0.14)",
+                  color: "#fbbf24",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  padding: "0 6px",
+                }}
+              >
+                {mastery.name}
+              </span>
+            )}
             {hasStealthDisadvantage(item) && (
               <span
                 title="Disadvantage on Stealth checks"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  border: "1px solid rgba(248,113,113,0.55)",
+                  background: "rgba(248,113,113,0.14)",
+                  color: "#f87171",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                }}
+                >
+                  D
+                </span>
+              )}
+            {lacksArmorProficiency && (
+              <span
+                title="Disadvantage from wearing armor or a shield without proficiency"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -955,36 +1024,9 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                 D
               </span>
             )}
-            {lacksArmorProficiency && (
-              <span
-                title="You are not proficient with this armor or shield"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: 999,
-                  border: "1px solid rgba(248,113,113,0.55)",
-                  background: "rgba(248,113,113,0.14)",
-                  color: "#f87171",
-                  fontSize: 11,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  padding: "0 6px",
-                }}
-              >
-                NP
-              </span>
-            )}
           </div>
           {meta && (
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{meta}</div>
-          )}
-          {stateLabel && (
-            <div style={{ fontSize: 10, color: accentColor, marginTop: 2, fontWeight: 700 }}>
-              {stateLabel}
-            </div>
           )}
           {lacksArmorProficiency && (
             <div style={{ fontSize: 10, color: "#f87171", marginTop: 2, fontWeight: 700 }}>
@@ -1482,7 +1524,13 @@ function InventoryItemPickerModal(props: {
     }
     let alive = true;
     api<CompendiumItemDetail>(`/api/compendium/items/${selectedId}`)
-      .then((data) => { if (alive) setDetail(data); })
+      .then((data) => {
+        if (!alive) return;
+        setDetail(data);
+        const parenQty = data.name?.match(/\((\d+)\)$/);
+        if (parenQty) setQty(parseInt(parenQty[1], 10));
+        else setQty(1);
+      })
       .catch(() => { if (alive) setDetail(null); });
     return () => { alive = false; };
   }, [props.isOpen, createMode, selectedId]);
@@ -1690,7 +1738,7 @@ function InventoryItemPickerModal(props: {
                 if (!detail) return;
                 props.onAdd({
                   source: "compendium",
-          name: detail.name,
+                  name: detail.name.replace(/\s*\(\d+\)$/, "").trim(),
                   quantity: qty,
                   itemId: detail.id,
                   rarity: detail.rarity,
@@ -1853,3 +1901,4 @@ const stepperBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   padding: 0, lineHeight: 1,
 };
+

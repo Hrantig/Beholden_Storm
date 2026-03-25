@@ -193,6 +193,7 @@ export function MonsterBrowserPanel(props: {
   return (
     <>
       <Panel
+        storageKey="compendium-monsters"
         title="Monsters"
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

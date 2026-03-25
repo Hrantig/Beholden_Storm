@@ -1,4 +1,4 @@
-import { ABILITY_LABELS, ALL_SKILLS } from "@/views/CharacterSheetConstants";
+import { ABILITY_LABELS, ALL_SKILLS } from "@/views/character/CharacterSheetConstants";
 
 export { ABILITY_LABELS, ALL_SKILLS };
 
@@ -63,3 +63,4 @@ export const STANDARD_55E_LANGUAGES = [
   "Halfling",
   "Orc",
 ];
+

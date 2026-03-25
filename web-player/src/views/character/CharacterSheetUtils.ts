@@ -1,4 +1,5 @@
-import type { TaggedItem } from "@/views/CharacterSheetTypes";
+import type { TaggedItem } from "@/views/character/CharacterSheetTypes";
+import type { AbilKey, ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 
 export function abilityMod(score: number | null | undefined): number {
   return Math.floor(((score ?? 10) - 10) / 2);
@@ -14,6 +15,78 @@ export function proficiencyBonus(level: number): number {
 
 export function hasNamedProficiency(list: Array<Pick<TaggedItem, "name">> | null | undefined, name: string): boolean {
   return (list ?? []).some((s) => String(s.name).toLowerCase() === name.toLowerCase());
+}
+
+export function proficiencyValue(level: number, tier: 0 | 0.5 | 1 | 2): number {
+  const pb = proficiencyBonus(level);
+  if (tier === 2) return pb * 2;
+  if (tier === 1) return pb;
+  if (tier === 0.5) return Math.floor(pb / 2);
+  return 0;
+}
+
+export function getSkillProficiencyTier(
+  prof: ProficiencyMap | null | undefined,
+  skillName: string,
+  opts?: { jackOfAllTrades?: boolean },
+): 0 | 0.5 | 1 | 2 {
+  if (hasNamedProficiency(prof?.expertise, skillName)) return 2;
+  if (hasNamedProficiency(prof?.skills, skillName)) return 1;
+  if (opts?.jackOfAllTrades) return 0.5;
+  return 0;
+}
+
+export function getSkillBonus(
+  skillName: string,
+  abilityKey: AbilKey,
+  scores: Record<AbilKey, number | null>,
+  level: number,
+  prof: ProficiencyMap | null | undefined,
+  opts?: { jackOfAllTrades?: boolean },
+): number {
+  return abilityMod(scores[abilityKey]) + proficiencyValue(level, getSkillProficiencyTier(prof, skillName, opts));
+}
+
+export function getSaveBonus(
+  abilityName: string,
+  abilityKey: AbilKey,
+  scores: Record<AbilKey, number | null>,
+  level: number,
+  prof: ProficiencyMap | null | undefined,
+): number {
+  return abilityMod(scores[abilityKey]) + (hasNamedProficiency(prof?.saves, abilityName) ? proficiencyBonus(level) : 0);
+}
+
+export function getInitiativeBonus(
+  dexScore: number | null | undefined,
+  level: number,
+  opts?: { jackOfAllTrades?: boolean },
+): number {
+  return abilityMod(dexScore) + (opts?.jackOfAllTrades ? Math.floor(proficiencyBonus(level) / 2) : 0);
+}
+
+export function getPassiveScore(skillBonus: number): number {
+  return 10 + skillBonus;
+}
+
+export function getUnarmoredDefenseAc(args: {
+  className?: string | null;
+  dexScore?: number | null;
+  conScore?: number | null;
+  wisScore?: number | null;
+  shieldEquipped?: boolean;
+  armorEquipped?: boolean;
+}): number | null {
+  if (args.armorEquipped) return null;
+  const className = String(args.className ?? "");
+  const dexMod = abilityMod(args.dexScore);
+  if (/barbarian/i.test(className)) {
+    return 10 + dexMod + abilityMod(args.conScore);
+  }
+  if (/monk/i.test(className) && !args.shieldEquipped) {
+    return 10 + dexMod + abilityMod(args.wisScore);
+  }
+  return null;
 }
 
 export function normalizeWeaponProficiencyName(name: string): string {
@@ -121,6 +194,56 @@ export function invocationPrerequisitesMet(
   return true;
 }
 
+export function featPrerequisitesMet(
+  text: string | null | undefined,
+  opts: {
+    level: number;
+    className?: string | null;
+    scores?: Partial<Record<AbilKey, number | null | undefined>>;
+    prof?: ProficiencyMap | null | undefined;
+    spellcaster?: boolean;
+  }
+): boolean {
+  const prereq = extractPrerequisite(text);
+  if (!prereq) return true;
+
+  const raw = prereq.toLowerCase();
+  const levelMatch = raw.match(/\blevel\s+(\d+)\+/i);
+  if (levelMatch && opts.level < Number(levelMatch[1])) return false;
+
+  const className = String(opts.className ?? "").toLowerCase();
+  const classMatches = [...raw.matchAll(/\b(barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard|artificer)\b/g)].map((match) => match[1]);
+  if (classMatches.length > 0 && !classMatches.some((name) => className.includes(name))) return false;
+
+  if (/\bspellcasting\b|\bpact magic\b/i.test(raw) && !opts.spellcaster) return false;
+
+  const abilityRequirements: Array<{ key: AbilKey; patterns: RegExp[] }> = [
+    { key: "str", patterns: [/\bstrength\b/i, /\bstr\b/i] },
+    { key: "dex", patterns: [/\bdexterity\b/i, /\bdex\b/i] },
+    { key: "con", patterns: [/\bconstitution\b/i, /\bcon\b/i] },
+    { key: "int", patterns: [/\bintelligence\b/i, /\bint\b/i] },
+    { key: "wis", patterns: [/\bwisdom\b/i, /\bwis\b/i] },
+    { key: "cha", patterns: [/\bcharisma\b/i, /\bcha\b/i] },
+  ];
+
+  for (const requirement of abilityRequirements) {
+    const hasAbilityMention = requirement.patterns.some((pattern) => pattern.test(raw));
+    if (!hasAbilityMention) continue;
+    const scoreMatch = raw.match(/(\d+)\+/);
+    if (!scoreMatch) continue;
+    const score = Number(opts.scores?.[requirement.key] ?? 0);
+    if (score < Number(scoreMatch[1])) return false;
+  }
+
+  if (/\bproficiency with a martial weapon\b/i.test(raw) && !hasNamedProficiency(opts.prof?.weapons, "Martial Weapons")) return false;
+  if (/\bproficiency with a shield\b/i.test(raw) && !hasNamedProficiency(opts.prof?.armor, "Shields")) return false;
+  if (/\bproficiency with light armor\b/i.test(raw) && !hasNamedProficiency(opts.prof?.armor, "Light Armor")) return false;
+  if (/\bproficiency with medium armor\b/i.test(raw) && !hasNamedProficiency(opts.prof?.armor, "Medium Armor")) return false;
+  if (/\bproficiency in the stealth skill\b/i.test(raw) && !hasNamedProficiency(opts.prof?.skills, "Stealth")) return false;
+
+  return true;
+}
+
 export function hpColor(pct: number): string {
   if (pct <= 0) return "#6b7280";
   if (pct < 25) return "#f87171";
@@ -128,3 +251,4 @@ export function hpColor(pct: number): string {
   if (pct < 75) return "#fbbf24";
   return "#4ade80";
 }
+

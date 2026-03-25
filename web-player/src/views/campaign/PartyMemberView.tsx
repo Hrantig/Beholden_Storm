@@ -5,9 +5,9 @@ import { api } from "@/services/api";
 import { IconPlayer, IconShield, IconSpeed, IconInitiative, IconHeart, IconConditionByKey } from "@/icons";
 import { useWs } from "@/services/ws";
 import type { PartyMember } from "./CampaignPartyView";
-import type { AbilKey } from "@/views/CharacterSheetTypes";
-import { ABILITY_LABELS, ALL_SKILLS } from "@/views/CharacterSheetConstants";
-import { abilityMod, formatModifier, hasNamedProficiency, hpColor, proficiencyBonus } from "@/views/CharacterSheetUtils";
+import type { AbilKey } from "@/views/character/CharacterSheetTypes";
+import { ABILITY_LABELS, ALL_SKILLS } from "@/views/character/CharacterSheetConstants";
+import { abilityMod, formatModifier, hasNamedProficiency, hpColor, proficiencyBonus } from "@/views/character/CharacterSheetUtils";
 
 // ---------------------------------------------------------------------------
 // Mini sub-components
@@ -388,3 +388,4 @@ function SpellRow({ name, color }: { name: string; color: string }) {
     </div>
   );
 }
+

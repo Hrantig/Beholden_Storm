@@ -1,0 +1,158 @@
+import React, { useState } from "react";
+import { C } from "@/lib/theme";
+import { CollapsiblePanel } from "@/views/character/CharacterViewParts";
+
+const DAMAGE_TYPE_OPTIONS = [
+  "Acid", "Bludgeoning", "Cold", "Fire", "Force", "Lightning",
+  "Necrotic", "Piercing", "Poison", "Psychic", "Radiant",
+  "Slashing", "Thunder", "Nonmagical B/P/S",
+];
+
+interface DefenseRowProps {
+  label: string;
+  color: string;
+  items: string[];
+  customItems: string[];
+  onAdd: (value: string) => void;
+  onRemove: (value: string) => void;
+  accentColor: string;
+}
+
+function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentColor }: DefenseRowProps) {
+  const [adding, setAdding] = useState(false);
+  const allItems = Array.from(new Set([...items, ...customItems]));
+
+  const remaining = DAMAGE_TYPE_OPTIONS.filter((o) => !allItems.includes(o));
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted }}>
+          {label}
+        </span>
+        {!adding && remaining.length > 0 && (
+          <button
+            onClick={() => setAdding(true)}
+            style={{ all: "unset", cursor: "pointer", fontSize: 11, color: accentColor, fontWeight: 800, lineHeight: 1 }}
+            title={`Add ${label.toLowerCase()}`}
+          >
+            +
+          </button>
+        )}
+      </div>
+      {adding && (
+        <div style={{ marginBottom: 6 }}>
+          <select
+            autoFocus
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 6,
+              color: C.text,
+              fontSize: 12,
+              padding: "3px 6px",
+              cursor: "pointer",
+            }}
+            defaultValue=""
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val) { onAdd(val); setAdding(false); }
+            }}
+            onBlur={() => setAdding(false)}
+          >
+            <option value="" disabled>Select type…</option>
+            {remaining.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {allItems.length === 0 ? (
+        <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>None</span>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {allItems.map((item) => {
+            const isCustom = customItems.includes(item);
+            return (
+              <span
+                key={item}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                  fontSize: 11, fontWeight: 700,
+                  color: color,
+                  background: `${color}18`,
+                  border: `1px solid ${color}44`,
+                  borderRadius: 999,
+                  padding: "2px 8px",
+                }}
+              >
+                {item}
+                {isCustom && (
+                  <button
+                    onClick={() => onRemove(item)}
+                    style={{ all: "unset", cursor: "pointer", fontSize: 10, color: C.muted, lineHeight: 1, marginLeft: 2 }}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface CharacterDefensesPanelProps {
+  resistances: string[];
+  immunities: string[];
+  customResistances: string[];
+  customImmunities: string[];
+  accentColor: string;
+  onCustomResistancesChange: (values: string[]) => void;
+  onCustomImmunitiesChange: (values: string[]) => void;
+}
+
+export function CharacterDefensesPanel({
+  resistances,
+  immunities,
+  customResistances,
+  customImmunities,
+  accentColor,
+  onCustomResistancesChange,
+  onCustomImmunitiesChange,
+}: CharacterDefensesPanelProps) {
+  const hasAnything = resistances.length > 0 || immunities.length > 0 ||
+    customResistances.length > 0 || customImmunities.length > 0;
+
+  // Always render the panel so users can add custom ones
+  void hasAnything;
+
+  return (
+    <CollapsiblePanel title="Defenses" color={accentColor} storageKey="defenses">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <DefenseRow
+          label="Resistances"
+          color="#34d399"
+          items={resistances}
+          customItems={customResistances}
+          accentColor={accentColor}
+          onAdd={(v) => onCustomResistancesChange([...customResistances, v])}
+          onRemove={(v) => onCustomResistancesChange(customResistances.filter((x) => x !== v))}
+        />
+        <DefenseRow
+          label="Immunities"
+          color="#60a5fa"
+          items={immunities}
+          customItems={customImmunities}
+          accentColor={accentColor}
+          onAdd={(v) => onCustomImmunitiesChange([...customImmunities, v])}
+          onRemove={(v) => onCustomImmunitiesChange(customImmunities.filter((x) => x !== v))}
+        />
+      </div>
+    </CollapsiblePanel>
+  );
+}
+

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { C, withAlpha } from "@/lib/theme";
-import type { ClassFeatureEntry, PlayerNote } from "@/views/CharacterSheetTypes";
+import type { ClassFeatureEntry, PlayerNote } from "@/views/character/CharacterSheetTypes";
 
-export function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+export function Tooltip({ text, children, multiline }: { text: string; children: React.ReactNode; multiline?: boolean }) {
   const [visible, setVisible] = useState(false);
 
   if (!text) return <>{children}</>;
@@ -20,10 +20,13 @@ export function Tooltip({ text, children }: { text: string; children: React.Reac
           transform: "translateX(-50%)",
           background: "rgba(10,15,28,0.97)",
           border: "1px solid rgba(255,255,255,0.14)",
-          borderRadius: 6, padding: "4px 8px",
+          borderRadius: 6, padding: "6px 10px",
           fontSize: 11, color: "rgba(160,180,220,0.85)",
-          whiteSpace: "nowrap", zIndex: 200, pointerEvents: "none",
+          whiteSpace: multiline ? "normal" : "nowrap",
+          maxWidth: multiline ? 280 : undefined,
+          zIndex: 200, pointerEvents: "none",
           boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          lineHeight: 1.5,
         }}>
           {text}
         </span>
@@ -42,16 +45,14 @@ export function Wrap({ children, wide }: { children: React.ReactNode; wide?: boo
   );
 }
 
+const PANEL_STYLE: React.CSSProperties = {
+  background: "rgba(255,255,255,0.035)",
+  border: "1px solid rgba(255,255,255,0.09)",
+  borderRadius: 12, padding: "14px 16px",
+};
+
 export function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      background: "rgba(255,255,255,0.035)",
-      border: "1px solid rgba(255,255,255,0.09)",
-      borderRadius: 12, padding: "14px 16px",
-    }}>
-      {children}
-    </div>
-  );
+  return <div style={PANEL_STYLE}>{children}</div>;
 }
 
 export function PanelTitle({ children, color, actions, style }: { children: React.ReactNode; color: string; actions?: React.ReactNode; style?: React.CSSProperties }) {
@@ -66,6 +67,62 @@ export function PanelTitle({ children, color, actions, style }: { children: Reac
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{children}</span>
       <div style={{ flex: 1, height: 1, background: `${color}30` }} />
       {actions ? <div style={{ flexShrink: 0 }}>{actions}</div> : null}
+    </div>
+  );
+}
+
+export function CollapsiblePanel({
+  title, color, actions, children, storageKey, defaultOpen = true,
+}: {
+  title: React.ReactNode;
+  color: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  storageKey: string;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem(`panel:${storageKey}`);
+      if (v !== null) return v !== "0";
+    } catch { /* ignore */ }
+    return defaultOpen;
+  });
+
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(`panel:${storageKey}`, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  return (
+    <div style={PANEL_STYLE}>
+      <div
+        onClick={toggle}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          cursor: "pointer", userSelect: "none",
+          marginBottom: open ? 10 : 0,
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color, display: "flex", alignItems: "center", gap: 6 }}>
+          {title}
+        </span>
+        <div style={{ flex: 1, height: 1, background: `${color}30` }} />
+        {actions && (
+          <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>{actions}</div>
+        )}
+        <span style={{
+          color, fontSize: 10, lineHeight: 1,
+          transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+          transition: "transform 120ms ease",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 10, flexShrink: 0,
+        }}>▼</span>
+      </div>
+      {open && children}
     </div>
   );
 }
@@ -458,3 +515,4 @@ export function NoteEditDrawer(props: {
     </>
   );
 }
+

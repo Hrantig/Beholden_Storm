@@ -1,5 +1,5 @@
-import type { Ruleset } from "@/lib/characterRules";
-import { abilityMod } from "@/views/CharacterSheetUtils";
+import { wordOrNumberToInt, type Ruleset, type RaceChoices } from "@/lib/characterRules";
+import { abilityMod } from "@/views/character/CharacterSheetUtils";
 import {
   ABILITY_NAME_TO_KEY,
   ABILITY_SCORE_NAMES,
@@ -8,7 +8,7 @@ import {
   ALL_TOOLS,
   WEAPON_MASTERY_KINDS,
   WEAPON_MASTERY_KIND_SET,
-} from "@/views/CharacterCreatorConstants";
+} from "@/views/character-creator/CharacterCreatorConstants";
 
 export { abilityMod };
 
@@ -17,17 +17,25 @@ const SKILL_NAMES = ALL_SKILLS.map((skill) => skill.name);
 interface CreatorFeatureLike {
   name: string;
   text: string;
-  optional: boolean;
+  optional?: boolean;
+  subclass?: string | null;
 }
 
 interface CreatorAutolevelLike {
   level: number;
   slots: number[] | null;
-  features: CreatorFeatureLike[];
+  features?: CreatorFeatureLike[];
 }
 
 export interface CreatorClassDetailLike {
   autolevels: CreatorAutolevelLike[];
+}
+
+export interface ClassExpertiseChoice {
+  key: string;
+  source: string;
+  count: number;
+  options: string[] | null;
 }
 
 export interface CreatorItemSummaryLike {
@@ -49,13 +57,7 @@ export interface CreatorRaceTraitLike {
   text: string;
 }
 
-export interface RaceChoices {
-  hasChosenSize: boolean;
-  skillChoice: { count: number; from: string[] | null } | null;
-  toolChoice: { count: number; from: string[] | null } | null;
-  languageChoice: { count: number; from: string[] | null } | null;
-  hasFeatChoice: boolean;
-}
+export type { RaceChoices };
 
 export interface StartingEquipmentOption {
   id: string;
@@ -88,10 +90,60 @@ export function calcHpMax(hd: number, level: number, conMod: number): number {
   return hd + conMod + (level - 1) * (Math.floor(hd / 2) + 1 + conMod);
 }
 
+function normalizeSubclassName(value: string | null | undefined): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+export function getFeatureSubclassName(feature: CreatorFeatureLike): string | null {
+  const explicit = String(feature.subclass ?? "").trim();
+  if (explicit) return explicit;
+  const namedSubclass = String(feature.name ?? "").match(/\(([^()]+)\)\s*$/);
+  if (namedSubclass?.[1]) return namedSubclass[1].trim();
+  const chooserMatch = String(feature.name ?? "").match(/subclass:\s*(.+)$/i);
+  if (chooserMatch?.[1]) return chooserMatch[1].trim();
+  return null;
+}
+
+export function isSubclassChoiceFeature(feature: CreatorFeatureLike): boolean {
+  const name = String(feature.name ?? "").trim();
+  return /subclass:/i.test(name) || /^becoming\b/i.test(name);
+}
+
+export function featureMatchesSubclass(feature: CreatorFeatureLike, selectedSubclass: string | null | undefined): boolean {
+  const featureSubclass = getFeatureSubclassName(feature);
+  if (!featureSubclass) return true;
+  if (isSubclassChoiceFeature(feature)) return false;
+  return normalizeSubclassName(featureSubclass) === normalizeSubclassName(selectedSubclass);
+}
+
+function getRelevantClassFeatures(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): CreatorFeatureLike[] {
+  return cls.autolevels
+    .filter((al) => al.level != null && al.level <= level)
+    .flatMap((al) =>
+      (al.features ?? []).filter((feature) => featureMatchesSubclass(feature, selectedSubclass) && !isSubclassChoiceFeature(feature))
+    );
+}
+
+function getSpellcastingFeature(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): CreatorFeatureLike | null {
+  const relevant = getRelevantClassFeatures(cls, level, selectedSubclass);
+  return relevant.find((feature) => /(pact magic|spellcasting)/i.test(feature.name)) ?? null;
+}
+
+export function getSpellcastingClassName(cls: CreatorClassDetailLike | null, level: number, selectedSubclass?: string | null): string | null {
+  if (!cls) return null;
+  const feature = getSpellcastingFeature(cls, level, selectedSubclass);
+  if (!feature) return null;
+  const fromList = feature.text.match(/from the ([A-Za-z' -]+?) spell list/i);
+  if (fromList?.[1]) return fromList[1].trim();
+  const spellType = feature.text.match(/for your ([A-Za-z' -]+?) spells/i);
+  if (spellType?.[1]) return spellType[1].trim();
+  return null;
+}
+
 export function getSubclassLevel(cls: CreatorClassDetailLike | null): number | null {
   if (!cls) return null;
   for (const al of cls.autolevels) {
-    for (const feature of al.features) {
+    for (const feature of al.features ?? []) {
       if (/subclass/i.test(feature.name) && !feature.optional) return al.level;
     }
   }
@@ -101,13 +153,23 @@ export function getSubclassLevel(cls: CreatorClassDetailLike | null): number | n
 export function featuresUpToLevel(cls: CreatorClassDetailLike, level: number) {
   return cls.autolevels
     .filter((al) => al.level != null && al.level <= level)
-    .flatMap((al) => al.features.filter((feature) => !feature.optional).map((feature) => ({ ...feature, level: al.level })));
+    .flatMap((al) => (al.features ?? []).filter((feature) => !feature.optional).map((feature) => ({ ...feature, level: al.level })));
+}
+
+export function featuresUpToLevelForSubclass(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null) {
+  return cls.autolevels
+    .filter((al) => al.level != null && al.level <= level)
+    .flatMap((al) =>
+      (al.features ?? [])
+        .filter((feature) => (!feature.optional || Boolean(getFeatureSubclassName(feature))) && featureMatchesSubclass(feature, selectedSubclass) && !isSubclassChoiceFeature(feature))
+        .map((feature) => ({ ...feature, level: al.level }))
+    );
 }
 
 export function getSubclassList(cls: CreatorClassDetailLike): string[] {
   const names: string[] = [];
   for (const al of cls.autolevels) {
-    for (const feature of al.features) {
+    for (const feature of al.features ?? []) {
       if (feature.optional && /subclass:/i.test(feature.name)) {
         const label = feature.name.replace(/^[^:]+:\s*/i, "").trim();
         if (label && !names.includes(label)) names.push(label);
@@ -152,28 +214,47 @@ export function getSlotsAtLevel(cls: CreatorClassDetailLike, level: number): num
   return best;
 }
 
-export function getCantripCount(cls: CreatorClassDetailLike, level: number): number {
-  return getSlotsAtLevel(cls, level)?.[0] ?? 0;
+export function getCantripCount(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): number {
+  const slotCount = getSlotsAtLevel(cls, level)?.[0] ?? 0;
+  if (slotCount > 0) return slotCount;
+  const spellcastingFeature = getSpellcastingFeature(cls, level, selectedSubclass);
+  if (!spellcastingFeature) return 0;
+  const knownMatch = spellcastingFeature.text.match(/you know (\w+) cantrips?/i);
+  let known = wordOrNumberToInt(knownMatch?.[1] ?? "") ?? 0;
+  for (const match of spellcastingFeature.text.matchAll(/when you reach [A-Za-z]+ level (\d+), you learn another [^.]*?cantrip/gi)) {
+    const unlockLevel = Number(match[1]);
+    if (Number.isFinite(unlockLevel) && level >= unlockLevel) known += 1;
+  }
+  return known;
 }
 
-export function getMaxSlotLevel(cls: CreatorClassDetailLike, level: number): number {
+export function getMaxSlotLevel(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): number {
   const slots = getSlotsAtLevel(cls, level);
-  if (!slots) return 0;
-  for (let i = slots.length - 1; i >= 1; i--) {
-    if (slots[i] > 0) return i;
+  if (slots) {
+    for (let i = slots.length - 1; i >= 1; i--) {
+      if (slots[i] > 0) return i;
+    }
+  }
+  const spellcastingFeature = getSpellcastingFeature(cls, level, selectedSubclass);
+  if (spellcastingFeature && getFeatureSubclassName(spellcastingFeature)) {
+    if (level >= 19) return 4;
+    if (level >= 13) return 3;
+    if (level >= 7) return 2;
+    if (level >= 3) return 1;
   }
   return 0;
 }
 
-export function isSpellcaster(cls: CreatorClassDetailLike): boolean {
-  return cls.autolevels.some((al) => al.slots != null && al.slots.slice(1).some((slot) => slot > 0));
+export function isSpellcaster(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): boolean {
+  return getCantripCount(cls, level, selectedSubclass) > 0 || getMaxSlotLevel(cls, level, selectedSubclass) > 0 || getPreparedSpellCount(cls, level, selectedSubclass) > 0;
 }
 
-export function getClassFeatureTable(cls: CreatorClassDetailLike, keyword: string, level: number): [number, number][] {
+export function getClassFeatureTable(cls: CreatorClassDetailLike, keyword: string, level: number, selectedSubclass?: string | null): [number, number][] {
   for (const al of cls.autolevels) {
     if (al.level == null || al.level > level) continue;
-    for (const feature of al.features) {
-      if (!feature.optional && new RegExp(keyword, "i").test(feature.name)) {
+    for (const feature of al.features ?? []) {
+      if (!featureMatchesSubclass(feature, selectedSubclass) || isSubclassChoiceFeature(feature)) continue;
+      if ((!feature.optional || Boolean(getFeatureSubclassName(feature))) && new RegExp(keyword, "i").test(feature.name)) {
         const table = parseLevelTable(feature.text);
         if (table.length > 0) return table;
       }
@@ -182,8 +263,8 @@ export function getClassFeatureTable(cls: CreatorClassDetailLike, keyword: strin
   return [];
 }
 
-export function getPreparedSpellCount(cls: CreatorClassDetailLike, level: number): number {
-  const prepTable = getClassFeatureTable(cls, "Prepared Spells|Pact Magic|Spellcasting", level);
+export function getPreparedSpellCount(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): number {
+  const prepTable = getClassFeatureTable(cls, "Prepared Spells|Pact Magic|Spellcasting", level, selectedSubclass);
   return prepTable.length > 0 ? tableValueAtLevel(prepTable, level) : 0;
 }
 
@@ -191,13 +272,7 @@ export function parseSkillList(proficiency: string): string[] {
   return proficiency.split(/[,;]/).map((s) => s.trim()).filter((s) => s && !ABILITY_SCORE_NAMES.has(s));
 }
 
-export function wordOrNumberToInt(value: string): number | null {
-  const lowered = value.trim().toLowerCase();
-  const numeric = Number.parseInt(lowered, 10);
-  if (Number.isFinite(numeric)) return numeric;
-  const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
-  return words[lowered] ?? null;
-}
+export { wordOrNumberToInt };
 
 export function baseWeaponKind(name: string): string {
   return name.replace(/\s*\[[^\]]+\]\s*$/u, "").trim();
@@ -261,6 +336,46 @@ export function classifyFeatSelection(
   return null;
 }
 
+export function getClassExpertiseChoices(cls: CreatorClassDetailLike | null, level: number): ClassExpertiseChoice[] {
+  if (!cls) return [];
+  const choices: ClassExpertiseChoice[] = [];
+  const seen = new Set<string>();
+  for (const al of cls.autolevels) {
+    if (al.level == null || al.level > level) continue;
+    for (const feature of al.features ?? []) {
+      if (feature.optional) continue;
+      const name = String(feature.name ?? "").trim();
+      const text = String(feature.text ?? "").trim();
+      if (!name || !text) continue;
+
+      let count: number | null = null;
+      let options: string[] | null = null;
+
+      const explicitMatch = text.match(/Choose\s+(one|two|three|four|\d+)\s+of (?:the following )?skills?[^:]*:\s*([^.]+)/i);
+      if (explicitMatch) {
+        count = wordOrNumberToInt(explicitMatch[1] ?? "") ?? 1;
+        options = (explicitMatch[2] ?? "")
+          .split(/,\s*|\s+or\s+/i)
+          .map((s) => s.trim())
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+          .filter((s) => SKILL_NAMES.includes(s));
+      } else {
+        const generalMatch = text.match(/gain Expertise in\s+(one|two|three|four|\d+)(?:\s+more)?\s+of your skill proficiencies of your choice/i);
+        if (generalMatch) {
+          count = wordOrNumberToInt(generalMatch[1] ?? "") ?? 1;
+        }
+      }
+
+      if (!count || count <= 0) continue;
+      const key = `classexpertise:${al.level}:${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      choices.push({ key, source: name, count, options: options && options.length > 0 ? options : null });
+    }
+  }
+  return choices;
+}
+
 export function parseRaceChoices(traits: CreatorRaceTraitLike[]): RaceChoices {
   let hasChosenSize = false;
   let skillChoice: RaceChoices["skillChoice"] = null;
@@ -309,11 +424,6 @@ export function parseRaceChoices(traits: CreatorRaceTraitLike[]): RaceChoices {
   return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
 }
 
-export function parseRaceChoicesByRuleset(ruleset: Ruleset, traits: CreatorRaceTraitLike[]): RaceChoices {
-  void ruleset;
-  return parseRaceChoices(traits);
-}
-
 export function parseStartingEquipmentOptions(equipment: string | undefined): StartingEquipmentOption[] {
   if (!equipment) return [];
   const normalized = equipment
@@ -346,10 +456,11 @@ export function extractClassStartingEquipment(classDetail: CreatorClassDetailLik
   if (!classDetail) return "";
   for (const al of classDetail.autolevels) {
     if (al.level !== 1) continue;
-    for (const feature of al.features) {
+    for (const feature of al.features ?? []) {
       const match = feature.text.match(/Starting Equipment:\s*([^\n]+)/i);
       if (match?.[1]) return match[1].trim();
     }
   }
   return "";
 }
+

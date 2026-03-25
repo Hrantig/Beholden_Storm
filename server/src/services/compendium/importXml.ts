@@ -303,13 +303,14 @@ export function importCompendiumXml(args: {
         }
       }
 
+      const raceRuleset = inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n"));
       const data = {
-        id, name, ruleset: inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n")), nameKey, name_key: nameKey,
+        id, name, ruleset: raceRuleset, nameKey, name_key: nameKey,
         size, speed,
         resist: asText(r?.resist) || null,
         vision,
         parsedChoices: parseRaceChoicesByRuleset(
-          inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n")),
+          raceRuleset,
           traits.map((t) => ({ name: t.name, text: t.text })),
         ),
         traits,

@@ -48,7 +48,7 @@ export interface RaceChoices {
   hasFeatChoice: boolean;
 }
 
-function wordOrNumberToInt(value: string): number | null {
+export function wordOrNumberToInt(value: string): number | null {
   const lowered = value.trim().toLowerCase();
   const numeric = Number.parseInt(lowered, 10);
   if (Number.isFinite(numeric)) return numeric;
@@ -109,20 +109,16 @@ function parseRaceChoices(traits: { name: string; text: string }[], allSkills: s
   return { hasChosenSize, skillChoice, toolChoice, languageChoice, hasFeatChoice };
 }
 
-export function parseRaceChoicesByRuleset(
-  ruleset: Ruleset,
-  traits: { name: string; text: string }[],
-  allSkills: string[],
-): RaceChoices {
-  void ruleset;
-  return parseRaceChoices(traits, allSkills);
-}
-
 export function getBackgroundFeatChoices(bgDetail: BackgroundDetailLike | null): BackgroundFeatChoiceEntry[] {
   const feats = bgDetail?.proficiencies?.feats ?? [];
   return feats.flatMap((feat) =>
     feat.parsed.choices
-      .filter((choice) => choice.type === "proficiency" || choice.type === "weapon_mastery")
+      .filter((choice) =>
+        choice.type === "proficiency"
+        || choice.type === "weapon_mastery"
+        || choice.type === "expertise"
+        || choice.type === "ability_score"
+      )
       .map((choice) => ({
         featName: feat.name,
         feat: feat.parsed,
@@ -130,9 +126,4 @@ export function getBackgroundFeatChoices(bgDetail: BackgroundDetailLike | null):
         key: `bg:${feat.name}:${choice.id}`,
       }))
   );
-}
-
-export function getBackgroundFeatChoicesByRuleset(ruleset: Ruleset, bgDetail: BackgroundDetailLike | null): BackgroundFeatChoiceEntry[] {
-  void ruleset;
-  return getBackgroundFeatChoices(bgDetail);
 }

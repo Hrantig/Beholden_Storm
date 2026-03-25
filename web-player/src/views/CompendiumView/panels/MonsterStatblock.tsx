@@ -1,7 +1,7 @@
 import * as React from "react";
 import { C, withAlpha } from "@/lib/theme";
 import { formatCr } from "@/lib/monsterPicker/utils";
-import { formatModifier } from "@/views/CharacterSheetUtils";
+import { formatModifier } from "@/views/character/CharacterSheetUtils";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -305,3 +305,4 @@ export function MonsterStatblock({ monster }: { monster: any | null }) {
     </div>
   );
 }
+

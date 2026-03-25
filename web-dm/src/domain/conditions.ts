@@ -24,6 +24,7 @@ export const CONDITION_DEFS: ConditionDef[] = [
   { key: "stunned", name: "Stunned" },
   { key: "unconscious", name: "Unconscious" },
   { key: "concentration", name: "Concentration" },
+  { key: "disadvantage", name: "Disadvantage" },
   { key: "hexed", name: "Hexed", needsCaster: true },
   { key: "marked", name: "Marked", needsCaster: true },
 ];

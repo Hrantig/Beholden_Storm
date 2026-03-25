@@ -125,6 +125,7 @@ export function SharedNotesPanel(props: {
   return (
     <>
       <Panel
+        storageKey="campaign-shared-notes"
         title={
           <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
             <IconNotes /> Shared Notes ({totalCount})

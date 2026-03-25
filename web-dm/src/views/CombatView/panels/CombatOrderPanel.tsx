@@ -57,6 +57,7 @@ export function CombatOrderPanel(props: {
 
   return (
     <Panel
+      storageKey="combat-order"
       title={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <IconInitiative size={18} title="Initiative" />

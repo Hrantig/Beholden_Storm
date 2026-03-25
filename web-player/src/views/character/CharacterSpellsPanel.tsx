@@ -1,9 +1,9 @@
 import React from "react";
 import { api } from "@/services/api";
 import { C } from "@/lib/theme";
-import { Panel, PanelTitle } from "@/views/CharacterViewParts";
-import { type InventoryItem, getEquipState, parseItemSpells } from "@/views/CharacterInventory";
-import type { GrantedSpellCast, ResourceCounter } from "@/views/CharacterSheetTypes";
+import { CollapsiblePanel } from "@/views/character/CharacterViewParts";
+import { type InventoryItem, getEquipState, parseItemSpells } from "@/views/character/CharacterInventory";
+import type { GrantedSpellCast, ResourceCounter } from "@/views/character/CharacterSheetTypes";
 
 interface ClassCounterDef {
   name: string;
@@ -71,14 +71,12 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
   }
 
   return (
-    <Panel>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <PanelTitle color="#a78bfa" style={{ margin: 0 }}>Spell Slots</PanelTitle>
-        <button onClick={longRest} style={{
-          fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
-          background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa",
-        }}>Long Rest</button>
-      </div>
+    <CollapsiblePanel title="Spell Slots" color="#a78bfa" storageKey="spell-slots" actions={
+      <button onClick={longRest} style={{
+        fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+        background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa",
+      }}>Long Rest</button>
+    }>
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
         {spellLevels.map(({ level: sl, count }) => {
           const used = usedSpellSlots[String(sl)] ?? 0;
@@ -111,7 +109,7 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
           );
         })}
       </div>
-    </Panel>
+    </CollapsiblePanel>
   );
 }
 
@@ -119,7 +117,7 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
 // RichSpellsPanel
 // ---------------------------------------------------------------------------
 
-export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, onResourceChange, spellcastingBlocked = false }: {
+export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, preparedLimit = 0, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, onResourceChange, spellcastingBlocked = false }: {
   spells: { name: string; source: string }[];
   grantedSpells?: GrantedSpellCast[];
   resources?: ResourceCounter[];
@@ -130,6 +128,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
   accentColor: string;
   classDetail: ClassRestDetail | null;
   charLevel: number;
+  preparedLimit?: number;
   usedSpellSlots: Record<string, number>;
   preparedSpells: string[];
   onSlotsChange: (next: Record<string, number>) => Promise<void>;
@@ -200,7 +199,9 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
   }
 
   function togglePrepared(key: string) {
-    const next = preparedSpells.includes(key)
+    const isPrepared = preparedSpells.includes(key);
+    if (!isPrepared && preparedLimit > 0 && preparedSpells.length >= preparedLimit) return;
+    const next = isPrepared
       ? preparedSpells.filter((k) => k !== key)
       : [...preparedSpells, key];
     void onPreparedChange(next);
@@ -232,7 +233,27 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
   }
 
   return (
-    <Panel>
+    <CollapsiblePanel title="Spells" color="#a78bfa" storageKey="spells" actions={
+      <div style={{ display: "flex", gap: 6 }}>
+        {([
+          { label: "ABILITY", value: spellAbilLabel, highlight: true },
+          { label: "SAVE DC",  value: String(saveDc),     highlight: false },
+          { label: "ATK BONUS", value: `+${spellAtk}`,   highlight: false },
+        ] as const).map(({ label, value, highlight }) => (
+          <div key={label} style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            padding: "4px 10px", borderRadius: 8,
+            background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.18)",
+            minWidth: 52,
+          }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
+            <span style={{ fontSize: 14, fontWeight: 900, color: spellcastingBlocked && !highlight ? "#f87171" : highlight ? accentColor : C.text }}>
+              {value}{spellcastingBlocked && !highlight ? " X" : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    }>
       {spellcastingBlocked && (
         <div style={{
           marginBottom: 10,
@@ -247,35 +268,11 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
           You can't cast spells while wearing armor or a shield without proficiency.
         </div>
       )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <PanelTitle color="#a78bfa" style={{ margin: 0 }}>Spells</PanelTitle>
-          {classDetail?.slotsReset === "S" && maxSpellSlotLevel > 0 && (
-            <div style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>
-              Pact Magic: cast Warlock spells using level {maxSpellSlotLevel} slots.
-            </div>
-          )}
+      {classDetail?.slotsReset === "S" && maxSpellSlotLevel > 0 && (
+        <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 12 }}>
+          Pact Magic: cast Warlock spells using level {maxSpellSlotLevel} slots.
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {([
-            { label: "ABILITY", value: spellAbilLabel, highlight: true },
-            { label: "SAVE DC",  value: String(saveDc),     highlight: false },
-            { label: "ATK BONUS", value: `+${spellAtk}`,   highlight: false },
-          ] as const).map(({ label, value, highlight }) => (
-            <div key={label} style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              padding: "6px 12px", borderRadius: 8,
-              background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.18)",
-              minWidth: 56,
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
-              <span style={{ fontSize: 15, fontWeight: 900, color: spellcastingBlocked && !highlight ? "#f87171" : highlight ? accentColor : C.text }}>
-                {value}{spellcastingBlocked && !highlight ? " X" : ""}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       {grantedEntries.length > 0 && (
         <div style={{ marginBottom: 18, opacity: spellcastingBlocked ? 0.65 : 1 }}>
@@ -431,6 +428,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
               const usesAtk = spellUsesAttack(d);
               const isCantrip = level === 0;
               const isPrepared = isCantrip || preparedSpells.includes(e.key);
+              const preparedLocked = !isCantrip && !isPrepared && preparedLimit > 0 && preparedSpells.length >= preparedLimit;
               return (
                 <div key={i} style={{
                   display: "grid",
@@ -446,13 +444,22 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                 >
                   {/* Prepared radio */}
                   <button
-                    onClick={() => !isCantrip && togglePrepared(e.key)}
-                    title={isCantrip ? "Cantrip (always prepared)" : isPrepared ? "Mark unprepared" : "Mark prepared"}
+                    onClick={() => !isCantrip && !preparedLocked && togglePrepared(e.key)}
+                    title={
+                      isCantrip
+                        ? "Cantrip (always prepared)"
+                        : isPrepared
+                          ? "Mark unprepared"
+                          : preparedLocked
+                            ? `Prepared limit reached (${preparedLimit})`
+                            : "Mark prepared"
+                    }
                     style={{
                       width: 20, height: 20, borderRadius: "50%", padding: 0,
-                      cursor: isCantrip ? "default" : "pointer", marginTop: 3,
+                      cursor: isCantrip || preparedLocked ? "default" : "pointer", marginTop: 3,
                       border: `2px solid ${isPrepared ? accentColor : "rgba(255,255,255,0.25)"}`,
-                      background: isPrepared ? accentColor : "transparent",
+                      background: isPrepared ? accentColor : preparedLocked ? "rgba(255,255,255,0.05)" : "transparent",
+                      opacity: preparedLocked ? 0.65 : 1,
                       flexShrink: 0,
                     }}
                   />
@@ -507,7 +514,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
       {selectedSpell && (
         <SpellDrawer spell={selectedSpell} accentColor={accentColor} onClose={() => setSelectedSpell(null)} charLevel={charLevel} maxSlotLevel={maxSpellSlotLevel} />
       )}
-    </Panel>
+    </CollapsiblePanel>
   );
 }
 
@@ -732,9 +739,13 @@ function parseSpellSave(text: string): string | null {
 }
 
 function abbrevTime(t: string): string {
-  return t
-    .replace(/1 action/i, "1A").replace(/1 bonus action/i, "1BA")
-    .replace(/1 reaction/i, "1R").replace(/1 minute/i, "1 min");
+  // Strip reaction/action condition clauses (e.g. "1 reaction, which you take…")
+  const base = t.split(/,\s*which\b/i)[0].trim();
+  return base
+    .replace(/1 bonus action/i, "1BA")
+    .replace(/1 action/i, "1A")
+    .replace(/1 reaction/i, "1R")
+    .replace(/1 minute/i, "1 min");
 }
 
 function grantedSpellChargeBtn(enabled: boolean): React.CSSProperties {
@@ -869,49 +880,41 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
         }
 
         return (
-          <Panel key={item.id}>
+          <CollapsiblePanel
+            key={item.id}
+            title={item.name.replace(/\s*\[.+\]$/, "")}
+            color="#a78bfa"
+            storageKey={`item-spells-${item.id}`}
+            actions={chargesMax > 0 ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 10, color: C.muted, marginRight: 3 }}>charges {charges}/{chargesMax}</span>
+                {Array.from({ length: chargesMax }).map((_, i) => {
+                  const filled = i < charges;
+                  return (
+                    <button
+                      key={i}
+                      title={filled ? "Use charge" : "Recover charge"}
+                      onClick={() => onChargeChange(item.id, i < charges ? i : i + 1)}
+                      style={{
+                        width: 16, height: 16, borderRadius: "50%", padding: 0, cursor: "pointer",
+                        border: `2px solid ${filled ? "#ef4444" : "rgba(255,255,255,0.2)"}`,
+                        background: filled ? "#ef4444" : "transparent",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            ) : undefined}
+          >
             {spellcastingBlocked && (
               <div style={{
-                marginBottom: 10,
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid rgba(248,113,113,0.35)",
-                background: "rgba(248,113,113,0.10)",
-                color: "#fca5a5",
-                fontSize: 11,
-                fontWeight: 700,
+                marginBottom: 10, padding: "8px 10px", borderRadius: 8,
+                border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.10)",
+                color: "#fca5a5", fontSize: 11, fontWeight: 700,
               }}>
                 You can't cast spells while wearing armor or a shield without proficiency.
               </div>
             )}
-            {/* Header: item name + charge circles */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <PanelTitle color="#a78bfa" style={{ margin: 0 }}>
-                {item.name.replace(/\s*\[.+\]$/, "")}
-              </PanelTitle>
-              {chargesMax > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ fontSize: 10, color: C.muted, marginRight: 3 }}>
-                    charges {charges}/{chargesMax}
-                  </span>
-                  {Array.from({ length: chargesMax }).map((_, i) => {
-                    const filled = i < charges;
-                    return (
-                      <button
-                        key={i}
-                        title={filled ? "Use charge" : "Recover charge"}
-                        onClick={() => onChargeChange(item.id, i < charges ? i : i + 1)}
-                        style={{
-                          width: 16, height: 16, borderRadius: "50%", padding: 0, cursor: "pointer",
-                          border: `2px solid ${filled ? "#ef4444" : "rgba(255,255,255,0.2)"}`,
-                          background: filled ? "#ef4444" : "transparent",
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
 
             <div style={{ opacity: spellcastingBlocked ? 0.65 : 1 }}>
             {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupSpells]) => (
@@ -1004,7 +1007,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
               </div>
             ))}
             </div>
-          </Panel>
+          </CollapsiblePanel>
         );
       })}
       {selectedSpell && (
@@ -1017,4 +1020,5 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
+
 

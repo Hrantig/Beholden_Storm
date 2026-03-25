@@ -77,6 +77,7 @@ export function ItemsBrowserPanel(props: Props) {
   return (
     <>
       <Panel
+        storageKey="compendium-items"
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--fs-large)" }}>
             <IconChest size={28} title="Items" />

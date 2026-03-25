@@ -1,9 +1,9 @@
 import { titleCase } from "@/lib/format/titleCase";
-import type { ClassFeatureEntry, CharacterData, ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
-import { abilityMod, normalizeWeaponProficiencyName } from "@/views/CharacterSheetUtils";
+import type { ClassFeatureEntry, CharacterData, ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
+import { abilityMod, normalizeWeaponProficiencyName } from "@/views/character/CharacterSheetUtils";
 
 export type TaggedItemLike = TaggedItem;
-export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons" | "armor">;
+export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons" | "armor" | "masteries">;
 export type ClassFeatureEntryLike = ClassFeatureEntry;
 export type CharacterDataLike = Pick<CharacterData, "chosenOptionals" | "classFeatures" | "proficiencies" | "inventoryContainers">;
 
@@ -162,6 +162,32 @@ export function formatItemProperties(properties: string[] | null | undefined): s
     .join(", ");
 }
 
+export interface WeaponMasteryInfo {
+  name: string;
+  text: string;
+}
+
+export function parseWeaponMastery(item: Pick<InventoryItem, "description"> | null | undefined): WeaponMasteryInfo | null {
+  const raw = String(item?.description ?? "").trim();
+  if (!raw) return null;
+  const match = raw.match(/^\s*([A-Za-z][A-Za-z\s'-]+)\s+\(Mastery\):\s*([\s\S]+)$/im);
+  if (!match) return null;
+  const name = titleCase(match[1].trim());
+  const remainder = match[2].trim();
+  const text = remainder
+    .split(/\n\s*\n/)[0]
+    .split(/\n(?=[A-Z][A-Za-z' -]+:)/)[0]
+    .trim();
+  if (!name || !text) return null;
+  return { name, text };
+}
+
+export function hasWeaponMastery(item: Pick<InventoryItem, "description" | "name"> | null | undefined, prof: ProficiencyMapLike | undefined): boolean {
+  const itemName = String(item?.name ?? "").trim().toLowerCase();
+  if (!itemName) return false;
+  return (prof?.masteries ?? []).some((entry) => String(entry.name ?? "").trim().toLowerCase() === itemName);
+}
+
 export function isShieldOrTorch(item: InventoryItem): boolean {
   const type = String(item.type ?? "").toLowerCase();
   const name = String(item.name ?? "").toLowerCase();
@@ -230,7 +256,11 @@ export function hasArmorProficiency(item: InventoryItem, prof: ProficiencyMapLik
 
 export function getEquipState(item: InventoryItem): EquipState {
   if (item.equipState) return item.equipState;
-  if (item.equipped) return isArmorItem(item) ? "worn" : "mainhand-1h";
+  if (item.equipped) {
+    if (isArmorItem(item)) return "worn";
+    if (!item.dmg1 && item.dmg2) return "mainhand-2h";
+    return "mainhand-1h";
+  }
   return "backpack";
 }
 
@@ -375,3 +405,4 @@ export function conditionDisplayWeaponMeta(item: InventoryItem): string {
   ].filter(Boolean);
   return meta.join(" • ");
 }
+

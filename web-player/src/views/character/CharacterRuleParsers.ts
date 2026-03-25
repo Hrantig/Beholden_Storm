@@ -1,5 +1,5 @@
-import type { AbilKey, GrantedSpellCast, ResourceCounter } from "@/views/CharacterSheetTypes";
-import { abilityMod, normalizeLanguageName, normalizeResourceKey } from "@/views/CharacterSheetUtils";
+import type { AbilKey, GrantedSpellCast, ResourceCounter } from "@/views/character/CharacterSheetTypes";
+import { abilityMod, normalizeLanguageName, normalizeResourceKey } from "@/views/character/CharacterSheetUtils";
 
 export interface FeatureGrants {
   armor: string[];
@@ -236,3 +236,60 @@ export function buildGrantedSpellData(
 
   return { spells, resources };
 }
+
+// ---------------------------------------------------------------------------
+// Defense parsing — resistances / immunities / vulnerabilities
+// ---------------------------------------------------------------------------
+
+export interface ParsedDefenses {
+  resistances: string[];
+  immunities: string[];
+  vulnerabilities: string[];
+}
+
+const DAMAGE_TYPES = [
+  "acid", "cold", "fire", "force", "lightning", "necrotic",
+  "piercing", "poison", "psychic", "radiant", "slashing", "thunder", "bludgeoning",
+];
+
+function extractDamageTypes(phrase: string): string[] {
+  const lower = phrase.toLowerCase();
+  // Special case: nonmagical B/P/S
+  if (/nonmagical/i.test(lower) && /bludgeoning|piercing|slashing/i.test(lower)) {
+    return ["Nonmagical B/P/S"];
+  }
+  return DAMAGE_TYPES
+    .filter((t) => new RegExp(`\\b${t}\\b`).test(lower))
+    .map((t) => toTitleCase(t));
+}
+
+function addFromText(text: string, resistances: Set<string>, immunities: Set<string>, vulnerabilities: Set<string>) {
+  const clean = text.replace(/\n/g, " ");
+
+  for (const m of clean.matchAll(/(?:have |gain )?resistance to ([^.;]+?) damage/gi)) {
+    extractDamageTypes(m[1]).forEach((t) => resistances.add(t));
+  }
+  for (const m of clean.matchAll(/immune to ([^.;]+?) damage/gi)) {
+    extractDamageTypes(m[1]).forEach((t) => immunities.add(t));
+  }
+  for (const m of clean.matchAll(/(?:have |gain )?vulnerability to ([^.;]+?) damage/gi)) {
+    extractDamageTypes(m[1]).forEach((t) => vulnerabilities.add(t));
+  }
+}
+
+export function parseDefenses(features: Array<{ name: string; text: string }>): ParsedDefenses {
+  const resistances = new Set<string>();
+  const immunities = new Set<string>();
+  const vulnerabilities = new Set<string>();
+
+  for (const { name, text } of features) {
+    addFromText(`${name} ${text}`, resistances, immunities, vulnerabilities);
+  }
+
+  return {
+    resistances: Array.from(resistances),
+    immunities: Array.from(immunities),
+    vulnerabilities: Array.from(vulnerabilities),
+  };
+}
+

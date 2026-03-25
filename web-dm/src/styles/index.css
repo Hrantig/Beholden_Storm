@@ -33,6 +33,7 @@
 .campaignCol {
   display: grid;
   gap: var(--gap-6);
+  align-content: start;
 }
 
 @media (max-width: 1440px) {

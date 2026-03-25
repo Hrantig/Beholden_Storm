@@ -1,8 +1,8 @@
 import React from "react";
 import { C } from "@/lib/theme";
 import { IconInitiative, IconShield, IconSpeed } from "@/icons";
-import { MiniStat, Panel, PanelTitle } from "@/views/CharacterViewParts";
-import { abilityMod, formatModifier } from "@/views/CharacterSheetUtils";
+import { CollapsiblePanel, MiniStat, Tooltip } from "@/views/character/CharacterViewParts";
+import { abilityMod, formatModifier } from "@/views/character/CharacterSheetUtils";
 import {
   type CharacterDataLike,
   type InventoryItem,
@@ -13,21 +13,24 @@ import {
   getEquipState,
   hasArmorProficiency,
   hasItemProperty,
+  hasWeaponMastery,
   hasWeaponProficiency,
   isRangedWeapon,
   isShieldItem,
   isWeaponItem,
+  parseWeaponMastery,
   weaponAbilityMod,
   weaponDamageDice,
-} from "@/views/CharacterInventory";
+} from "@/views/character/CharacterInventory";
 
 export interface CharacterCombatPanelsProps {
   effectiveAc: number;
   speed: number;
   level: number;
   className?: string | null;
-  dexScore: number | null;
+  initiativeBonus: number;
   strScore: number | null;
+  dexScore: number | null;
   pb: number;
   passivePerc: number;
   passiveInv: number;
@@ -36,6 +39,7 @@ export interface CharacterCombatPanelsProps {
   prof?: ProficiencyMapLike | null;
   characterData?: CharacterDataLike | null;
   nonProficientArmorPenalty: boolean;
+  hasDisadvantage?: boolean;
 }
 
 export function CharacterCombatPanels({
@@ -43,8 +47,9 @@ export function CharacterCombatPanels({
   speed,
   level,
   className,
-  dexScore,
+  initiativeBonus,
   strScore,
+  dexScore,
   pb,
   passivePerc,
   passiveInv,
@@ -53,7 +58,9 @@ export function CharacterCombatPanels({
   prof,
   characterData,
   nonProficientArmorPenalty,
+  hasDisadvantage = false,
 }: CharacterCombatPanelsProps) {
+  const attackDisadvantage = nonProficientArmorPenalty || hasDisadvantage;
   const actionItems = inventory.filter((it) => getEquipState(it) !== "backpack" && isWeaponItem(it) && (!it.attunement || it.attuned));
   const nonProficientArmorItems = inventory.filter((it) => getEquipState(it) !== "backpack" && (isShieldItem(it) || /\barmor\b/i.test(it.type ?? "")) && !hasArmorProficiency(it, prof ?? undefined));
   const strMod = abilityMod(strScore);
@@ -64,18 +71,18 @@ export function CharacterCombatPanels({
 
   return (
     <>
-      <Panel>
+      <CollapsiblePanel title="Combat Stats" color={accentColor} storageKey="combat-stats">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
           <MiniStat label="Armor Class" value={String(effectiveAc)} accent={accentColor} icon={<IconShield size={11} />} />
           <MiniStat label="Speed" value={`${speed} ft`} icon={<IconSpeed size={11} />} />
-          <MiniStat label="Initiative" value={formatModifier(abilityMod(dexScore))} accent={accentColor} icon={<IconInitiative size={11} />} />
+          <MiniStat label="Initiative" value={formatModifier(initiativeBonus)} accent={accentColor} icon={<IconInitiative size={11} />} />
           <MiniStat label="Prof. Bonus" value={`+${pb}`} accent={accentColor} />
           <MiniStat label="Passive Perc." value={String(passivePerc)} />
           <MiniStat label="Passive Inv." value={String(passiveInv)} />
         </div>
-      </Panel>
+      </CollapsiblePanel>
 
-      <Panel>
+      <CollapsiblePanel title="Actions" color={accentColor} storageKey="actions">
         {nonProficientArmorItems.length > 0 && (
           <div style={{
             marginBottom: 10,
@@ -90,7 +97,6 @@ export function CharacterCombatPanels({
             Not proficient with equipped armor: disadvantage on STR/DEX attacks and you can't cast spells.
           </div>
         )}
-        <PanelTitle color={accentColor}>Actions</PanelTitle>
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", marginBottom: 6 }}>
           {(["ATTACK", "RANGE", "HIT / DC", "DAMAGE / NOTES"] as const).map((h) => (
             <div key={h} style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, paddingBottom: 4, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -105,6 +111,8 @@ export function CharacterCombatPanels({
             const dmg = weaponDamageDice(it, attackState);
             const ability = weaponAbilityMod(it, { strScore, dexScore });
             const proficient = hasWeaponProficiency(it, prof ?? undefined);
+            const mastery = parseWeaponMastery(it);
+            const masteryKnown = hasWeaponMastery(it, prof ?? undefined);
             const toHit = ability + (proficient ? pb : 0);
             const damageAbility = attackState === "offhand" && !addsAbilityModToOffhandDamage(it, characterData) ? 0 : ability;
             const damageType = formatItemDamageType(it.dmgType);
@@ -120,8 +128,9 @@ export function CharacterCombatPanels({
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 13, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</span>
                     {modeLabel && <span style={{ fontSize: 9, fontWeight: 800, color: accentColor, border: `1px solid ${accentColor}44`, background: `${accentColor}18`, borderRadius: 999, padding: "1px 5px" }}>{modeLabel}</span>}
+                    {masteryKnown && mastery && <Tooltip text={mastery.text} multiline><span style={{ fontSize: 9, fontWeight: 800, color: "#fbbf24", border: "1px solid rgba(251,191,36,0.35)", background: "rgba(251,191,36,0.12)", borderRadius: 999, padding: "1px 5px", cursor: "help" }}>{mastery.name}</span></Tooltip>}
                     {!proficient && <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>No proficiency</span>}
-                    {nonProficientArmorPenalty && <span style={{ fontSize: 10, color: "#f87171", fontWeight: 700 }}>D</span>}
+                    {attackDisadvantage && <span style={{ fontSize: 10, color: "#f87171", fontWeight: 700 }}>D</span>}
                   </div>
                   <div style={{ fontSize: 10, color: C.muted }}>{isWeaponItem(it) ? "Melee Weapon" : it.type ?? ""}</div>
                 </div>
@@ -130,7 +139,7 @@ export function CharacterCombatPanels({
                   style={{
                     fontSize: 18,
                     fontWeight: 900,
-                    color: nonProficientArmorPenalty ? "#f87171" : C.text,
+                    color: attackDisadvantage ? "#f87171" : C.text,
                     textAlign: "center",
                     minWidth: 36,
                     border: `1px solid ${proficient ? accentColor + "55" : "rgba(255,255,255,0.15)"}`,
@@ -139,7 +148,7 @@ export function CharacterCombatPanels({
                     background: "rgba(255,255,255,0.04)",
                   }}
                 >
-                  {formatModifier(toHit)}{nonProficientArmorPenalty ? " D" : ""}
+                  {formatModifier(toHit)}{attackDisadvantage ? " D" : ""}
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dmgText}</div>
@@ -172,8 +181,8 @@ export function CharacterCombatPanels({
               <div style={{ fontSize: 10, color: C.muted }}>Melee Attack</div>
             </div>
             <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>5 ft.</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: nonProficientArmorPenalty ? "#f87171" : C.text, textAlign: "center", minWidth: 36, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
-              {formatModifier(unarmedToHit)}{nonProficientArmorPenalty ? " D" : ""}
+            <div style={{ fontSize: 18, fontWeight: 900, color: attackDisadvantage ? "#f87171" : C.text, textAlign: "center", minWidth: 36, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
+              {formatModifier(unarmedToHit)}{attackDisadvantage ? " D" : ""}
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{unarmedDmg}</div>
@@ -181,7 +190,8 @@ export function CharacterCombatPanels({
             </div>
           </div>
         </div>
-      </Panel>
+      </CollapsiblePanel>
     </>
   );
 }
+

@@ -79,6 +79,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
   return (
     <>
       <Panel
+        storageKey="treasure"
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <span style={{ display: "inline-flex" }}>

@@ -13,7 +13,7 @@ export function CombatantListPanel({
   onSelect,
 }: Props) {
   return (
-    <Panel title="Order">
+    <Panel title="Order" storageKey="combat-list-order">
       {combatants.map((c) => (
         <div
           key={c.id}

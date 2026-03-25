@@ -24,6 +24,7 @@ const AboutView = React.lazy(() => import("@/views/Info/AboutView").then(m => ({
 const FaqView = React.lazy(() => import("@/views/Info/FaqView").then(m => ({ default: m.FaqView })));
 const UpdatesView = React.lazy(() => import("@/views/Info/UpdatesView").then(m => ({ default: m.UpdatesView })));
 const AdminView = React.lazy(() => import("@/views/AdminView/AdminView").then(m => ({ default: m.AdminView })));
+const ProfileView = React.lazy(() => import("@/views/ProfileView").then(m => ({ default: m.ProfileView })));
 
 function AppInner() {
   const { state, dispatch } = useStore();
@@ -233,6 +234,7 @@ function AppInner() {
           <Route path="/campaign/:campaignId/roster/:encounterId" element={<CombatRosterView />} />
           <Route path="/campaign/:campaignId/combat/:encounterId" element={<CombatView />} />
           <Route path="/compendium" element={<CompendiumView />} />
+          <Route path="/profile" element={<ProfileView />} />
           <Route path="/about" element={<AboutView />} />
           <Route path="/faq" element={<FaqView />} />
           <Route path="/updates" element={<UpdatesView />} />

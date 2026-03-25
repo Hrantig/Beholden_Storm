@@ -37,6 +37,10 @@ coverage/
 # ===== Misc =====
 *.zip
 
+# ===== Local Transpile Artifacts =====
+web-player/src/**/*.js
+web-player/src/**/*.js.map
+
 # ===== Claude -------
 .claude/
 claude/

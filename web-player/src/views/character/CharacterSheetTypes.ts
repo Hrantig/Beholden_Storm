@@ -1,4 +1,4 @@
-import type { InventoryContainer, InventoryItem } from "@/views/CharacterInventory";
+import type { InventoryContainer, InventoryItem } from "@/views/character/CharacterInventory";
 
 export type AbilKey = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -9,6 +9,7 @@ export interface TaggedItem {
 
 export interface ProficiencyMap {
   skills: TaggedItem[];
+  expertise: TaggedItem[];
   saves: TaggedItem[];
   armor: TaggedItem[];
   weapons: TaggedItem[];
@@ -88,8 +89,11 @@ export interface CharacterData {
   hitDiceCurrent?: number | null;
   xp?: number;
   chosenOptionals?: string[];
+  chosenClassFeatIds?: Record<string, string>;
+  chosenLevelUpFeats?: Array<{ level: number; featId: string }>;
   chosenSkills?: string[];
   chosenClassLanguages?: string[];
+  chosenFeatOptions?: Record<string, string[]>;
   chosenCantrips?: string[];
   chosenSpells?: string[];
   chosenInvocations?: string[];
@@ -101,4 +105,7 @@ export interface CharacterData {
   playerNotesList?: PlayerNote[];
   usedSpellSlots?: Record<string, number>;
   preparedSpells?: string[];
+  customResistances?: string[];
+  customImmunities?: string[];
 }
+

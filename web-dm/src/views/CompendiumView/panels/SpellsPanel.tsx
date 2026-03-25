@@ -106,6 +106,7 @@ export function SpellsPanel(props: SpellsPanelProps) {
   return (
     <>
       <Panel
+        storageKey="compendium-spells"
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--fs-large)" }}>
             <IconSpells size={36} title="Spells" />

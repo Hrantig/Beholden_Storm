@@ -49,6 +49,7 @@ export function EncounterRosterPanel(props: {
 
   return (
     <Panel
+      storageKey="campaign-roster"
       title="Combat Roster"
       actions={
         encounter ? (

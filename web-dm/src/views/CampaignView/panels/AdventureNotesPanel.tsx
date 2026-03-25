@@ -21,6 +21,7 @@ export function AdventureNotesPanel(props: {
 
   return (
     <Panel
+      storageKey="campaign-adventure-notes"
       title={
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
           <IconNotes /> Adventure Notes ({notes.length})

@@ -1,6 +1,6 @@
 import type { ParsedFeatChoiceLike } from "@/lib/characterRules";
-import { parseStartingEquipmentOptions } from "@/views/CharacterCreatorUtils";
-import { normalizeInventoryItemLookupName } from "@/views/CharacterInventory";
+import { parseStartingEquipmentOptions } from "@/views/character-creator/CharacterCreatorUtils";
+import { normalizeInventoryItemLookupName } from "@/views/character/CharacterInventory";
 
 export interface ItemSummaryLike {
   id: string;
@@ -207,3 +207,4 @@ export function buildEquipmentItems(
 
   return seeds;
 }
+

@@ -21,6 +21,7 @@ export function AdventuresPanel(props: {
 
   return (
     <Panel
+      storageKey="campaign-adventures"
       title={
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
           <IconChest /> Adventures ({adventures.length})

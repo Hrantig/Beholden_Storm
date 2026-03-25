@@ -1,4 +1,4 @@
-import type { AbilKey } from "@/views/CharacterSheetTypes";
+import type { AbilKey } from "@/views/character/CharacterSheetTypes";
 
 export const ABILITY_LABELS: Record<AbilKey, string> = {
   str: "STR",
@@ -38,3 +38,4 @@ export const ALL_SKILLS: { name: string; abil: AbilKey }[] = [
   { name: "Stealth", abil: "dex" },
   { name: "Survival", abil: "wis" },
 ];
+

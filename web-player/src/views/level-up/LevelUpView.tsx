@@ -3,17 +3,22 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, jsonInit } from "@/services/api";
 import { C } from "@/lib/theme";
 import { rollDiceExpr } from "@/lib/dice";
-import { abilityMod, extractPrerequisite, formatModifier, invocationPrerequisitesMet, spellLooksLikeDamageSpell, stripPrerequisiteLine } from "@/views/CharacterSheetUtils";
+import { abilityMod, formatModifier } from "@/views/character/CharacterSheetUtils";
 import {
   getCantripCount,
+  getClassExpertiseChoices,
   getClassFeatureTable,
+  getFeatChoiceOptions,
   getMaxSlotLevel,
   getPreparedSpellCount,
+  getSpellcastingClassName,
   getSubclassLevel,
   getSubclassList,
   isSpellcaster,
   tableValueAtLevel,
-} from "@/views/CharacterCreatorUtils";
+} from "@/views/character-creator/CharacterCreatorUtils";
+import { BackBtn, ChoiceBtn, ExpertiseSelectionSection, FeatSelectionSection, Section, SpellChoiceList, Wrap } from "@/views/level-up/LevelUpParts";
+import { buildLevelUpPayload, deriveAllowedInvocationIds, deriveFeatAbilityBonuses, deriveHpGain, deriveLevelUpValidation, derivePreviewScores } from "@/views/level-up/LevelUpUtils";
 
 // ---------------------------------------------------------------------------
 // Types (minimal, matching CharacterView / CharacterCreatorView shapes)
@@ -41,6 +46,51 @@ interface SpellSummary {
   text?: string | null;
 }
 
+interface ParsedFeatChoice {
+  id: string;
+  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
+  count: number;
+  options: string[] | null;
+  anyOf?: string[];
+  amount?: number | null;
+  note?: string | null;
+}
+
+interface ParsedFeatGrants {
+  skills: string[];
+  tools: string[];
+  languages: string[];
+  armor: string[];
+  weapons: string[];
+  savingThrows: string[];
+  spells: string[];
+  cantrips: string[];
+  abilityIncreases: Record<string, number>;
+}
+
+interface ParsedFeat {
+  category: string | null;
+  baseName: string;
+  variant: string | null;
+  prerequisite: string | null;
+  repeatable: boolean;
+  source: string | null;
+  grants: ParsedFeatGrants;
+  choices: ParsedFeatChoice[];
+}
+
+interface FeatSummary {
+  id: string;
+  name: string;
+}
+
+interface FeatDetail {
+  id: string;
+  name: string;
+  text?: string | null;
+  parsed: ParsedFeat;
+}
+
 interface Character {
   id: string;
   name: string;
@@ -58,12 +108,16 @@ interface Character {
     classId?: string;
     xp?: number;
     subclass?: string | null;
+    chosenLevelUpFeats?: Array<{ level: number; featId: string }>;
     chosenCantrips?: string[];
     chosenSpells?: string[];
     chosenInvocations?: string[];
+    chosenFeatOptions?: Record<string, string[]>;
     proficiencies?: {
       spells?: Array<{ name: string; source: string }>;
       invocations?: Array<{ name: string; source: string }>;
+      skills?: Array<{ name: string; source: string }>;
+      expertise?: Array<{ name: string; source: string }>;
       [k: string]: unknown;
     };
     [k: string]: unknown;
@@ -111,6 +165,12 @@ export function LevelUpView() {
   const [chosenCantrips, setChosenCantrips] = useState<string[]>([]);
   const [chosenSpells, setChosenSpells] = useState<string[]>([]);
   const [chosenInvocations, setChosenInvocations] = useState<string[]>([]);
+  const [chosenExpertise, setChosenExpertise] = useState<Record<string, string[]>>({});
+  const [featSummaries, setFeatSummaries] = useState<FeatSummary[]>([]);
+  const [featSearch, setFeatSearch] = useState("");
+  const [chosenFeatId, setChosenFeatId] = useState<string>("");
+  const [chosenFeatDetail, setChosenFeatDetail] = useState<FeatDetail | null>(null);
+  const [chosenFeatOptions, setChosenFeatOptions] = useState<Record<string, string[]>>({});
   const [classCantrips, setClassCantrips] = useState<SpellSummary[]>([]);
   const [classSpells, setClassSpells] = useState<SpellSummary[]>([]);
   const [classInvocations, setClassInvocations] = useState<SpellSummary[]>([]);
@@ -127,6 +187,12 @@ export function LevelUpView() {
         setChosenCantrips(c.characterData?.chosenCantrips ?? []);
         setChosenSpells(c.characterData?.chosenSpells ?? []);
         setChosenInvocations(c.characterData?.chosenInvocations ?? []);
+        const existingFeatOptions = (c.characterData?.chosenFeatOptions ?? {}) as Record<string, string[]>;
+        setChosenExpertise(
+          Object.fromEntries(
+            Object.entries(existingFeatOptions).filter(([key]) => key.startsWith("classexpertise:"))
+          )
+        );
         const classId = c.characterData?.classId;
         if (classId) {
           return api<ClassDetail>(`/api/compendium/classes/${classId}`);
@@ -145,7 +211,8 @@ export function LevelUpView() {
       setClassInvocations([]);
       return;
     }
-    const name = encodeURIComponent(classDetail.name);
+    const spellcastingClassName = getSpellcastingClassName(classDetail, nextLevel, subclass) ?? classDetail.name;
+    const name = encodeURIComponent(spellcastingClassName);
     api<SpellSummary[]>(`/api/spells/search?classes=${name}&level=0&limit=200`).then(setClassCantrips).catch(() => setClassCantrips([]));
     api<SpellSummary[]>(`/api/spells/search?classes=${name}&minLevel=1&maxLevel=9&limit=300`).then(setClassSpells).catch(() => setClassSpells([]));
     if (/warlock/i.test(classDetail.name)) {
@@ -153,7 +220,21 @@ export function LevelUpView() {
     } else {
       setClassInvocations([]);
     }
-  }, [classDetail]);
+  }, [classDetail, nextLevel, subclass]);
+
+  useEffect(() => {
+    api<FeatSummary[]>("/api/compendium/feats").then(setFeatSummaries).catch(() => setFeatSummaries([]));
+  }, []);
+
+  useEffect(() => {
+    if (!chosenFeatId) {
+      setChosenFeatDetail(null);
+      return;
+    }
+    api<FeatDetail>(`/api/compendium/feats/${encodeURIComponent(chosenFeatId)}`)
+      .then((feat) => setChosenFeatDetail(feat))
+      .catch(() => setChosenFeatDetail(null));
+  }, [chosenFeatId]);
 
   const nextLevel = (char?.level ?? 0) + 1;
 
@@ -164,44 +245,33 @@ export function LevelUpView() {
   const hpRollMax = hd + conMod;
 
   const autoLevel = classDetail?.autolevels.find((al) => al.level === nextLevel);
-  const newFeatures = autoLevel?.features.filter((f) => !f.optional) ?? [];
+  const newFeatures = autoLevel?.features.filter((f) => !f.optional || (Boolean(subclass) && /\(([^()]+)\)\s*$/.test(f.name) && new RegExp(`\\(${subclass.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)\\s*$`, "i").test(f.name))) ?? [];
   const isAsiLevel = autoLevel?.scoreImprovement ?? false;
   const newSlots = autoLevel?.slots ?? null;
   const subclassLevel = classDetail ? getSubclassLevel(classDetail) : null;
   const subclassOptions = classDetail ? getSubclassList(classDetail) : [];
   const needsSubclassChoice = Boolean(subclassLevel && nextLevel >= subclassLevel && subclassOptions.length > 0);
-  const cantripCount = classDetail ? getCantripCount(classDetail, nextLevel) : 0;
-  const invocTable = classDetail ? getClassFeatureTable(classDetail, "Invocation", nextLevel) : [];
+  const cantripCount = classDetail ? getCantripCount(classDetail, nextLevel, subclass) : 0;
+  const invocTable = classDetail ? getClassFeatureTable(classDetail, "Invocation", nextLevel, subclass) : [];
   const invocCount = invocTable.length > 0 ? tableValueAtLevel(invocTable, nextLevel) : 0;
-  const prepCount = classDetail ? getPreparedSpellCount(classDetail, nextLevel) : 0;
-  const maxSpellLevel = classDetail ? getMaxSlotLevel(classDetail, nextLevel) : 0;
-  const spellcaster = classDetail ? isSpellcaster(classDetail) : false;
+  const prepCount = classDetail ? getPreparedSpellCount(classDetail, nextLevel, subclass) : 0;
+  const maxSpellLevel = classDetail ? getMaxSlotLevel(classDetail, nextLevel, subclass) : 0;
+  const spellcaster = classDetail ? isSpellcaster(classDetail, nextLevel, subclass) : false;
+  const expertiseChoices = classDetail ? getClassExpertiseChoices(classDetail, nextLevel) : [];
+  const proficientSkills = Array.isArray(char?.characterData?.proficiencies?.skills)
+    ? char.characterData?.proficiencies?.skills.map((entry) => entry.name)
+    : [];
+  const existingExpertise = Array.isArray(char?.characterData?.proficiencies?.expertise)
+    ? char.characterData?.proficiencies?.expertise.map((entry) => entry.name)
+    : [];
+  const featChoiceEntries = React.useMemo(
+    () => (chosenFeatDetail?.parsed.choices ?? []).filter((choice) => choice.type !== "damage_type"),
+    [chosenFeatDetail]
+  );
+  const featSourceLabel = chosenFeatDetail ? `${chosenFeatDetail.name} (Level ${nextLevel})` : "";
   const allowedInvocationIds = React.useMemo(
-    () => {
-      const chosenCantripNames = classCantrips
-        .filter((spell) => chosenCantrips.includes(spell.id))
-        .map((spell) => spell.name);
-      const chosenDamageCantripNames = classCantrips
-        .filter((spell) => chosenCantrips.includes(spell.id) && spellLooksLikeDamageSpell(spell))
-        .map((spell) => spell.name);
-      const chosenInvocationNames = classInvocations
-        .filter((invocation) => chosenInvocations.includes(invocation.id))
-        .map((invocation) => invocation.name);
-
-      return new Set(
-        classInvocations
-          .filter((invocation) =>
-            invocationPrerequisitesMet(invocation.text ?? "", {
-              level: nextLevel,
-              chosenCantripNames,
-              chosenDamageCantripNames,
-              chosenInvocationNames,
-            })
-          )
-          .map((invocation) => invocation.id)
-      );
-    },
-    [chosenCantrips, chosenInvocations, classCantrips, classDetail?.name, classInvocations, nextLevel]
+    () => deriveAllowedInvocationIds({ classCantrips, classInvocations, chosenCantrips, chosenInvocations, nextLevel }),
+    [chosenCantrips, chosenInvocations, classCantrips, classInvocations, nextLevel]
   );
 
   useEffect(() => {
@@ -232,40 +302,118 @@ export function LevelUpView() {
     });
   }, [allowedInvocationIds, invocCount]);
 
-  // Determine HP gain for display
-  const hpGain = hpChoice === "average"
-    ? hpAverage
-    : hpChoice === "roll"
-      ? rolledHp ?? null
-      : hpChoice === "manual"
-        ? (() => {
-            const value = parseInt(manualHp, 10);
-            return Number.isFinite(value) && value > 0 ? value : null;
-          })()
-      : null;
+  useEffect(() => {
+    if (expertiseChoices.length === 0) return;
+    setChosenExpertise((prev) => {
+      let changed = false;
+      const next: Record<string, string[]> = { ...prev };
+      const taken = new Set(existingExpertise.map((name) => name.toLowerCase()));
+      for (const choice of expertiseChoices) {
+        const options = (choice.options ?? proficientSkills).filter((skill) => proficientSkills.includes(skill));
+        const current = prev[choice.key] ?? [];
+        const filtered = current
+          .filter((skill) => options.includes(skill))
+          .filter((skill) => !taken.has(skill.toLowerCase()))
+          .slice(0, choice.count);
+        filtered.forEach((skill) => taken.add(skill.toLowerCase()));
+        if (filtered.length === 0) delete next[choice.key];
+        else next[choice.key] = filtered;
+        if (filtered.length !== current.length || filtered.some((skill, index) => skill !== current[index])) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [expertiseChoices, proficientSkills, existingExpertise]);
+
+  useEffect(() => {
+    if (!chosenFeatDetail) {
+      setChosenFeatOptions({});
+      return;
+    }
+    setChosenFeatOptions((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const choice of chosenFeatDetail.parsed.choices) {
+        const key = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
+        const options = getFeatChoiceOptions(choice);
+        next[key] = (prev[key] ?? [])
+          .filter((value) => options.includes(value))
+          .slice(0, choice.count);
+      }
+      return next;
+    });
+  }, [chosenFeatDetail, nextLevel]);
+
+  const hpGain = deriveHpGain(hpChoice, hpAverage, rolledHp, manualHp);
+  const featAbilityBonuses = React.useMemo(
+    () => deriveFeatAbilityBonuses({ chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel }),
+    [chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel]
+  );
+  const featHpBonus = asiMode === "feat" && /(^|\\s)tough(\\s|$)/i.test(chosenFeatDetail?.name ?? "") ? nextLevel * 2 : 0;
 
   // Current scores + ASI deltas
   const baseScores: Record<string, number> = {
     str: char?.strScore ?? 10, dex: char?.dexScore ?? 10, con: char?.conScore ?? 10,
     int: char?.intScore ?? 10, wis: char?.wisScore ?? 10, cha: char?.chaScore ?? 10,
   };
-  const previewScores: Record<string, number> = { ...baseScores };
-  for (const [k, v] of Object.entries(asiStats)) {
-    previewScores[k] = Math.min(20, (previewScores[k] ?? 10) + v);
-  }
-
-  const asiTotal = Object.values(asiStats).reduce((a, b) => a + b, 0);
-  const asiValid =
-    !isAsiLevel ||
-    asiMode === "feat" ||
-    (asiMode === "+2" && asiTotal === 2) ||
-    (asiMode === "+1+1" && asiTotal === 2 && Object.values(asiStats).every((v) => v <= 1));
-  const subclassValid = !needsSubclassChoice || Boolean(subclass.trim());
-  const cantripsValid = cantripCount === 0 || chosenCantrips.length === cantripCount;
-  const spellsValid = !spellcaster || prepCount === 0 || chosenSpells.length === prepCount;
-  const invocationsValid = invocCount === 0 || chosenInvocations.length === invocCount;
-
-  const canConfirm = hpGain !== null && asiValid && subclassValid && cantripsValid && spellsValid && invocationsValid;
+  const previewScores = React.useMemo(
+    () => derivePreviewScores({ baseScores, asiStats, asiMode, featAbilityBonuses }),
+    [baseScores, asiStats, asiMode, featAbilityBonuses]
+  );
+  const { filteredFeatSummaries, featPrereqsMet, asiTotal, canConfirm } = React.useMemo(
+    () =>
+      deriveLevelUpValidation({
+        isAsiLevel,
+        asiMode,
+        asiStats,
+        needsSubclassChoice,
+        subclass,
+        cantripCount,
+        chosenCantrips,
+        spellcaster,
+        prepCount,
+        chosenSpells,
+        invocCount,
+        chosenInvocations,
+        expertiseChoices,
+        chosenExpertise,
+        chosenFeatDetail,
+        featChoiceEntries,
+        chosenFeatOptions,
+        nextLevel,
+        className: classDetail?.name ?? char?.className,
+        level: nextLevel,
+        scores: baseScores,
+        prof: (char?.characterData?.proficiencies as Character["characterData"]["proficiencies"]) ?? undefined,
+        featSearch,
+        featSummaries,
+        hpGain,
+      }),
+    [
+      isAsiLevel,
+      asiMode,
+      asiStats,
+      needsSubclassChoice,
+      subclass,
+      cantripCount,
+      chosenCantrips,
+      spellcaster,
+      prepCount,
+      chosenSpells,
+      invocCount,
+      chosenInvocations,
+      expertiseChoices,
+      chosenExpertise,
+      chosenFeatDetail,
+      featChoiceEntries,
+      chosenFeatOptions,
+      nextLevel,
+      classDetail?.name,
+      char?.className,
+      char?.characterData?.proficiencies,
+      featSearch,
+      featSummaries,
+      hpGain,
+    ]
+  );
 
   if (loading) return <Wrap><p style={{ color: C.muted }}>Loading…</p></Wrap>;
   if (error || !char) return <Wrap><p style={{ color: C.red }}>{error ?? "Character not found."}</p></Wrap>;
@@ -318,8 +466,6 @@ export function LevelUpView() {
     if (!char || !canConfirm) return;
     setSaving(true);
     try {
-      const newHpMax = char.hpMax + (hpGain ?? 0);
-      const proficiencies = { ...(char.characterData?.proficiencies ?? {}) } as NonNullable<Character["characterData"]>["proficiencies"];
       const selectedCantripEntries = classCantrips
         .filter((spell) => chosenCantrips.includes(spell.id))
         .map((spell) => ({ name: spell.name, source: classDetail?.name ?? char.className }));
@@ -329,40 +475,31 @@ export function LevelUpView() {
       const selectedInvocationEntries = classInvocations
         .filter((spell) => chosenInvocations.includes(spell.id))
         .map((spell) => ({ name: spell.name, source: classDetail?.name ?? char.className }));
-      const existingSpells = Array.isArray(proficiencies?.spells) ? proficiencies.spells : [];
-      const existingInvocations = Array.isArray(proficiencies?.invocations) ? proficiencies.invocations : [];
-      const classSource = classDetail?.name ?? char.className;
-      const nextCharacterData = {
-        ...(char.characterData ?? {}),
-        subclass: subclass || null,
+      const payload = buildLevelUpPayload({
+        char,
+        nextLevel,
+        hpGain: hpGain ?? 0,
+        featHpBonus,
+        subclass,
         chosenCantrips,
         chosenSpells,
         chosenInvocations,
-        proficiencies: {
-          ...(proficiencies ?? {}),
-          spells: [
-            ...existingSpells.filter((entry) => entry.source !== classSource),
-            ...selectedCantripEntries,
-            ...selectedSpellEntries,
-          ],
-          invocations: [
-            ...existingInvocations.filter((entry) => entry.source !== classSource),
-            ...selectedInvocationEntries,
-          ],
-        },
-      };
-      const payload: Record<string, unknown> = {
-        level: nextLevel,
-        hpMax: newHpMax,
-        hpCurrent: char.hpCurrent + (hpGain ?? 0),
-        characterData: nextCharacterData,
-      };
-      if (asiMode === "+2" || asiMode === "+1+1") {
-        for (const [k, v] of Object.entries(asiStats)) {
-          const scoreKey = `${k}Score`;
-          payload[scoreKey] = Math.min(20, (baseScores[k] ?? 10) + v);
-        }
-      }
+        chosenExpertise,
+        chosenFeatOptions,
+        expertiseChoices,
+        featChoiceEntries,
+        chosenFeatDetail,
+        featSourceLabel,
+        newFeatures,
+        classDetailName: classDetail?.name,
+        selectedCantripEntries,
+        selectedSpellEntries,
+        selectedInvocationEntries,
+        baseScores,
+        asiMode,
+        asiStats,
+        featAbilityBonuses,
+      });
       await api(`/api/me/characters/${char.id}`, jsonInit("PUT", payload));
       navigate(`/characters/${char.id}`);
     } catch (e) {
@@ -448,7 +585,7 @@ export function LevelUpView() {
         )}
         {hpGain !== null && (
           <div style={{ marginTop: 10, fontSize: 13, color: C.muted }}>
-            New HP max: <span style={{ color: "#fff", fontWeight: 700 }}>{char.hpMax} + {hpGain} = {char.hpMax + hpGain}</span>
+            New HP max: <span style={{ color: "#fff", fontWeight: 700 }}>{char.hpMax} + {hpGain}{featHpBonus > 0 ? ` + ${featHpBonus}` : ""} = {char.hpMax + hpGain + featHpBonus}</span>
           </div>
         )}
       </Section>
@@ -507,17 +644,57 @@ export function LevelUpView() {
           )}
 
           {asiMode === "feat" && (
-            <div style={{
-              padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.03)", fontSize: 12, color: C.muted,
-            }}>
-              Feat selection is managed in the full character editor.{" "}
-              <span
-                style={{ color: accentColor, cursor: "pointer", textDecoration: "underline" }}
-                onClick={() => navigate(`/characters/${char.id}/edit`)}
-              >Open editor →</span>
-            </div>
+            <FeatSelectionSection
+              accentColor={accentColor}
+              featSearch={featSearch}
+              onFeatSearchChange={setFeatSearch}
+              chosenFeatId={chosenFeatId}
+              filteredFeatSummaries={filteredFeatSummaries}
+              onChooseFeat={(featId) => {
+                setChosenFeatId(featId);
+                setChosenFeatOptions({});
+              }}
+              chosenFeatDetail={chosenFeatDetail}
+              featPrereqsMet={featPrereqsMet}
+              featChoiceEntries={featChoiceEntries}
+              chosenFeatOptions={chosenFeatOptions}
+              nextLevel={nextLevel}
+              onToggleFeatOption={(choiceKey, option, count) => {
+                setChosenFeatOptions((prev) => {
+                  const current = prev[choiceKey] ?? [];
+                  const next = current.includes(option)
+                    ? current.filter((entry) => entry !== option)
+                    : current.length < count
+                      ? [...current, option]
+                      : current;
+                  return { ...prev, [choiceKey]: next };
+                });
+              }}
+            />
           )}
+        </Section>
+      )}
+
+      {expertiseChoices.length > 0 && (
+        <Section title={`Expertise at Level ${nextLevel}`} accent={accentColor}>
+          <ExpertiseSelectionSection
+            accentColor={accentColor}
+            expertiseChoices={expertiseChoices}
+            chosenExpertise={chosenExpertise}
+            proficientSkills={proficientSkills}
+            existingExpertise={existingExpertise}
+            onToggleExpertise={(choiceKey, skill, count) => {
+              setChosenExpertise((prev) => {
+                const current = prev[choiceKey] ?? [];
+                const next = current.includes(skill)
+                  ? current.filter((entry) => entry !== skill)
+                  : current.length < count
+                    ? [...current, skill]
+                    : current;
+                return { ...prev, [choiceKey]: next };
+              });
+            }}
+          />
         </Section>
       )}
 
@@ -666,142 +843,3 @@ export function LevelUpView() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Local sub-components
-// ---------------------------------------------------------------------------
-
-function Wrap({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ height: "100%", overflowY: "auto", background: C.bg, color: C.text }}>
-      <div style={{
-        maxWidth: 540, margin: "0 auto", padding: "24px 16px 140px",
-        fontFamily: "system-ui, Segoe UI, Arial", color: C.text,
-      }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function BackBtn({ onClick }: { onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      background: "none", border: "none", cursor: "pointer", color: C.muted,
-      fontSize: 13, padding: "6px 0",
-    }}>← Back</button>
-  );
-}
-
-function Section({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      marginBottom: 20, padding: "16px", borderRadius: 12,
-      border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)",
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SpellChoiceList({ title, caption, spells, chosen, max, onToggle, isAllowed }: {
-  title: string;
-  caption: string;
-  spells: SpellSummary[];
-  chosen: string[];
-  max: number;
-  onToggle: (id: string) => void;
-  isAllowed?: (spell: SpellSummary) => boolean;
-}) {
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{title}</div>
-        <div style={{ fontSize: 11, color: C.muted }}>
-          {chosen.length} / {max} · {caption}
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-        {spells.map((spell) => {
-          const active = chosen.includes(spell.id);
-          const allowed = isAllowed ? isAllowed(spell) : true;
-          const blocked = !active && (chosen.length >= max || !allowed);
-          const prerequisite = extractPrerequisite(spell.text);
-          const preview = stripPrerequisiteLine(spell.text).replace(/Source:.*$/ms, "").trim();
-          return (
-            <button
-              key={spell.id}
-              type="button"
-              onClick={() => !blocked && onToggle(spell.id)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 8,
-                cursor: blocked ? "not-allowed" : "pointer",
-                border: `2px solid ${active ? "#38b6ff" : "rgba(255,255,255,0.1)"}`,
-                background: active ? "rgba(56,182,255,0.14)" : "rgba(255,255,255,0.03)",
-                color: blocked ? C.muted : C.text,
-                textAlign: "left",
-                opacity: blocked ? 0.6 : 1,
-                minHeight: 92,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{spell.name}</div>
-              {spell.level != null && spell.level > 0 && (
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
-                  Level {spell.level}
-                </div>
-              )}
-              {prerequisite && (
-                <div style={{ marginTop: 6, fontSize: 10, lineHeight: 1.35 }}>
-                  <span style={{ color: allowed ? "#fbbf24" : "#f87171", fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    Prerequisite
-                  </span>
-                  <span style={{ color: allowed ? "rgba(251,191,36,0.92)" : "#fca5a5" }}> {prerequisite}</span>
-                </div>
-              )}
-              {!allowed && prerequisite && (
-                <div style={{ marginTop: 4, fontSize: 10, color: "#f87171", fontWeight: 700 }}>
-                  Prerequisite not met
-                </div>
-              )}
-              {preview && (
-                <div style={{ marginTop: 6, fontSize: 10, lineHeight: 1.35, color: "rgba(160,180,220,0.72)" }}>
-                  {preview.slice(0, 150)}{preview.length > 150 ? "…" : ""}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {spells.length === 0 && (
-        <div style={{ fontSize: 12, color: C.muted }}>No eligible options found in compendium.</div>
-      )}
-    </div>
-  );
-}
-
-function ChoiceBtn({ active, onClick, accent, children }: {
-  active: boolean;
-  onClick: () => void;
-  accent?: string;
-  children: React.ReactNode;
-}) {
-  const color = accent ?? "#38b6ff";
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1, padding: "10px 14px", borderRadius: 8, cursor: "pointer",
-        border: `2px solid ${active ? color : "rgba(255,255,255,0.1)"}`,
-        background: active ? `${color}18` : "rgba(255,255,255,0.03)",
-        color: active ? "#fff" : C.muted,
-        fontSize: 13, fontWeight: active ? 700 : 500,
-        transition: "border-color 0.15s, background 0.15s",
-      }}
-    >
-      {children}
-    </button>
-  );
-}

@@ -4,7 +4,7 @@ import { C } from "@/lib/theme";
 import { api } from "@/services/api";
 import { IconPlayer, IconConditionByKey } from "@/icons";
 import { useWs } from "@/services/ws";
-import { hpColor } from "@/views/CharacterSheetUtils";
+import { hpColor } from "@/views/character/CharacterSheetUtils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -218,3 +218,4 @@ export function CampaignPartyView() {
     </div>
   );
 }
+

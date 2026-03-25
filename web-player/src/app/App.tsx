@@ -2,17 +2,17 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { WsProvider } from "@/services/ws";
-import { LoginView } from "@/views/LoginView";
-import { PlayerHomeView } from "@/views/PlayerHomeView";
+import { LoginView } from "@/views/auth/LoginView";
+import { PlayerHomeView } from "@/views/home/PlayerHomeView";
 import { AppShell } from "./AppShell";
 
 const CompendiumView = React.lazy(() => import("@/views/CompendiumView/CompendiumView").then(m => ({ default: m.CompendiumView })));
-const CharacterCreatorView = React.lazy(() => import("@/views/CharacterCreatorView").then(m => ({ default: m.CharacterCreatorView })));
-const CharacterView = React.lazy(() => import("@/views/CharacterView").then(m => ({ default: m.CharacterView })));
-const LevelUpView = React.lazy(() => import("@/views/LevelUpView").then(m => ({ default: m.LevelUpView })));
-const ProfileView = React.lazy(() => import("@/views/ProfileView").then(m => ({ default: m.ProfileView })));
-const CampaignPartyView = React.lazy(() => import("@/views/CampaignPartyView").then(m => ({ default: m.CampaignPartyView })));
-const PartyMemberView = React.lazy(() => import("@/views/PartyMemberView").then(m => ({ default: m.PartyMemberView })));
+const CharacterCreatorView = React.lazy(() => import("@/views/character-creator/CharacterCreatorView").then(m => ({ default: m.CharacterCreatorView })));
+const CharacterView = React.lazy(() => import("@/views/character/CharacterView").then(m => ({ default: m.CharacterView })));
+const LevelUpView = React.lazy(() => import("@/views/level-up/LevelUpView").then(m => ({ default: m.LevelUpView })));
+const ProfileView = React.lazy(() => import("@/views/profile/ProfileView").then(m => ({ default: m.ProfileView })));
+const CampaignPartyView = React.lazy(() => import("@/views/campaign/CampaignPartyView").then(m => ({ default: m.CampaignPartyView })));
+const PartyMemberView = React.lazy(() => import("@/views/campaign/PartyMemberView").then(m => ({ default: m.PartyMemberView })));
 
 function AuthGate() {
   const { user, isLoading } = useAuth();
@@ -71,3 +71,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+

@@ -1,8 +1,8 @@
 import React from "react";
 import { C } from "@/lib/theme";
 import { IconAttack, IconConditionByKey, IconConditions, IconHeal, IconHeart, IconInspiration, IconPlayer } from "@/icons";
-import { HexBtn, Panel } from "@/views/CharacterViewParts";
-import type { CharacterCampaign, ConditionInstance, CharacterData } from "@/views/CharacterSheetTypes";
+import { HexBtn, Panel } from "@/views/character/CharacterViewParts";
+import type { CharacterCampaign, ConditionInstance, CharacterData } from "@/views/character/CharacterSheetTypes";
 
 interface CharacterHudLike {
   id: string;
@@ -44,6 +44,7 @@ const CONDITIONS = [
   { key: "stunned", name: "Stunned" },
   { key: "unconscious", name: "Unconscious" },
   { key: "concentration", name: "Concentration" },
+  { key: "disadvantage", name: "Disadvantage" },
   { key: "hexed", name: "Hexed", needsCaster: true },
   { key: "marked", name: "Marked", needsCaster: true },
 ];
@@ -639,3 +640,4 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
     </>
   );
 }
+

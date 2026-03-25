@@ -77,6 +77,7 @@ export function CompendiumAdminPanel() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, minHeight: 0, overflow: "auto" }}>
       <Panel
+        storageKey="compendium-admin-import"
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--fs-large)" }}>
             <IconCompendiumAlt size={36} title="Compendium" />

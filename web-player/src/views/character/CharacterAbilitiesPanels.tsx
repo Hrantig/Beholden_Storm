@@ -1,10 +1,10 @@
 import React from "react";
 import { C } from "@/lib/theme";
-import { Panel, PanelTitle, ProfDot, Tooltip } from "@/views/CharacterViewParts";
-import type { AbilKey, ProficiencyMap, TaggedItem } from "@/views/CharacterSheetTypes";
-import { ABILITY_FULL, ABILITY_LABELS, ALL_SKILLS } from "@/views/CharacterSheetConstants";
-import { hasNamedProficiency } from "@/views/CharacterSheetUtils";
-import { formatWeaponProficiencyName } from "@/views/CharacterInventory";
+import { CollapsiblePanel, ProfDot, Tooltip } from "@/views/character/CharacterViewParts";
+import type { AbilKey, ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
+import { ABILITY_FULL, ABILITY_LABELS, ALL_SKILLS } from "@/views/character/CharacterSheetConstants";
+import { getSaveBonus, getSkillBonus, getSkillProficiencyTier, hasNamedProficiency } from "@/views/character/CharacterSheetUtils";
+import { formatWeaponProficiencyName } from "@/views/character/CharacterInventory";
 
 export interface CharacterAbilitiesPanelsProps {
   scores: Record<AbilKey, number | null>;
@@ -13,6 +13,7 @@ export interface CharacterAbilitiesPanelsProps {
   accentColor: string;
   stealthDisadvantage: boolean;
   nonProficientArmorPenalty: boolean;
+  hasJackOfAllTrades?: boolean;
   mod: (score: number | null) => number;
   fmtMod: (value: number) => string;
 }
@@ -24,13 +25,13 @@ export function CharacterAbilitiesPanels({
   accentColor,
   stealthDisadvantage,
   nonProficientArmorPenalty,
+  hasJackOfAllTrades = false,
   mod,
   fmtMod,
 }: CharacterAbilitiesPanelsProps) {
   return (
     <>
-      <Panel>
-        <PanelTitle color={accentColor}>Abilities &amp; Saves</PanelTitle>
+      <CollapsiblePanel title="Abilities &amp; Saves" color={accentColor} storageKey="abilities-saves">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 18, rowGap: 8, width: "100%" }}>
           {(["str", "dex", "con"] as AbilKey[]).flatMap((leftKey, i) => {
             const rightKey = (["int", "wis", "cha"] as AbilKey[])[i];
@@ -38,7 +39,7 @@ export function CharacterAbilitiesPanels({
               const score = scores[k];
               const m = mod(score);
               const isProfSave = prof ? hasNamedProficiency(prof.saves, ABILITY_FULL[k]) : false;
-              const save = m + (isProfSave ? pb : 0);
+              const save = getSaveBonus(ABILITY_FULL[k], k, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined);
               const showSaveDisadvantage = nonProficientArmorPenalty && (k === "str" || k === "dex");
               return (
                 <div key={k} style={{ minWidth: 0 }}>
@@ -62,15 +63,17 @@ export function CharacterAbilitiesPanels({
             });
           })}
         </div>
-      </Panel>
+      </CollapsiblePanel>
 
-      <Panel>
-        <PanelTitle color={accentColor}>Skills</PanelTitle>
+      <CollapsiblePanel title="Skills" color={accentColor} storageKey="skills">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 18, rowGap: 2 }}>
           {ALL_SKILLS.map(({ name, abil }) => {
-            const isProfSkill = prof ? hasNamedProficiency(prof.skills, name) : false;
-            const bonus = mod(scores[abil]) + (isProfSkill ? pb : 0);
+            const tier = getSkillProficiencyTier(prof ?? undefined, name);
+            const isProfSkill = tier >= 1;
+            const isExpertise = tier >= 2;
+            const bonus = getSkillBonus(name, abil, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades });
             const src = prof?.skills.find((s) => s.name.toLowerCase() === name.toLowerCase())?.source;
+            const expertiseSrc = prof?.expertise.find((s) => s.name.toLowerCase() === name.toLowerCase())?.source;
             const showArmorPenalty = nonProficientArmorPenalty && (abil === "str" || abil === "dex");
             const showStealthDisadvantage = name === "Stealth" && stealthDisadvantage;
             const showDisadvantage = showArmorPenalty || showStealthDisadvantage;
@@ -86,7 +89,7 @@ export function CharacterAbilitiesPanels({
                   minWidth: 0,
                 }}
               >
-                <ProfDot filled={isProfSkill} color={C.green} />
+                <ProfDot filled={isProfSkill} color={isExpertise ? accentColor : C.green} />
                 <span
                   style={{
                     fontSize: 9,
@@ -112,6 +115,9 @@ export function CharacterAbilitiesPanels({
                   }}
                 >
                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                  {isExpertise && (
+                    <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>EXP</span>
+                  )}
                   {showDisadvantage && (
                     <span
                       title={showArmorPenalty ? "Disadvantage while wearing armor or a shield without proficiency" : "Disadvantage on Stealth checks from equipped armor"}
@@ -141,60 +147,72 @@ export function CharacterAbilitiesPanels({
                     fontWeight: 700,
                     minWidth: 26,
                     textAlign: "right",
-                    color: showDisadvantage ? "#f87171" : isProfSkill ? C.green : C.text,
+                    color: showDisadvantage ? "#f87171" : isExpertise ? accentColor : isProfSkill ? C.green : C.text,
                   }}
                 >
-                  {isProfSkill && src ? <Tooltip text={src}>{fmtMod(bonus)}{showDisadvantage ? " D" : ""}</Tooltip> : `${fmtMod(bonus)}${showDisadvantage ? " D" : ""}`}
+                  {isProfSkill && (src || expertiseSrc)
+                    ? <Tooltip text={[src, expertiseSrc].filter(Boolean).join(" • ")}>{fmtMod(bonus)}{showDisadvantage ? " D" : ""}</Tooltip>
+                    : `${fmtMod(bonus)}${showDisadvantage ? " D" : ""}`}
                 </span>
               </div>
             );
           })}
         </div>
-      </Panel>
+      </CollapsiblePanel>
 
-      {prof && (() => {
-        const sections = [
-          { label: "Armor", items: prof.armor, color: "#a78bfa" },
-          { label: "Weapons", items: prof.weapons, color: "#f87171" },
-          { label: "Tools", items: prof.tools, color: "#fb923c" },
-          { label: "Languages", items: prof.languages, color: "#60a5fa" },
-        ].filter((s) => s.items.length > 0);
-        if (!sections.length) return null;
-        return (
-          <Panel>
-            <PanelTitle color={accentColor}>Proficiencies &amp; Languages</PanelTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {sections.map((s) => (
-                <div key={s.label}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
-                    {s.label}
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {s.items.map((item, i) => (
-                      <Tooltip key={i} text={item.source}>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            padding: "3px 9px",
-                            borderRadius: 5,
-                            cursor: "default",
-                            background: s.color + "18",
-                            border: `1px solid ${s.color}44`,
-                            color: s.color,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {s.label === "Weapons" ? formatWeaponProficiencyName(item.name) : item.name}
-                        </span>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Panel>
-        );
-      })()}
     </>
   );
 }
+
+export function CharacterProficienciesPanel({
+  prof,
+  accentColor,
+}: {
+  prof: ProficiencyMap | null | undefined;
+  accentColor: string;
+}) {
+  if (!prof) return null;
+  const sections = [
+    { label: "Armor", items: prof.armor, color: "#a78bfa" },
+    { label: "Weapons", items: prof.weapons, color: "#f87171" },
+    { label: "Weapon Masteries", items: prof.masteries, color: "#fbbf24" },
+    { label: "Tools", items: prof.tools, color: "#fb923c" },
+    { label: "Expertise", items: prof.expertise, color: accentColor },
+    { label: "Languages", items: prof.languages, color: "#60a5fa" },
+  ].filter((s) => s.items.length > 0);
+  if (!sections.length) return null;
+  return (
+    <CollapsiblePanel title="Proficiencies &amp; Languages" color={accentColor} storageKey="proficiencies">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {sections.map((s) => (
+          <div key={s.label}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+              {s.label}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {s.items.map((item, i) => (
+                <Tooltip key={i} text={item.source}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      padding: "3px 9px",
+                      borderRadius: 5,
+                      cursor: "default",
+                      background: s.color + "18",
+                      border: `1px solid ${s.color}44`,
+                      color: s.color,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {s.label === "Weapons" ? formatWeaponProficiencyName(item.name) : item.name}
+                  </span>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </CollapsiblePanel>
+  );
+}
+

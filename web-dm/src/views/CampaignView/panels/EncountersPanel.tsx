@@ -23,6 +23,7 @@ export function EncountersPanel(props: {
 
   return (
     <Panel
+      storageKey="campaign-encounters"
       title={
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
           <IconEncounter /> Encounters ({encounters.length})

@@ -46,6 +46,7 @@ export function PlayersPanel(props: {
 
   return (
     <Panel
+      storageKey="campaign-players"
       title={
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
           <IconPlayer /> Players ({players.length})

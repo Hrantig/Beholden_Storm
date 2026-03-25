@@ -7,6 +7,7 @@
  */
 
 import { parseFeat, type ParsedFeat } from "./featParser.js";
+import { type Ruleset } from "./inferRuleset.js";
 
 export const ALL_SKILLS = [
   "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
@@ -77,8 +78,6 @@ export interface StructuredBgProficiencies {
   featChoice: number;        // number of origin feats the player must choose (0 = none)
   abilityScores: string[];   // the ability scores player can choose from
 }
-
-export type Ruleset = "5.5e";
 
 export interface StructuredRaceChoices {
   hasChosenSize: boolean;

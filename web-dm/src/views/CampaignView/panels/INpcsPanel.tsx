@@ -42,6 +42,7 @@ export function INpcsPanel(props: Props) {
 
   return (
     <Panel
+      storageKey="campaign-inpcs"
       title={
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
           <IconINPC /> Important NPCs ({props.inpcs.length})

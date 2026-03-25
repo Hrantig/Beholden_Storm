@@ -20,6 +20,7 @@ export function CampaignNotesPanel(props: {
 
   return (
     <Panel
+      storageKey="campaign-notes"
       title={
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
           <IconNotes /> Campaign Notes ({notes.length})

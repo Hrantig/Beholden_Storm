@@ -1,16 +1,15 @@
 import React from "react";
 import { C } from "@/lib/theme";
 import { DraggableList } from "@/ui/DraggableList";
-import type { ClassFeatureEntry, PlayerNote, ResourceCounter } from "@/views/CharacterSheetTypes";
+import type { ClassFeatureEntry, PlayerNote, ResourceCounter } from "@/views/character/CharacterSheetTypes";
 import {
-  Panel,
-  PanelTitle,
+  CollapsiblePanel,
   panelHeaderAddBtn,
   miniPillBtn,
   restBtnStyle,
   NoteItem,
   ClassFeatureItem,
-} from "@/views/CharacterViewParts";
+} from "@/views/character/CharacterViewParts";
 
 export function CharacterSupportPanels(props: {
   accentColor: string;
@@ -73,8 +72,7 @@ export function CharacterSupportPanels(props: {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Panel>
-        <PanelTitle color={accentColor}>Recovery</PanelTitle>
+      <CollapsiblePanel title="Recovery" color={accentColor} storageKey="recovery">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{
             display: "grid",
@@ -184,14 +182,11 @@ export function CharacterSupportPanels(props: {
             </div>
           )}
         </div>
-      </Panel>
+      </CollapsiblePanel>
 
-      <Panel>
-        <PanelTitle color={accentColor} actions={
-          <button type="button" onClick={onOpenPlayerNoteCreate} title="Add note" style={panelHeaderAddBtn(accentColor)}>
-            +
-          </button>
-        }>Player Notes</PanelTitle>
+      <CollapsiblePanel title="Player Notes" color={accentColor} storageKey="player-notes" actions={
+        <button type="button" onClick={onOpenPlayerNoteCreate} title="Add note" style={panelHeaderAddBtn(accentColor)}>+</button>
+      }>
         {playerNotesList.length ? (
           <DraggableList
             items={playerNotesList}
@@ -218,14 +213,11 @@ export function CharacterSupportPanels(props: {
         ) : (
           <div style={{ color: C.muted, fontSize: 12 }}>No notes yet.</div>
         )}
-      </Panel>
+      </CollapsiblePanel>
 
-      {hasCampaign && <Panel>
-        <PanelTitle color={accentColor} actions={
-          <button type="button" onClick={onOpenSharedNoteCreate} title="Add shared note" style={panelHeaderAddBtn(accentColor)}>
-            +
-          </button>
-        }>Shared Notes</PanelTitle>
+      {hasCampaign && <CollapsiblePanel title="Shared Notes" color={accentColor} storageKey="shared-notes" actions={
+        <button type="button" onClick={onOpenSharedNoteCreate} title="Add shared note" style={panelHeaderAddBtn(accentColor)}>+</button>
+      }>
         {allSharedNotes.length ? (
           <DraggableList
             items={allSharedNotes}
@@ -252,11 +244,10 @@ export function CharacterSupportPanels(props: {
         ) : (
           <div style={{ color: C.muted, fontSize: 12 }}>No notes yet.</div>
         )}
-      </Panel>}
+      </CollapsiblePanel>}
 
       {classFeaturesList.length > 0 && (
-        <Panel>
-          <PanelTitle color={accentColor}>Player Features</PanelTitle>
+        <CollapsiblePanel title="Player Features" color={accentColor} storageKey="player-features">
           <DraggableList
             items={classFeaturesList}
             expandedIds={expandedClassFeatureIds}
@@ -277,7 +268,7 @@ export function CharacterSupportPanels(props: {
               );
             }}
           />
-        </Panel>
+        </CollapsiblePanel>
       )}
 
       <div style={{ display: "none" }}>
@@ -294,3 +285,4 @@ export function CharacterSupportPanels(props: {
     </div>
   );
 }
+

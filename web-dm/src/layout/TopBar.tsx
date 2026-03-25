@@ -113,7 +113,12 @@ export function TopBar() {
         )}
         {user && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-medium)" }}>
-            {!isPhone && <span style={{ color: theme.colors.muted }}>{user.name}</span>}
+            {!isPhone && (
+              <Link to="/profile" style={{ color: theme.colors.muted, textDecoration: "none" }}
+                title="Account settings">
+                {user.name}
+              </Link>
+            )}
             <button
               onClick={logout}
               title={isPhone ? `Sign out (${user.name})` : undefined}

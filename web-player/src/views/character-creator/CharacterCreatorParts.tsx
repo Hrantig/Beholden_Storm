@@ -1,7 +1,7 @@
 import React from "react";
 import { C } from "@/lib/theme";
-import { inputStyle, labelStyle } from "@/views/CharacterCreatorStyles";
-import { extractPrerequisite, stripPrerequisiteLine } from "@/views/CharacterSheetUtils";
+import { inputStyle, labelStyle } from "@/views/character-creator/CharacterCreatorStyles";
+import { extractPrerequisite, stripPrerequisiteLine } from "@/views/character/CharacterSheetUtils";
 
 function btnStyle(primary: boolean, disabled: boolean): React.CSSProperties {
   return {
@@ -217,3 +217,4 @@ export function SpellPicker<T extends { id: string; name: string; level: number 
     </div>
   );
 }
+
