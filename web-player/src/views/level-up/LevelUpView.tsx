@@ -18,6 +18,11 @@ import {
   isSpellcaster,
   tableValueAtLevel,
 } from "@/views/character-creator/utils/CharacterCreatorUtils";
+import {
+  FEAT_SPELL_LIST_NAMES,
+  loadSpellChoiceOptions,
+  sanitizeSpellChoiceSelections,
+} from "@/views/character-creator/utils/SpellChoiceUtils";
 import { BackBtn, ChoiceBtn, ExpertiseSelectionSection, FeatSelectionSection, Section, SpellChoiceList, Wrap } from "@/views/level-up/LevelUpParts";
 import { buildLevelUpPayload, deriveAllowedInvocationIds, deriveFeatAbilityBonuses, deriveHpGain, deriveLevelUpValidation, derivePreviewScores } from "@/views/level-up/LevelUpUtils";
 
@@ -139,7 +144,23 @@ const ABILITY_LABELS: Record<string, string> = {
 
 // Spell slot columns: index 1–9 map to spell levels
 const SLOT_LABELS = ["Cantrips", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
-const FEAT_SPELL_LIST_NAMES = new Set(["Artificer", "Bard", "Cleric", "Druid", "Paladin", "Ranger", "Sorcerer", "Warlock", "Wizard"]);
+interface LevelUpSpellListChoiceEntry {
+  key: string;
+  title: string;
+  count: number;
+  options: string[];
+  note?: string | null;
+}
+
+interface LevelUpResolvedSpellChoiceEntry {
+  key: string;
+  title: string;
+  count: number;
+  level: number | null;
+  note?: string | null;
+  linkedTo?: string | null;
+  listNames: string[];
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -285,6 +306,45 @@ export function LevelUpView() {
     () => (chosenFeatDetail?.parsed.choices ?? []).filter((choice) => choice.type !== "damage_type"),
     [chosenFeatDetail]
   );
+  const featSpellListChoices = React.useMemo<LevelUpSpellListChoiceEntry[]>(
+    () => {
+      if (!chosenFeatDetail) return [];
+      return featChoiceEntries
+        .filter((choice) => choice.type === "spell_list")
+        .map((choice) => ({
+          key: `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`,
+          title: "Spell List Choice",
+          count: choice.count,
+          options: getFeatChoiceOptions(choice),
+          note: choice.note,
+        }));
+    },
+    [chosenFeatDetail, featChoiceEntries, nextLevel]
+  );
+  const featResolvedSpellChoices = React.useMemo<LevelUpResolvedSpellChoiceEntry[]>(
+    () => {
+      if (!chosenFeatDetail) return [];
+      return featChoiceEntries
+        .filter((choice) => choice.type === "spell")
+        .map((choice) => {
+          const key = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
+          const linkedChoiceKey = choice.linkedTo ? `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.linkedTo}` : null;
+          const listNames = linkedChoiceKey
+            ? (chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
+            : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
+          return {
+            key,
+            title: choice.level === 0 ? "Feat Cantrip Choice" : "Feat Spell Choice",
+            count: choice.count,
+            level: choice.level ?? null,
+            note: choice.note,
+            linkedTo: linkedChoiceKey,
+            listNames,
+          };
+        });
+    },
+    [chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel]
+  );
   const featSourceLabel = chosenFeatDetail ? `${chosenFeatDetail.name} (Level ${nextLevel})` : "";
   const allowedInvocationIds = React.useMemo(
     () => deriveAllowedInvocationIds({ classCantrips, classInvocations, chosenCantrips, chosenInvocations, nextLevel }),
@@ -355,50 +415,17 @@ export function LevelUpView() {
       return;
     }
     let alive = true;
-    const spellChoices = featChoiceEntries.filter((choice) => choice.type === "spell");
-    if (spellChoices.length === 0) {
+    if (featResolvedSpellChoices.length === 0) {
       setFeatSpellChoiceOptions({});
       return;
     }
-    Promise.all(
-      spellChoices.map(async (choice) => {
-        const choiceKey = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
-        const linkedChoiceKey = choice.linkedTo ? `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.linkedTo}` : null;
-        const listNames = linkedChoiceKey
-          ? (chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
-          : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
-        if (listNames.length === 0) return [choiceKey, []] as const;
-
-        const groups = await Promise.all(
-          listNames.map(async (listName) => {
-            const encoded = encodeURIComponent(listName);
-            if ((choice.level ?? 0) === 0) {
-              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=0&limit=200`).catch(() => []);
-            }
-            if (typeof choice.level === "number" && /\bat or below\b/i.test(choice.note ?? "")) {
-              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&minLevel=1&maxLevel=${choice.level}&limit=300`).catch(() => []);
-            }
-            if (typeof choice.level === "number") {
-              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=${choice.level}&limit=300`).catch(() => []);
-            }
-            return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&limit=300`).catch(() => []);
-          })
-        );
-
-        const byName = new Map<string, SpellSummary>();
-        for (const spell of groups.flat()) {
-          if (!spell?.name) continue;
-          byName.set(spell.name.toLowerCase(), spell);
-        }
-        return [choiceKey, Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))] as const;
-      })
-    ).then((entries) => {
-      if (alive) setFeatSpellChoiceOptions(Object.fromEntries(entries));
+    loadSpellChoiceOptions(featResolvedSpellChoices, (query) => api<SpellSummary[]>(query)).then((optionsByKey) => {
+      if (alive) setFeatSpellChoiceOptions(optionsByKey);
     }).catch(() => {
       if (alive) setFeatSpellChoiceOptions({});
     });
     return () => { alive = false; };
-  }, [chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel]);
+  }, [chosenFeatDetail, featResolvedSpellChoices]);
 
   const featChoiceOptionsByKey = React.useMemo(() => {
     const entries: Array<[string, string[]]> = [];
@@ -420,17 +447,25 @@ export function LevelUpView() {
   useEffect(() => {
     if (!chosenFeatDetail) return;
     setChosenFeatOptions((prev) => {
-      const next: Record<string, string[]> = {};
+      const next = { ...prev };
       for (const choice of chosenFeatDetail.parsed.choices) {
         const key = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
+        if (choice.type === "spell" || choice.type === "spell_list") continue;
         const options = featChoiceOptionsByKey[key] ?? [];
-        next[key] = (prev[key] ?? [])
+        const filtered = (prev[key] ?? [])
           .filter((value) => options.includes(value))
           .slice(0, choice.count);
+        if (filtered.length === 0) delete next[key];
+        else next[key] = filtered;
       }
-      return next;
+      return sanitizeSpellChoiceSelections({
+        currentSelections: next,
+        spellListChoices: featSpellListChoices,
+        resolvedSpellChoices: featResolvedSpellChoices,
+        spellOptionsByKey: featSpellChoiceOptions,
+      });
     });
-  }, [chosenFeatDetail, featChoiceOptionsByKey, nextLevel]);
+  }, [chosenFeatDetail, featChoiceEntries, featChoiceOptionsByKey, featResolvedSpellChoices, featSpellChoiceOptions, featSpellListChoices, nextLevel]);
 
   const hpGain = deriveHpGain(hpChoice, hpAverage, rolledHp, manualHp);
   const featAbilityBonuses = React.useMemo(
@@ -505,6 +540,12 @@ export function LevelUpView() {
       hpGain,
     ]
   );
+  const extraFeatSpellSelectionsValid = React.useMemo(
+    () =>
+      featSpellListChoices.every((choice) => (chosenFeatOptions[choice.key] ?? []).length === choice.count)
+      && featResolvedSpellChoices.every((choice) => (chosenFeatOptions[choice.key] ?? []).length === choice.count),
+    [chosenFeatOptions, featResolvedSpellChoices, featSpellListChoices]
+  );
 
   if (loading) return <Wrap><p style={{ color: C.muted }}>Loading…</p></Wrap>;
   if (error || !char) return <Wrap><p style={{ color: C.red }}>{error ?? "Character not found."}</p></Wrap>;
@@ -554,7 +595,7 @@ export function LevelUpView() {
   }
 
   async function confirm() {
-    if (!char || !canConfirm) return;
+    if (!char || !canConfirm || !extraFeatSpellSelectionsValid) return;
     setSaving(true);
     try {
       const selectedCantripEntries = classCantrips
@@ -806,7 +847,7 @@ export function LevelUpView() {
         </Section>
       )}
 
-      {(cantripCount > 0 || prepCount > 0 || invocCount > 0) && (
+      {(cantripCount > 0 || prepCount > 0 || invocCount > 0 || featSpellListChoices.length > 0 || featResolvedSpellChoices.length > 0) && (
         <Section title={`Spell Choices at Level ${nextLevel}`} accent={accentColor}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {cantripCount > 0 && (
@@ -839,6 +880,75 @@ export function LevelUpView() {
                 onToggle={(id) => toggleSelection(id, chosenInvocations, setChosenInvocations, invocCount)}
                 isAllowed={(invocation) => allowedInvocationIds.has(invocation.id)}
               />
+            )}
+            {featSpellListChoices.map((choice) => {
+              const selected = chosenFeatOptions[choice.key] ?? [];
+              return (
+                <div key={choice.key}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{choice.title}</div>
+                    <div style={{ fontSize: 12, color: selected.length >= choice.count ? accentColor : C.muted }}>
+                      {selected.length} / {choice.count}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {choice.options.map((option) => {
+                      const active = selected.includes(option);
+                      const blocked = !active && selected.length >= choice.count;
+                      return (
+                        <ChoiceBtn
+                          key={option}
+                          active={active}
+                          onClick={() => {
+                            if (blocked) return;
+                            setChosenFeatOptions((prev) => {
+                              const current = prev[choice.key] ?? [];
+                              const next = current.includes(option)
+                                ? current.filter((entry) => entry !== option)
+                                : current.length < choice.count
+                                  ? [...current, option]
+                                  : current;
+                              return { ...prev, [choice.key]: next };
+                            });
+                          }}
+                          accent={accentColor}
+                        >
+                          {option}
+                        </ChoiceBtn>
+                      );
+                    })}
+                  </div>
+                  {choice.note && <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>{choice.note}</div>}
+                </div>
+              );
+            })}
+            {featResolvedSpellChoices.map((choice) => (
+              <SpellChoiceList
+                key={choice.key}
+                title={choice.title}
+                caption={`Choose ${choice.count}`}
+                spells={(featSpellChoiceOptions[choice.key] ?? []).map((spell) => ({ ...spell, id: spell.name }))}
+                chosen={chosenFeatOptions[choice.key] ?? []}
+                max={choice.count}
+                onToggle={(id) => {
+                  setChosenFeatOptions((prev) => {
+                    const current = prev[choice.key] ?? [];
+                    const next = current.includes(id)
+                      ? current.filter((entry) => entry !== id)
+                      : current.length < choice.count
+                        ? [...current, id]
+                        : current;
+                    return { ...prev, [choice.key]: next };
+                  });
+                }}
+              />
+            ))}
+            {featResolvedSpellChoices.some((choice) => (featSpellChoiceOptions[choice.key] ?? []).length === 0) && (
+              <div style={{ fontSize: 11, color: C.muted }}>
+                {featResolvedSpellChoices.some((choice) => choice.linkedTo && (chosenFeatOptions[choice.linkedTo] ?? []).length === 0)
+                  ? "Choose the spell list first."
+                  : "No eligible spell options found."}
+              </div>
             )}
           </div>
         </Section>
@@ -919,7 +1029,7 @@ export function LevelUpView() {
         >Cancel</button>
         <button
           onClick={confirm}
-          disabled={!canConfirm || saving}
+          disabled={!canConfirm || !extraFeatSpellSelectionsValid || saving}
           style={{
             flex: 1, padding: "12px 20px", borderRadius: 10, cursor: canConfirm && !saving ? "pointer" : "not-allowed",
             fontSize: 14, fontWeight: 800, border: "none",
@@ -935,4 +1045,3 @@ export function LevelUpView() {
     </Wrap>
   );
 }
-

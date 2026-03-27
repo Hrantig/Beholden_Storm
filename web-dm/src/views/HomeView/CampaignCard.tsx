@@ -102,8 +102,15 @@ export function CampaignCard({ campaign: c, onOpen, onEdit, onDelete, onRefresh 
     await onRefresh();
   }
 
-  function exportCampaign() {
-    window.location.href = `/api/campaigns/${c.id}/export`;
+  async function exportCampaign() {
+    const data = await api<unknown>(`/api/campaigns/${c.id}/export`);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${c.name ?? c.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (

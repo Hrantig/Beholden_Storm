@@ -276,9 +276,11 @@ export function FeatSelectionSection(props: {
         </div>
       )}
 
-      {chosenFeatDetail && featChoiceEntries.length > 0 && (
+      {chosenFeatDetail && featChoiceEntries.some((choice) => choice.type !== "spell" && choice.type !== "spell_list") && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {featChoiceEntries.map((choice) => {
+          {featChoiceEntries
+            .filter((choice) => choice.type !== "spell" && choice.type !== "spell_list")
+            .map((choice) => {
             const choiceKey = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
             const selected = chosenFeatOptions[choiceKey] ?? [];
             const options = featChoiceOptionsByKey[choiceKey] ?? getFeatChoiceOptions(choice);
@@ -382,4 +384,3 @@ export function ExpertiseSelectionSection(props: {
     </div>
   );
 }
-

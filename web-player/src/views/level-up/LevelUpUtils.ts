@@ -295,7 +295,9 @@ export function deriveLevelUpValidation(args: DeriveLevelUpValidationArgs) {
       Boolean(chosenFeatDetail) &&
       featPrereqsMet &&
       featRepeatableValid &&
-      featChoiceEntries.every((choice) => {
+      featChoiceEntries
+        .filter((choice) => choice.type !== "spell" && choice.type !== "spell_list")
+        .every((choice) => {
         if (!chosenFeatDetail) return false;
         return (chosenFeatOptions[`levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`] ?? []).length === choice.count;
       })
@@ -463,4 +465,3 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
 
   return payload;
 }
-

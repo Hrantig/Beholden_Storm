@@ -59,6 +59,12 @@ import {
   parseStartingEquipmentOptions,
   tableValueAtLevel,
 } from "@/views/character-creator/utils/CharacterCreatorUtils";
+import {
+  FEAT_SPELL_LIST_NAMES,
+  loadSpellChoiceOptions,
+  sanitizeSpellChoiceSelections,
+  type SharedSpellSummary,
+} from "@/views/character-creator/utils/SpellChoiceUtils";
 import { Select } from "@/ui/Select";
 import { NavButtons, SpellPicker, StepHeader } from "@/views/character-creator/shared/CharacterCreatorParts";
 import {
@@ -212,8 +218,6 @@ interface Campaign {
   playerCount: number;
   imageUrl: string | null;
 }
-
-const FEAT_SPELL_LIST_NAMES = new Set(["Artificer", "Bard", "Cleric", "Druid", "Paladin", "Ranger", "Sorcerer", "Warlock", "Wizard"]);
 
 interface ClassFeatureEntry {
   id: string;
@@ -508,7 +512,7 @@ export function CharacterCreatorView() {
   const [classCantrips, setClassCantrips] = React.useState<SpellSummary[]>([]);
   const [classSpells, setClassSpells] = React.useState<SpellSummary[]>([]);
   const [classInvocations, setClassInvocations] = React.useState<SpellSummary[]>([]);
-  const [featSpellChoiceOptions, setFeatSpellChoiceOptions] = React.useState<Record<string, SpellSummary[]>>({});
+  const [featSpellChoiceOptions, setFeatSpellChoiceOptions] = React.useState<Record<string, SharedSpellSummary[]>>({});
 
   // Track initially-assigned campaigns so we can diff on save in edit mode
   const initialCampaignIdsRef = React.useRef<string[]>([]);
@@ -905,36 +909,9 @@ export function CharacterCreatorView() {
       return;
     }
     let cancelled = false;
-    Promise.all(
-      step6ResolvedSpellChoices.map(async (choice) => {
-        if (choice.listNames.length === 0) return [choice.key, []] as const;
-
-        const groups = await Promise.all(
-          choice.listNames.map(async (listName) => {
-            const encoded = encodeURIComponent(listName);
-            if ((choice.level ?? 0) === 0) {
-              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=0&limit=200`).catch(() => []);
-            }
-            if (typeof choice.level === "number" && /\bat or below\b/i.test(choice.note ?? "")) {
-              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&minLevel=1&maxLevel=${choice.level}&limit=300`).catch(() => []);
-            }
-            if (typeof choice.level === "number") {
-              return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=${choice.level}&limit=300`).catch(() => []);
-            }
-            return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&limit=300`).catch(() => []);
-          })
-        );
-
-        const byName = new Map<string, SpellSummary>();
-        for (const spell of groups.flat()) {
-          if (!spell?.name) continue;
-          byName.set(spell.name.toLowerCase(), spell);
-        }
-        return [choice.key, Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))] as const;
-      })
-    )
-      .then((entries) => {
-        if (!cancelled) setFeatSpellChoiceOptions(Object.fromEntries(entries));
+    loadSpellChoiceOptions(step6ResolvedSpellChoices, (query) => api<SpellSummary[]>(query))
+      .then((optionsByKey) => {
+        if (!cancelled) setFeatSpellChoiceOptions(optionsByKey);
       })
       .catch(() => {
         if (!cancelled) setFeatSpellChoiceOptions({});
@@ -949,38 +926,17 @@ export function CharacterCreatorView() {
     ]);
     if (allSpellChoiceKeys.size === 0) return;
     setForm((f) => {
-      let changed = false;
-      const nextChosenFeatOptions = { ...f.chosenFeatOptions };
-
-      for (const choice of step6SpellListChoices) {
-        const current = nextChosenFeatOptions[choice.key] ?? [];
-        const filtered = current.filter((value) => choice.options.includes(value)).slice(0, choice.count);
-        if (filtered.length === 0) {
-          if (choice.key in nextChosenFeatOptions) {
-            delete nextChosenFeatOptions[choice.key];
-            changed = true;
-          }
-        } else if (filtered.length !== current.length || filtered.some((value, index) => value !== current[index])) {
-          nextChosenFeatOptions[choice.key] = filtered;
-          changed = true;
-        }
-      }
-
-      for (const choice of step6ResolvedSpellChoices) {
-        const options = (featSpellChoiceOptions[choice.key] ?? []).map((spell) => spell.name);
-        const current = nextChosenFeatOptions[choice.key] ?? [];
-        const filtered = current.filter((value) => options.includes(value)).slice(0, choice.count);
-        if (filtered.length === 0) {
-          if (choice.key in nextChosenFeatOptions) {
-            delete nextChosenFeatOptions[choice.key];
-            changed = true;
-          }
-        } else if (filtered.length !== current.length || filtered.some((value, index) => value !== current[index])) {
-          nextChosenFeatOptions[choice.key] = filtered;
-          changed = true;
-        }
-      }
-
+      const nextChosenFeatOptions = sanitizeSpellChoiceSelections({
+        currentSelections: f.chosenFeatOptions,
+        spellListChoices: step6SpellListChoices,
+        resolvedSpellChoices: step6ResolvedSpellChoices,
+        spellOptionsByKey: featSpellChoiceOptions,
+      });
+      const changed = Object.keys(nextChosenFeatOptions).length !== Object.keys(f.chosenFeatOptions).length
+        || Object.entries(nextChosenFeatOptions).some(([key, values]) => {
+          const current = f.chosenFeatOptions[key] ?? [];
+          return values.length !== current.length || values.some((value, index) => value !== current[index]);
+        });
       return changed ? { ...f, chosenFeatOptions: nextChosenFeatOptions } : f;
     });
   }, [featSpellChoiceOptions, step6ResolvedSpellChoices, step6SpellListChoices]);
@@ -1529,7 +1485,11 @@ export function CharacterCreatorView() {
       key: entry.key,
       title: entry.title,
       sourceLabel: entry.sourceLabel,
-      spells: (featSpellChoiceOptions[entry.key] ?? []).map((spell) => ({ ...spell, id: spell.name })),
+      spells: (featSpellChoiceOptions[entry.key] ?? []).map((spell) => ({
+        ...spell,
+        id: spell.name,
+        level: spell.level ?? null,
+      })),
       chosen: form.chosenFeatOptions[entry.key] ?? [],
       max: entry.count,
       note: entry.note,

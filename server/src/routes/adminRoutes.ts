@@ -34,7 +34,7 @@ export function registerAdminRoutes(app: Express, ctx: ServerContext) {
 
   app.get("/api/admin/users", requireAuth, requireAdmin, (_req, res) => {
     const rows = db
-      .prepare("SELECT id, username, name, is_admin, created_at, updated_at FROM users ORDER BY created_at ASC")
+      .prepare("SELECT id, username, name, is_admin, created_at, updated_at FROM users ORDER BY name ASC")
       .all() as Record<string, unknown>[];
     res.json(rows.map(rowToUser));
   });
