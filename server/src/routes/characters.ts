@@ -18,6 +18,7 @@ import {
   mergeLiveStats,
 } from "../services/characters.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP } from "../lib/imageHelpers.js";
+import { absolutizePublicUrl } from "../lib/publicUrl.js";
 
 const CharacterBodyBase = z.object({
   name: z.string().trim().min(1).optional(),
@@ -514,7 +515,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     ctx.fs.writeFileSync(ctx.path.join(imagesDir, filename), thumbnail);
     const imageUrl = `/character-images/${filename}`;
     db.prepare("UPDATE user_characters SET image_url = ?, updated_at = ? WHERE id = ?").run(imageUrl, now(), charId);
-    res.json({ ok: true, imageUrl });
+    res.json({ ok: true, imageUrl: absolutizePublicUrl(imageUrl) });
   });
 
   // Remove character portrait image.

@@ -8,6 +8,7 @@ import { rowToPlayer, PLAYER_COLS } from "../lib/db.js";
 import { ConditionInstanceSchema, OverridesSchema } from "../lib/schemas.js";
 import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP } from "../lib/imageHelpers.js";
+import { absolutizePublicUrl } from "../lib/publicUrl.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 
 const PlayerCreateBody = z.object({
@@ -285,7 +286,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     const imageUrl = `/player-images/${filename}`;
     db.prepare("UPDATE players SET image_url = ?, updated_at = ? WHERE id = ?").run(imageUrl, now(), playerId);
     ctx.broadcast("players:changed", { campaignId: row.campaign_id });
-    res.json({ ok: true, imageUrl });
+    res.json({ ok: true, imageUrl: absolutizePublicUrl(imageUrl) });
   });
 
   // Remove player character image.

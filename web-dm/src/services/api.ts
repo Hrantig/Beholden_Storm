@@ -1,5 +1,26 @@
 const SERVER_PORT_FALLBACK = typeof __SERVER_PORT__ !== "undefined" ? __SERVER_PORT__ : 5174;
 
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function configuredApiOrigin() {
+  const raw = String((import.meta as any).env?.VITE_API_ORIGIN ?? "").trim();
+  if (!raw) return "";
+  try {
+    return trimTrailingSlash(new URL(raw).toString());
+  } catch {
+    return trimTrailingSlash(raw);
+  }
+}
+
+const API_ORIGIN = configuredApiOrigin();
+
+function resolveApiPath(path: string) {
+  if (!API_ORIGIN || !path.startsWith("/")) return path;
+  return `${API_ORIGIN}${path}`;
+}
+
 function directServerUrl(path: string) {
   const loc = window.location;
   return `${loc.protocol}//${loc.hostname}:${SERVER_PORT_FALLBACK}${path}`;
@@ -52,7 +73,7 @@ function mergeInit(init?: RequestInit): RequestInit {
 
 /** Raw fetch helper — no automatic auth header injection. Used by AuthContext for login/me. */
 export async function apiRaw<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await fetch(resolveApiPath(path), init);
   if (!res.ok) throw await apiError(res);
   return (await res.json()) as T;
 }
@@ -62,7 +83,13 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   // Non-API paths: just fetch as-is.
   if (!path.startsWith("/api")) {
-    const res = await fetch(path, merged);
+    const res = await fetch(resolveApiPath(path), merged);
+    if (!res.ok) throw await apiError(res);
+    return (await res.json()) as T;
+  }
+
+  if (API_ORIGIN) {
+    const res = await fetch(resolveApiPath(path), merged);
     if (!res.ok) throw await apiError(res);
     return (await res.json()) as T;
   }

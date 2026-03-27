@@ -2,6 +2,7 @@
 // Row → domain object converters, shared across all route files.
 
 import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "./defaults.js";
+import { absolutizePublicUrl } from "./publicUrl.js";
 import type {
   StoredCampaign,
   StoredAdventure,
@@ -64,7 +65,7 @@ export function rowToCampaign(row: Record<string, unknown>): StoredCampaign {
     id: row.id as string,
     name: row.name as string,
     color: (row.color as string | null) ?? null,
-    imageUrl: (row.image_url as string | null) ?? null,
+    imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
     sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
@@ -120,7 +121,7 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
     ...(row.wis != null ? { wis: row.wis as number } : {}),
     ...(row.cha != null ? { cha: row.cha as number } : {}),
     ...(row.color != null ? { color: row.color as string } : {}),
-    imageUrl: (row.image_url as string | null) ?? null,
+    imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
     overrides: parseJson(row.overrides_json, DEFAULT_OVERRIDES),
     conditions: parseJson(row.conditions_json, []),
     ...(row.death_saves_json
@@ -152,7 +153,7 @@ export function rowToUserCharacter(row: Record<string, unknown>): StoredUserChar
     wisScore: (row.wis_score as number | null) ?? null,
     chaScore: (row.cha_score as number | null) ?? null,
     color: (row.color as string | null) ?? null,
-    imageUrl: (row.image_url as string | null) ?? null,
+    imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
     characterData: parseJson(row.character_data_json, null),
     ...(row.death_saves_json
       ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }

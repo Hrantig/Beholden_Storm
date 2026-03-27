@@ -7,6 +7,7 @@ import { requireParam } from "../lib/routeHelpers.js";
 import { rowToCampaign, rowToPlayer } from "../lib/db.js";
 import { DEFAULT_OVERRIDES } from "../lib/defaults.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP, deleteImageFiles } from "../lib/imageHelpers.js";
+import { absolutizePublicUrl } from "../lib/publicUrl.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 
@@ -174,7 +175,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     const imageUrl = `/campaign-images/${filename}`;
     db.prepare("UPDATE campaigns SET image_url = ?, updated_at = ? WHERE id = ?").run(imageUrl, now(), campaignId);
     ctx.broadcast("campaigns:changed", { campaignId });
-    res.json({ ok: true, imageUrl });
+    res.json({ ok: true, imageUrl: absolutizePublicUrl(imageUrl) });
   });
 
   // Update DM-created shared notes for a campaign.
