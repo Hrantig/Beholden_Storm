@@ -22,9 +22,14 @@ import {
 import {
   getClassLanguageChoice,
   getCoreLanguageChoice,
-  parseFeatureGrants,
 } from "@/views/character/CharacterRuleParsers";
-import { parseFeatureEffects } from "@/domain/character/parseFeatureEffects";
+import {
+  collectSpellChoicesFromEffects,
+  collectTaggedGrantsFromEffects,
+  parseFeatureEffects,
+  type ParseFeatureEffectsInput,
+} from "@/domain/character/parseFeatureEffects";
+import type { ParsedFeatureEffects } from "@/domain/character/featureEffects";
 import type { ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
 
 export interface CreatorItemSummaryLike {
@@ -151,6 +156,34 @@ export interface CreatorWeaponMasteryChoice {
 
 function splitComma(s: string): string[] {
   return s.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+}
+
+export function parseSelectedClassOptionalFeatureEffects(
+  classDetail: CreatorClassDetailLike | null,
+  level: number,
+  chosenOptionals: string[],
+): ParsedFeatureEffects[] {
+  if (!classDetail || chosenOptionals.length === 0) return [];
+  const selected = new Set(chosenOptionals);
+  const parsed: ParsedFeatureEffects[] = [];
+  for (const autolevel of classDetail.autolevels) {
+    if (autolevel.level == null || autolevel.level > level) continue;
+    for (const feature of autolevel.features) {
+      if (!feature.optional || !selected.has(feature.name) || !String(feature.text ?? "").trim()) continue;
+      parsed.push(parseFeatureEffects({
+        source: {
+          id: `creator-class-optional:${autolevel.level}:${feature.name}`,
+          kind: "class",
+          name: feature.name,
+          level: autolevel.level,
+          parentName: classDetail.name,
+          text: feature.text,
+        },
+        text: feature.text,
+      } satisfies ParseFeatureEffectsInput));
+    }
+  }
+  return parsed;
 }
 
 export function buildStartingInventory(
@@ -292,22 +325,18 @@ export function buildProficiencyMap(args: {
       form.chosenWeaponMasteries.forEach((name) => masteries.push({ name, source: masteryChoice.source }));
     }
 
-    const optFeatureMap: Record<string, string> = {};
-    for (const autolevel of classDetail.autolevels) {
-      for (const feature of autolevel.features) {
-        if (feature.optional) optFeatureMap[feature.name] = feature.text;
-      }
-    }
-    for (const featureName of form.chosenOptionals) {
-      const featureText = optFeatureMap[featureName];
-      if (!featureText) continue;
-      const grants = parseFeatureGrants(featureText);
-      grants.armor.forEach((name) => pushArmor(name, featureName));
-      grants.weapons.forEach((name) => pushWeapon(name, featureName));
-      grants.tools.forEach((name) => tools.push({ name, source: featureName }));
-      grants.skills.forEach((name) => skills.push({ name, source: featureName }));
-      grants.languages.forEach((name) => pushLanguage(name, featureName));
-    }
+    const parsedOptionalFeatures = parseSelectedClassOptionalFeatureEffects(classDetail, form.level, form.chosenOptionals);
+    const optionalFeatureGrants = collectTaggedGrantsFromEffects(parsedOptionalFeatures);
+    optionalFeatureGrants.armor.forEach((entry) => pushArmor(entry.name, entry.source));
+    optionalFeatureGrants.weapons.forEach((entry) => pushWeapon(entry.name, entry.source));
+    optionalFeatureGrants.tools.forEach((entry) => tools.push(entry));
+    optionalFeatureGrants.skills.forEach((entry) => skills.push(entry));
+    optionalFeatureGrants.languages.forEach((entry) => pushLanguage(entry.name, entry.source));
+    const optionalSpellChoices = collectSpellChoicesFromEffects(parsedOptionalFeatures);
+    optionalSpellChoices.forEach((choice) => {
+      const key = `classoptional:${choice.id}`;
+      (form.chosenFeatOptions[key] ?? []).forEach((name) => spells.push({ name, source: choice.source.name }));
+    });
 
     for (const [featureName, feat] of Object.entries(classFeatDetails)) {
       const grants = collectFeatTaggedEntries({
@@ -323,6 +352,7 @@ export function buildProficiencyMap(args: {
       grants.saves.forEach((entry) => saves.push(entry));
       grants.masteries.forEach((entry) => masteries.push(entry));
       grants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
+      grants.spells.forEach((entry) => spells.push(entry));
     }
   }
 
@@ -357,6 +387,7 @@ export function buildProficiencyMap(args: {
       grants.saves.forEach((entry) => saves.push(entry));
       grants.masteries.forEach((entry) => masteries.push(entry));
       grants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
+      grants.spells.forEach((entry) => spells.push(entry));
     }
 
     if (bgOriginFeatDetail) {
@@ -373,6 +404,7 @@ export function buildProficiencyMap(args: {
       grants.saves.forEach((entry) => saves.push(entry));
       grants.masteries.forEach((entry) => masteries.push(entry));
       grants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
+      grants.spells.forEach((entry) => spells.push(entry));
     }
   }
 
@@ -411,6 +443,7 @@ export function buildProficiencyMap(args: {
       grants.saves.forEach((entry) => saves.push(entry));
       grants.masteries.forEach((entry) => masteries.push(entry));
       grants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
+      grants.spells.forEach((entry) => spells.push(entry));
     }
   }
 

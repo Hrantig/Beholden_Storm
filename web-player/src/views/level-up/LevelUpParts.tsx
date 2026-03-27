@@ -1,7 +1,7 @@
 import React from "react";
 import { C } from "@/lib/theme";
 import { extractPrerequisite, stripPrerequisiteLine } from "@/views/character/CharacterSheetUtils";
-import { getFeatChoiceOptions } from "@/views/character-creator/CharacterCreatorUtils";
+import { getFeatChoiceOptions } from "@/views/character-creator/utils/CharacterCreatorUtils";
 
 export interface LevelUpSpellSummary {
   id: string;

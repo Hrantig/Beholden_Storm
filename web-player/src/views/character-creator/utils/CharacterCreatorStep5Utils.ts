@@ -290,7 +290,9 @@ export function getStep5ChoiceState(args: Step5ChoiceStateArgs): Step5ChoiceStat
   const missingClassFeatChoices = classFeatChoices.some((choice) => !form.chosenClassFeatIds[choice.featureName]);
   const missingClassExpertiseChoices = classExpertiseChoices.some((choice) => (form.chosenFeatOptions[choice.key] ?? []).length < choice.count);
   const allFeatChoices = [...bgFeatChoices, ...raceFeatChoices, ...classSelectedFeatChoices, ...levelUpFeatChoices];
-  const missingFeatOptionSelections = allFeatChoices.some(({ key, choice }) => (form.chosenFeatOptions[key] ?? []).length < choice.count);
+  const missingFeatOptionSelections = allFeatChoices
+    .filter(({ choice }) => choice.type !== "spell" && choice.type !== "spell_list")
+    .some(({ key, choice }) => (form.chosenFeatOptions[key] ?? []).length < choice.count);
   const missingCoreLanguages = form.chosenRaceLanguages.length < (coreLanguageChoice?.choose ?? 0);
   const missingClassLanguages = form.chosenClassLanguages.length < (classLanguageChoice?.choose ?? 0);
   const hasAnything =
@@ -339,4 +341,3 @@ export function getFixedGrantsForStep5(feat: Step5ParsedFeatLike): string[] {
 export function getFeatChoiceOptionsForStep5(choice: Step5FeatChoiceLike): string[] {
   return getFeatChoiceOptions(choice as never);
 }
-

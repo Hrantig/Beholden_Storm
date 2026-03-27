@@ -1,6 +1,6 @@
 import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 import { featPrerequisitesMet, invocationPrerequisitesMet, spellLooksLikeDamageSpell } from "@/views/character/CharacterSheetUtils";
-import { collectFeatTaggedEntries } from "@/views/character-creator/FeatGrantUtils";
+import { collectFeatTaggedEntries } from "@/views/character-creator/utils/FeatGrantUtils";
 
 export interface LevelUpTaggedEntry {
   name: string;

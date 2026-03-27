@@ -48,6 +48,16 @@ export interface Helpers {
     backgrounds?: number;
     feats?: number;
   };
+  importCompendiumSqlite: (args: { buffer: Buffer }) => {
+    imported: number;
+    total: number;
+    spells: number;
+    items: number;
+    classes: number;
+    races: number;
+    backgrounds: number;
+    feats: number;
+  };
 }
 
 export interface ServerContext {

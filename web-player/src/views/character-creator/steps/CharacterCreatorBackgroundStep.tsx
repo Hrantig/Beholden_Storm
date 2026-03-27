@@ -51,6 +51,7 @@ interface BackgroundFormLike {
   chosenBgTools: string[];
   chosenBgLanguages: string[];
   chosenBgEquipmentOption: string | null;
+  chosenFeatOptions: Record<string, string[]>;
   bgAbilityMode: "split" | "even";
   bgAbilityBonuses: Record<string, number>;
 }
@@ -196,7 +197,14 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                       <button
                         key={feat.id}
                         type="button"
-                        onClick={() => setForm((prev) => ({ ...prev, chosenBgOriginFeatId: selected ? null : feat.id }))}
+                        onClick={() => setForm((prev) => ({
+                          ...prev,
+                          chosenBgOriginFeatId: selected ? null : feat.id,
+                          chosenFeatOptions: Object.fromEntries(
+                            Object.entries((prev as typeof prev & { chosenFeatOptions?: Record<string, string[]> }).chosenFeatOptions ?? {})
+                              .filter(([key]) => !key.startsWith("bg:"))
+                          ),
+                        }))}
                         style={{
                           padding: "6px 14px",
                           borderRadius: 6,

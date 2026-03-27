@@ -127,6 +127,14 @@ export interface SpellGrantEffect extends FeatureEffectBase {
   riderSummary?: string;
 }
 
+export interface SpellChoiceEffect extends FeatureEffectBase {
+  type: "spell_choice";
+  mode: "learn";
+  count: ScalingValue;
+  level: number;
+  spellLists: string[];
+}
+
 export interface ProficiencyGrantEffect extends FeatureEffectBase {
   type: "proficiency_grant";
   category: "skill" | "tool" | "language" | "armor" | "weapon" | "saving_throw";
@@ -269,6 +277,7 @@ export type FeatureEffect =
   | AbilityScoreEffect
   | ResourceGrantEffect
   | SpellGrantEffect
+  | SpellChoiceEffect
   | ProficiencyGrantEffect
   | WeaponMasteryEffect
   | ArmorClassEffect
@@ -295,6 +304,7 @@ export const FEATURE_EFFECT_PRIORITIES: Record<FeatureEffect["type"], number> = 
   weapon_mastery: 20,
   resource_grant: 30,
   spell_grant: 40,
+  spell_choice: 45,
   armor_class: 50,
   speed: 60,
   senses: 70,

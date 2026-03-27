@@ -41,7 +41,7 @@ import {
   normalizeWeaponProficiencyName,
   proficiencyBonus,
 } from "@/views/character/CharacterSheetUtils";
-import { featureMatchesSubclass, getPreparedSpellCount, isSubclassChoiceFeature } from "@/views/character-creator/CharacterCreatorUtils";
+import { featureMatchesSubclass, getPreparedSpellCount, isSubclassChoiceFeature } from "@/views/character-creator/utils/CharacterCreatorUtils";
 import type {
   AbilKey,
   CharacterCampaign,

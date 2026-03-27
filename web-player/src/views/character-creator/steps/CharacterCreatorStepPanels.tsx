@@ -1176,8 +1176,11 @@ export function renderSpellsStep<T extends { id: string; name: string; level: nu
   classSpells,
   chosenSpells,
   toggleSpell,
+  extraSpellListChoices,
+  extraSpellChoices,
   onBack,
   onNext,
+  nextDisabled = false,
   side,
 }: {
   isCaster: boolean;
@@ -1195,11 +1198,34 @@ export function renderSpellsStep<T extends { id: string; name: string; level: nu
   classSpells: T[];
   chosenSpells: string[];
   toggleSpell: (id: string) => void;
+  extraSpellListChoices: Array<{
+    key: string;
+    title: string;
+    sourceLabel?: string | null;
+    options: string[];
+    chosen: string[];
+    max: number;
+    note?: string | null;
+    emptyMsg?: string;
+    onToggle: (value: string) => void;
+  }>;
+  extraSpellChoices: Array<{
+    key: string;
+    title: string;
+    sourceLabel?: string | null;
+    spells: T[];
+    chosen: string[];
+    max: number;
+    note?: string | null;
+    emptyMsg: string;
+    onToggle: (id: string) => void;
+  }>;
   onBack: () => void;
   onNext: () => void;
+  nextDisabled?: boolean;
   side: React.ReactNode;
 }): { main: React.ReactNode; side: React.ReactNode } {
-  const hasAnything = isCaster || invocCount > 0;
+  const hasAnything = isCaster || invocCount > 0 || extraSpellListChoices.length > 0 || extraSpellChoices.length > 0;
   const main = (
     <div>
       <h2 style={headingStyle}>Spells</h2>
@@ -1227,8 +1253,45 @@ export function renderSpellsStep<T extends { id: string; name: string; level: nu
           onToggle={toggleSpell}
         />
       )}
+      {extraSpellListChoices.map((entry) => (
+        <div key={entry.key}>
+          {renderChoiceChipGroup({
+            title: entry.title,
+            sourceLabel: entry.sourceLabel,
+            selectedCount: entry.chosen.length,
+            maxCount: entry.max,
+            options: entry.options,
+            isSelected: (option) => entry.chosen.includes(option),
+            isLocked: (option, isSelected) => !isSelected && entry.chosen.length >= entry.max,
+            onToggle: entry.onToggle,
+            note: entry.note,
+          })}
+          {entry.options.length === 0 && (
+            <div style={{ marginTop: -16, marginBottom: 16, fontSize: 11, color: C.muted }}>
+              {entry.emptyMsg ?? "No eligible options found."}
+            </div>
+          )}
+        </div>
+      ))}
+      {extraSpellChoices.map((entry) => (
+        <div key={entry.key}>
+          <SpellPicker
+            title={entry.sourceLabel ? `${entry.title} (${entry.sourceLabel})` : entry.title}
+            spells={entry.spells}
+            chosen={entry.chosen}
+            max={entry.max}
+            emptyMsg={entry.emptyMsg}
+            onToggle={entry.onToggle}
+          />
+          {entry.note && (
+            <div style={{ marginTop: -16, marginBottom: 16, fontSize: 11, color: C.muted }}>
+              {entry.note}
+            </div>
+          )}
+        </div>
+      ))}
       {!hasAnything && <p style={{ color: C.muted, fontSize: 14 }}>This class has no spellcasting choices at this level.</p>}
-      <NavButtons step={6} onBack={onBack} onNext={onNext} />
+      <NavButtons step={6} onBack={onBack} onNext={onNext} nextDisabled={nextDisabled} />
     </div>
   );
   return { main, side };
@@ -1471,4 +1534,3 @@ export function renderDerivedStatsStep({
   );
   return { main, side };
 }
-

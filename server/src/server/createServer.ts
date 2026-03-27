@@ -17,6 +17,7 @@ import { upload } from "../lib/upload.js";
 import { getPaths } from "../config/paths.js";
 import { openDb } from "../lib/db.js";
 import { importCompendiumXml } from "../services/compendium/importXml.js";
+import { importCompendiumSqlite } from "../services/compendium/importSqlite.js";
 import { ensureCombat, nextLabelNumber, createPlayerCombatant } from "../services/combat.js";
 import { seedDefaultConditions } from "../services/conditions.js";
 import { now, uid } from "../lib/runtime.js";
@@ -111,6 +112,7 @@ export function createServer() {
       createPlayerCombatant,
       seedDefaultConditions: (campaignId) => seedDefaultConditions(db, campaignId),
       importCompendiumXml: ({ xml }) => importCompendiumXml({ xml, db }),
+      importCompendiumSqlite: ({ buffer }) => importCompendiumSqlite({ buffer, db }),
     },
   };
 

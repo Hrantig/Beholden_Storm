@@ -35,16 +35,6 @@ interface SelectedClassFeatEntryLike {
   detail: { name: string; text?: string };
 }
 
-interface FeatChoiceDisplay {
-  key: string;
-  title: string;
-  sourceLabel?: string;
-  options: string[];
-  count: number;
-  note?: string | null;
-  linkedTo?: string | null;
-}
-
 function choiceButtonStyle(selected: boolean, locked: boolean, duplicate: boolean): React.CSSProperties {
   return {
     padding: "6px 14px",
@@ -89,14 +79,13 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
     | "takenLanguageKeys"
     | "takenExpertiseKeys"
   >;
-  featChoiceDisplays: FeatChoiceDisplay[];
   getClassFeatChoiceLabel: (featGroup: string) => string;
   getClassFeatOptionLabel: (optionName: string, featGroup: string) => string;
   sideSummary: React.ReactNode;
   onBack: () => void;
   onNext: () => void;
 }): StepResult {
-  const { form, setForm, classDetailName, bgDetailName, skillList, numSkills, bgLangChoice, coreLanguageChoice, classLanguageChoice, classFeatChoices, classExpertiseChoices, classSelectedFeatChoices, selectedClassFeatEntries, bgFeatChoices, raceFeatChoices, weaponMasteryChoice, weaponOptions, choiceState, featChoiceDisplays, getClassFeatChoiceLabel, getClassFeatOptionLabel, sideSummary, onBack, onNext } = args;
+  const { form, setForm, classDetailName, bgDetailName, skillList, numSkills, bgLangChoice, coreLanguageChoice, classLanguageChoice, classFeatChoices, classExpertiseChoices, classSelectedFeatChoices, selectedClassFeatEntries, bgFeatChoices, raceFeatChoices, weaponMasteryChoice, weaponOptions, choiceState, getClassFeatChoiceLabel, getClassFeatOptionLabel, sideSummary, onBack, onNext } = args;
   const { missingClassFeatChoices, missingClassExpertiseChoices, missingFeatOptionSelections, missingCoreLanguages, missingClassLanguages, hasAnything, takenSkillKeys, takenToolKeys, takenLanguageKeys, takenExpertiseKeys } = choiceState;
 
   function duplicateLocked(kind: "skill" | "tool" | "language" | "expertise", value: string, selected: boolean): boolean {
@@ -256,30 +245,6 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
       })}
 
       {renderFeatGroup(classSelectedFeatChoices)}
-
-      {featChoiceDisplays.map((entry) => {
-        const selected = form.chosenFeatOptions[entry.key] ?? [];
-        return (
-          <div key={entry.key} style={{ marginBottom: 24 }}>
-            {renderChoiceChipGroup({
-              title: entry.title,
-              sourceLabel: entry.sourceLabel,
-              selectedCount: selected.length,
-              maxCount: entry.count,
-              options: entry.options,
-              isSelected: (option) => selected.includes(option),
-              isLocked: (option, isSelected) => !isSelected && selected.length >= entry.count,
-              onToggle: (option) => toggleFeatChoice(entry.key, option, entry.count),
-              note: entry.note,
-            })}
-            {entry.options.length === 0 && (
-              <div style={{ marginTop: -16, fontSize: 11, color: C.muted }}>
-                {entry.linkedTo ? "Choose the spell list first." : "No eligible spell options found."}
-              </div>
-            )}
-          </div>
-        );
-      })}
 
       {weaponMasteryChoice && renderChoiceChipGroup({
         title: "Weapon Mastery",

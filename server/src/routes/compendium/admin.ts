@@ -38,4 +38,21 @@ export function registerCompendiumAdminRoutes(app: Express, ctx: ServerContext) 
       feats: out.feats ?? 0,
     });
   });
+
+  app.post("/api/compendium/import/sqlite", requireAdmin, ctx.upload.single("file"), (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, message: "No file uploaded" });
+    const out = ctx.helpers.importCompendiumSqlite({ buffer: req.file.buffer });
+    ctx.broadcast("compendium:changed", { imported: out.imported, total: out.total });
+    res.json({
+      ok: true,
+      imported: out.imported,
+      total: out.total,
+      spells: out.spells,
+      items: out.items,
+      classes: out.classes,
+      races: out.races,
+      backgrounds: out.backgrounds,
+      feats: out.feats,
+    });
+  });
 }

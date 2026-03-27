@@ -13,6 +13,7 @@ import {
   type FeatureEffectSource,
   type ParsedFeatureEffects,
   type ProficiencyGrantEffect,
+  type SpellChoiceEffect,
   type ScalingValue,
   type SpellGrantEffect,
   type WeaponMasteryEffect,
@@ -54,6 +55,34 @@ function cleanupText(text: string): string {
     .replace(/Source:.*$/gim, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const SPELL_LIST_NAMES = ["Artificer", "Bard", "Cleric", "Druid", "Paladin", "Ranger", "Sorcerer", "Warlock", "Wizard"];
+
+function parseSpellLists(text: string): string[] {
+  const found = new Set<string>();
+  for (const name of SPELL_LIST_NAMES) {
+    if (new RegExp(`\\b${name}\\b`, "i").test(text)) found.add(name);
+  }
+  return Array.from(found);
+}
+
+function pushSpellChoiceEffect(
+  source: FeatureEffectSource,
+  effects: FeatureEffect[],
+  args: { count: number; level: number; spellLists: string[] }
+) {
+  if (args.count <= 0 || args.spellLists.length === 0) return;
+  effects.push({
+    id: createFeatureEffectId(source, "spell_choice", effects.length),
+    type: "spell_choice",
+    source,
+    mode: "learn",
+    count: { kind: "fixed", value: args.count },
+    level: args.level,
+    spellLists: args.spellLists,
+    summary: `Choose ${args.count} ${args.level === 0 ? "cantrip" : `level ${args.level} spell`}${args.count === 1 ? "" : "s"} from ${args.spellLists.join(", ")}`,
+  } satisfies SpellChoiceEffect);
 }
 
 function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
@@ -139,6 +168,27 @@ function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effec
     castsWithoutSlot: true,
     summary: `${spellName} at will`,
   } satisfies SpellGrantEffect);
+}
+
+function parseSpellChoiceEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  let lastSpellLists: string[] = [];
+
+  for (const match of text.matchAll(/you\s+(?:know|learn)\s+(\w+)\s+(?:extra\s+)?cantrips?(?:\s+of\s+your\s+choice)?\s+from\s+the\s+([^.]+?)\s+spell\s+list/gi)) {
+    const count = parseWordCount(match[1]) ?? 0;
+    const spellLists = parseSpellLists(match[2]);
+    if (spellLists.length === 0) continue;
+    lastSpellLists = spellLists;
+    pushSpellChoiceEffect(source, effects, { count, level: 0, spellLists });
+  }
+
+  for (const match of text.matchAll(/you\s+(?:also\s+)?learn\s+(\w+)\s+level\s+(\d+)\s+spells?(?:\s+of\s+your\s+choice)?\s+from\s+(?:the\s+([^.]+?)\s+spell\s+list|that\s+list)/gi)) {
+    const count = parseWordCount(match[1]) ?? 0;
+    const level = Number(match[2]);
+    const spellLists = match[3] ? parseSpellLists(match[3]) : lastSpellLists;
+    if (!Number.isFinite(level) || spellLists.length === 0) continue;
+    if (match[3]) lastSpellLists = spellLists;
+    pushSpellChoiceEffect(source, effects, { count, level, spellLists });
+  }
 }
 
 function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
@@ -513,6 +563,7 @@ export function parseFeatureEffects(input: ParseFeatureEffectsInput): ParsedFeat
 
   if (cleanText) {
     parseAbilityScoreEffects(source, cleanText, effects);
+    parseSpellChoiceEffects(source, cleanText, effects);
     parseSpellGrantEffects(source, cleanText, effects);
     parseProficiencyGrantEffects(source, cleanText, effects);
     parseWeaponMasteryEffects(source, cleanText, effects);
@@ -663,6 +714,16 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
     }
   }
 
+  return result;
+}
+
+export function collectSpellChoicesFromEffects(parsed: ParsedFeatureEffects[]): SpellChoiceEffect[] {
+  const result: SpellChoiceEffect[] = [];
+  for (const parsedFeature of parsed) {
+    for (const effect of parsedFeature.effects) {
+      if (effect.type === "spell_choice") result.push(effect);
+    }
+  }
   return result;
 }
 

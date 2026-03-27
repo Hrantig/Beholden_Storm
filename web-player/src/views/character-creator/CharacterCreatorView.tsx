@@ -16,6 +16,7 @@ import {
   getCoreLanguageChoice as getCoreLanguageChoiceFromRules,
   parseFeatureGrants as parseFeatureGrantsFromRules,
 } from "@/views/character/CharacterRuleParsers";
+import { collectSpellChoicesFromEffects } from "@/domain/character/parseFeatureEffects";
 import {
   ABILITY_NAME_TO_KEY,
   ABILITY_KEYS,
@@ -81,11 +82,12 @@ import {
   renderSpeciesStep,
   renderSpellsStep,
 } from "@/views/character-creator/steps/CharacterCreatorStepPanels";
-import { duplicateLockedForStep5, getFeatChoiceOptionsForStep5, getFixedGrantsForStep5, getStep5ChoiceState } from "@/views/character-creator/utils/CharacterCreatorStep5Utils";
+import { getFeatChoiceOptionsForStep5, getStep5ChoiceState } from "@/views/character-creator/utils/CharacterCreatorStep5Utils";
 import { renderSkillsStep } from "@/views/character-creator/steps/CharacterCreatorSkillsStep";
 import { renderBackgroundStep } from "@/views/character-creator/steps/CharacterCreatorBackgroundStep";
 import {
   buildProficiencyMap as buildProficiencyMapFromUtils,
+  parseSelectedClassOptionalFeatureEffects,
   buildStartingInventory as buildStartingInventoryFromUtils,
   getWeaponMasteryChoice as getWeaponMasteryChoiceFromUtils,
 } from "@/views/character-creator/utils/CharacterCreatorProficiencyUtils";
@@ -217,6 +219,26 @@ interface ClassFeatureEntry {
   id: string;
   name: string;
   text: string;
+}
+
+interface CreatorSpellListChoiceEntry {
+  key: string;
+  title: string;
+  sourceLabel?: string;
+  options: string[];
+  count: number;
+  note?: string | null;
+}
+
+interface CreatorResolvedSpellChoiceEntry {
+  key: string;
+  title: string;
+  sourceLabel?: string;
+  count: number;
+  level: number | null;
+  note?: string | null;
+  linkedTo?: string | null;
+  listNames: string[];
 }
 
 
@@ -511,6 +533,14 @@ export function CharacterCreatorView() {
       .filter(Boolean),
     [form.chosenClassFeatIds, classFeatDetails]
   );
+  const selectedClassOptionalFeatureEffects = React.useMemo(
+    () => parseSelectedClassOptionalFeatureEffects(classDetail, form.level, form.chosenOptionals),
+    [classDetail, form.level, form.chosenOptionals]
+  );
+  const selectedClassOptionalSpellChoices = React.useMemo(
+    () => collectSpellChoicesFromEffects(selectedClassOptionalFeatureEffects),
+    [selectedClassOptionalFeatureEffects]
+  );
   const selectedFeatAbilityBonuses = React.useMemo(() => {
     const bonusMap: Record<string, number> = {};
     const applyBonus = (bonus: Record<string, number>) => {
@@ -550,7 +580,7 @@ export function CharacterCreatorView() {
   const step5ClassExpertiseChoices = getClassExpertiseChoices(classDetail, form.level);
   const step5WeaponMasteryChoice = getWeaponMasteryChoiceFromUtils(classDetail, form.level);
   const step5WeaponOptions = getWeaponMasteryOptions(items);
-  const step5ChoiceState = getStep5ChoiceState({
+  const step5ChoiceState = React.useMemo(() => getStep5ChoiceState({
     form,
     bgDetail,
     raceDetailName: raceDetail?.name,
@@ -565,9 +595,60 @@ export function CharacterCreatorView() {
     classExpertiseChoices: step5ClassExpertiseChoices,
     weaponMasteryChoice: step5WeaponMasteryChoice,
     weaponOptions: step5WeaponOptions,
-  });
-  const step5SpellFeatChoices = step5ChoiceState.allFeatChoices.filter(
-    ({ choice }) => choice.type === "spell" || choice.type === "spell_list"
+  }), [form, bgDetail, raceDetail, classFeatDetails, raceFeatDetail, levelUpFeatDetails, classDetail, featSummaries, items]); // eslint-disable-line react-hooks/exhaustive-deps
+  const step6FeatSpellListChoices = React.useMemo<CreatorSpellListChoiceEntry[]>(
+    () => step5ChoiceState.allFeatChoices
+      .filter(({ choice }) => choice.type === "spell_list")
+      .map(({ featName, choice, key, sourceLabel }) => ({
+        key,
+        title: "Spell List Choice",
+        sourceLabel: sourceLabel ?? featName,
+        options: getFeatChoiceOptionsForStep5(choice),
+        count: choice.count,
+        note: choice.note,
+      })),
+    [step5ChoiceState]
+  );
+  const step6FeatResolvedSpellChoices = React.useMemo<CreatorResolvedSpellChoiceEntry[]>(
+    () => step5ChoiceState.allFeatChoices
+      .filter(({ choice }) => choice.type === "spell")
+      .map(({ featName, choice, key, sourceLabel }) => {
+        const linkedChoiceKey = choice.linkedTo ? key.replace(`:${choice.id}`, `:${choice.linkedTo}`) : null;
+        const listNames = linkedChoiceKey
+          ? (form.chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
+          : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
+        return {
+          key,
+          title: choice.level === 0 ? "Spell Choice: Cantrips" : "Spell Choice",
+          sourceLabel: sourceLabel ?? featName,
+          count: choice.count,
+          level: choice.level ?? null,
+          note: choice.note,
+          linkedTo: linkedChoiceKey,
+          listNames,
+        };
+      }),
+    [form.chosenFeatOptions, step5ChoiceState]
+  );
+  const step6OptionalSpellChoices = React.useMemo<CreatorResolvedSpellChoiceEntry[]>(
+    () => selectedClassOptionalSpellChoices.flatMap((effect) => {
+      if (effect.count.kind !== "fixed") return [];
+      return [{
+        key: `classoptional:${effect.id}`,
+        title: effect.level === 0 ? "Bonus Cantrip" : `Bonus Level ${effect.level} Spell`,
+        sourceLabel: effect.source.name,
+        count: effect.count.value,
+        level: effect.level,
+        note: effect.summary,
+        listNames: effect.spellLists,
+      }];
+    }),
+    [selectedClassOptionalSpellChoices]
+  );
+  const step6SpellListChoices = step6FeatSpellListChoices;
+  const step6ResolvedSpellChoices = React.useMemo(
+    () => [...step6FeatResolvedSpellChoices, ...step6OptionalSpellChoices],
+    [step6FeatResolvedSpellChoices, step6OptionalSpellChoices]
   );
   const levelUpFeatLevels = React.useMemo(
     () => Array.from(new Set((classDetail?.autolevels ?? [])
@@ -819,23 +900,17 @@ export function CharacterCreatorView() {
   }, [levelUpFeatLevels]);
 
   React.useEffect(() => {
-    if (step5SpellFeatChoices.length === 0) {
+    if (step6ResolvedSpellChoices.length === 0) {
       setFeatSpellChoiceOptions({});
       return;
     }
     let cancelled = false;
     Promise.all(
-      step5SpellFeatChoices.map(async ({ key, choice }) => {
-        if (choice.type !== "spell") return [key, []] as const;
-
-        const linkedChoiceKey = choice.linkedTo ? key.replace(`:${choice.id}`, `:${choice.linkedTo}`) : null;
-        const listNames = linkedChoiceKey
-          ? (form.chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
-          : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
-        if (listNames.length === 0) return [key, []] as const;
+      step6ResolvedSpellChoices.map(async (choice) => {
+        if (choice.listNames.length === 0) return [choice.key, []] as const;
 
         const groups = await Promise.all(
-          listNames.map(async (listName) => {
+          choice.listNames.map(async (listName) => {
             const encoded = encodeURIComponent(listName);
             if ((choice.level ?? 0) === 0) {
               return api<SpellSummary[]>(`/api/spells/search?classes=${encoded}&level=0&limit=200`).catch(() => []);
@@ -855,7 +930,7 @@ export function CharacterCreatorView() {
           if (!spell?.name) continue;
           byName.set(spell.name.toLowerCase(), spell);
         }
-        return [key, Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))] as const;
+        return [choice.key, Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))] as const;
       })
     )
       .then((entries) => {
@@ -865,7 +940,50 @@ export function CharacterCreatorView() {
         if (!cancelled) setFeatSpellChoiceOptions({});
       });
     return () => { cancelled = true; };
-  }, [form.chosenFeatOptions, step5SpellFeatChoices]);
+  }, [step6ResolvedSpellChoices]);
+
+  React.useEffect(() => {
+    const allSpellChoiceKeys = new Set<string>([
+      ...step6SpellListChoices.map((choice) => choice.key),
+      ...step6ResolvedSpellChoices.map((choice) => choice.key),
+    ]);
+    if (allSpellChoiceKeys.size === 0) return;
+    setForm((f) => {
+      let changed = false;
+      const nextChosenFeatOptions = { ...f.chosenFeatOptions };
+
+      for (const choice of step6SpellListChoices) {
+        const current = nextChosenFeatOptions[choice.key] ?? [];
+        const filtered = current.filter((value) => choice.options.includes(value)).slice(0, choice.count);
+        if (filtered.length === 0) {
+          if (choice.key in nextChosenFeatOptions) {
+            delete nextChosenFeatOptions[choice.key];
+            changed = true;
+          }
+        } else if (filtered.length !== current.length || filtered.some((value, index) => value !== current[index])) {
+          nextChosenFeatOptions[choice.key] = filtered;
+          changed = true;
+        }
+      }
+
+      for (const choice of step6ResolvedSpellChoices) {
+        const options = (featSpellChoiceOptions[choice.key] ?? []).map((spell) => spell.name);
+        const current = nextChosenFeatOptions[choice.key] ?? [];
+        const filtered = current.filter((value) => options.includes(value)).slice(0, choice.count);
+        if (filtered.length === 0) {
+          if (choice.key in nextChosenFeatOptions) {
+            delete nextChosenFeatOptions[choice.key];
+            changed = true;
+          }
+        } else if (filtered.length !== current.length || filtered.some((value, index) => value !== current[index])) {
+          nextChosenFeatOptions[choice.key] = filtered;
+          changed = true;
+        }
+      }
+
+      return changed ? { ...f, chosenFeatOptions: nextChosenFeatOptions } : f;
+    });
+  }, [featSpellChoiceOptions, step6ResolvedSpellChoices, step6SpellListChoices]);
 
   // Load bg detail when selected
   React.useEffect(() => {
@@ -1342,19 +1460,6 @@ export function CharacterCreatorView() {
 
   // Step 5: Skills, languages, and feature-based picks
   function StepSkills(): { main: React.ReactNode; side: React.ReactNode } {
-    const featChoiceDisplays = step5ChoiceState.allFeatChoices
-      .filter(({ choice }) => choice.type === "spell" || choice.type === "spell_list")
-      .map(({ featName, choice, key, sourceLabel }) => ({
-        key,
-        title: choice.type === "spell_list" ? "Spell List Choice" : "Spell Choice",
-        sourceLabel: sourceLabel ?? featName,
-        options: choice.type === "spell"
-          ? ((featSpellChoiceOptions[key] ?? []).map((spell) => spell.name))
-          : getFeatChoiceOptionsForStep5(choice),
-        count: choice.count,
-        note: choice.note,
-        linkedTo: choice.linkedTo,
-      }));
     return renderSkillsStep({
       form,
       setForm,
@@ -1385,7 +1490,6 @@ export function CharacterCreatorView() {
         takenLanguageKeys: step5ChoiceState.takenLanguageKeys,
         takenExpertiseKeys: step5ChoiceState.takenExpertiseKeys,
       },
-      featChoiceDisplays,
       getClassFeatChoiceLabel,
       getClassFeatOptionLabel,
       sideSummary: SideSummaryCard(),
@@ -1404,6 +1508,43 @@ export function CharacterCreatorView() {
     const invocCount = invocTable.length > 0 ? tableValueAtLevel(invocTable, form.level) : 0;
 
     const prepCount = classDetail ? getPreparedSpellCount(classDetail, form.level, form.subclass) : 0;
+    const extraSpellListChoices = step6SpellListChoices.map((entry) => ({
+      key: entry.key,
+      title: entry.title,
+      sourceLabel: entry.sourceLabel,
+      options: entry.options,
+      chosen: form.chosenFeatOptions[entry.key] ?? [],
+      max: entry.count,
+      note: entry.note,
+      emptyMsg: "No eligible spell lists found.",
+      onToggle: (value: string) => setForm((f) => {
+        const current = f.chosenFeatOptions[entry.key] ?? [];
+        const next = current.includes(value)
+          ? current.filter((x) => x !== value)
+          : current.length < entry.count ? [...current, value] : current;
+        return { ...f, chosenFeatOptions: { ...f.chosenFeatOptions, [entry.key]: next } };
+      }),
+    }));
+    const extraSpellChoices = step6ResolvedSpellChoices.map((entry) => ({
+      key: entry.key,
+      title: entry.title,
+      sourceLabel: entry.sourceLabel,
+      spells: (featSpellChoiceOptions[entry.key] ?? []).map((spell) => ({ ...spell, id: spell.name })),
+      chosen: form.chosenFeatOptions[entry.key] ?? [],
+      max: entry.count,
+      note: entry.note,
+      emptyMsg: entry.linkedTo ? "Choose the spell list first." : "No eligible spell options found.",
+      onToggle: (name: string) => setForm((f) => {
+        const current = f.chosenFeatOptions[entry.key] ?? [];
+        const next = current.includes(name)
+          ? current.filter((x) => x !== name)
+          : current.length < entry.count ? [...current, name] : current;
+        return { ...f, chosenFeatOptions: { ...f.chosenFeatOptions, [entry.key]: next } };
+      }),
+    }));
+    const missingExtraSpellSelections =
+      extraSpellListChoices.some((entry) => entry.chosen.length < entry.max)
+      || extraSpellChoices.some((entry) => entry.chosen.length < entry.max);
 
     function toggleSpell(id: string, listKey: "chosenCantrips" | "chosenSpells" | "chosenInvocations", max: number) {
       setForm((f) => {
@@ -1431,8 +1572,11 @@ export function CharacterCreatorView() {
       classSpells,
       chosenSpells: form.chosenSpells,
       toggleSpell: (id) => toggleSpell(id, "chosenSpells", prepCount),
+      extraSpellListChoices,
+      extraSpellChoices,
       onBack: () => setStep(5),
       onNext: () => setStep(7),
+      nextDisabled: missingExtraSpellSelections,
       side: SideSummaryCard(),
     });
   }

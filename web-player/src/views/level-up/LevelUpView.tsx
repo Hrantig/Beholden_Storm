@@ -17,7 +17,7 @@ import {
   getSubclassList,
   isSpellcaster,
   tableValueAtLevel,
-} from "@/views/character-creator/CharacterCreatorUtils";
+} from "@/views/character-creator/utils/CharacterCreatorUtils";
 import { BackBtn, ChoiceBtn, ExpertiseSelectionSection, FeatSelectionSection, Section, SpellChoiceList, Wrap } from "@/views/level-up/LevelUpParts";
 import { buildLevelUpPayload, deriveAllowedInvocationIds, deriveFeatAbilityBonuses, deriveHpGain, deriveLevelUpValidation, derivePreviewScores } from "@/views/level-up/LevelUpUtils";
 
