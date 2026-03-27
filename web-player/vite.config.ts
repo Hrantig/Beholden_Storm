@@ -13,7 +13,7 @@ export default defineConfig({
   },
   // In production the app is mounted at /player by Express.
   // In dev it runs standalone on port 5175 — navigate to http://localhost:5175/player/
-  base: "/player/",
+  base: "/",
   build: {
     outDir: "dist",
     rollupOptions: {
