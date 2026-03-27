@@ -10,6 +10,7 @@ import { createServer } from "./server/createServer.js";
 // because npm workspaces may set process.cwd() differently depending on the script.
 (function loadEnv() {
   const cwd = process.cwd();
+  const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_ID);
 
   const candidates = [
     path.resolve(cwd, ".env"),
@@ -18,9 +19,11 @@ import { createServer } from "./server/createServer.js";
   ];
 
   const found = candidates.find((p) => fs.existsSync(p));
-  // Allow repo-local .env to override machine/user environment variables.
-  // This keeps dev toggles (like BEHOLDEN_SUPPORT=false) predictable.
-  if (found) dotenv.config({ path: found, override: true });
+  if (!found) return;
+
+  // In local dev, let the repo .env drive behavior for convenience.
+  // In Railway/production, keep dashboard-provided env vars authoritative.
+  dotenv.config({ path: found, override: !isRailway });
 })();
 
 createServer();
