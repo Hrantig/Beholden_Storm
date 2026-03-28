@@ -35,7 +35,7 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
                  COUNT(p.id) AS player_count
           FROM campaigns c
           LEFT JOIN players p ON p.campaign_id = c.id
-          WHERE c.id IN (SELECT campaign_id FROM campaign_membership WHERE user_id = ?)
+          WHERE c.id IN (SELECT campaign_id FROM campaign_membership WHERE user_id = ? AND role = 'dm')
           GROUP BY c.id
           ORDER BY c.updated_at DESC
         `).all(user.userId) as Record<string, unknown>[];
