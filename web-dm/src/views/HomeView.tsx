@@ -65,13 +65,13 @@ export function HomeView({
 
         {/* Header */}
         <div>
-          <div style={{ fontSize: 28, fontWeight: 900, margin: 0, color: theme.colors.text }}>
+          <div style={{ fontSize: "var(--fs-hero)", fontWeight: 900, margin: 0, color: theme.colors.text }}>
             Campaigns&nbsp;
             {campaigns.length > 0 && (
               <span style={{ color: theme.colors.muted }}>({campaigns.length})</span>
             )}
           </div>
-          <div style={{ marginTop: 6, color: theme.colors.muted, fontSize: 15 }}>
+          <div style={{ marginTop: 6, color: theme.colors.muted, fontSize: "var(--fs-body)" }}>
             Jump back into an existing world, or start a new one.
           </div>
         </div>
@@ -94,7 +94,7 @@ export function HomeView({
               border: `1px solid ${theme.colors.panelBorder}`,
               background: theme.colors.inputBg,
               color: importFile ? theme.colors.text : theme.colors.muted,
-              fontSize: 13,
+              fontSize: "var(--fs-subtitle)",
               cursor: "pointer",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -118,7 +118,7 @@ export function HomeView({
             {importBusy ? "Importing…" : "Import"}
           </Button>
 
-          {importMsg ? <span style={{ fontSize: 12, color: msgColor }}>{importMsg}</span> : null}
+          {importMsg ? <span style={{ fontSize: "var(--fs-small)", color: msgColor }}>{importMsg}</span> : null}
         </div>
 
         {/* Campaign grid */}
@@ -136,7 +136,7 @@ export function HomeView({
             ))}
           </div>
         ) : (
-          <div style={{ color: theme.colors.muted, fontSize: 15, padding: "48px 0", textAlign: "center" }}>
+          <div style={{ color: theme.colors.muted, fontSize: "var(--fs-body)", padding: "48px 0", textAlign: "center" }}>
             No campaigns yet — create one above to get started.
           </div>
         )}

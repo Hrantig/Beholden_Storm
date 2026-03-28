@@ -95,7 +95,7 @@ export function PlayerHomeView() {
 
         {/* ── My Characters ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>My Characters</h2>
+          <h2 style={{ margin: 0, fontSize: "var(--fs-hero)", fontWeight: 800 }}>My Characters</h2>
           <button style={accentBtn} onClick={() => navigate("/characters/new")}>
             + Create Character
           </button>
@@ -105,7 +105,7 @@ export function PlayerHomeView() {
         {error && <p style={{ color: C.red }}>{error}</p>}
 
         {!loading && !error && characters.length === 0 && (
-          <p style={{ color: C.muted, fontSize: 14 }}>No characters yet. Create one to get started.</p>
+          <p style={{ color: C.muted, fontSize: "var(--fs-medium)" }}>No characters yet. Create one to get started.</p>
         )}
 
         {!loading && characters.length > 0 && (
@@ -124,7 +124,7 @@ export function PlayerHomeView() {
         {/* ── Your Campaigns ── */}
         {!loading && campaigns.length > 0 && (
           <>
-            <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800 }}>Your Campaigns</h2>
+            <h2 style={{ margin: "0 0 20px", fontSize: "var(--fs-hero)", fontWeight: 800 }}>Your Campaigns</h2>
             <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
@@ -161,7 +161,7 @@ function CharacterRow({ ch, onOpen, onRefresh }: {
 
   const color = ch.color ?? C.accentHl;
   const hpPct = ch.hpMax > 0 ? Math.max(0, Math.min(100, Math.round((ch.hpCurrent / ch.hpMax) * 100))) : 0;
-  const hpColor = hpPct <= 0 ? "#6b7280" : hpPct < 25 ? "#f87171" : hpPct < 50 ? "#fb923c" : hpPct < 75 ? "#fbbf24" : "#4ade80";
+  const hpColor = hpPct <= 0 ? "#6b7280" : hpPct < 25 ? C.colorPinkRed : hpPct < 50 ? C.colorOrange : hpPct < 75 ? C.colorGold : "#4ade80";
   const hpLabel = hpPct <= 0 ? "Down" : hpPct < 25 ? "Critical" : hpPct < 50 ? "Bloodied" : hpPct < 75 ? "Bloody" : "Healthy";
 
   async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
@@ -216,19 +216,19 @@ function CharacterRow({ ch, onOpen, onRefresh }: {
             ? <img src={ch.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             : <IconPlayer size={28} style={{ opacity: 0.4 }} />}
           {uploading && (
-            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>…</div>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--fs-tiny)", color: "#fff" }}>…</div>
           )}
         </div>
 
         {/* Info — clickable to open sheet */}
         <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => onOpen(ch.id)}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "var(--fs-body)", fontWeight: 800, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {ch.name}
           </div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2 }}>
             {[ch.className, ch.species].filter(Boolean).join(" · ")}
           </div>
-          <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 1 }}>Level {ch.level}</div>
+          <div style={{ fontSize: "var(--fs-small)", color, fontWeight: 700, marginTop: 1 }}>Level {ch.level}</div>
         </div>
 
         {/* AC badge */}
@@ -236,16 +236,16 @@ function CharacterRow({ ch, onOpen, onRefresh }: {
           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
           background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "4px 10px", flexShrink: 0,
         }}>
-          <span style={{ fontSize: 18, fontWeight: 900, color: C.text }}>{ch.ac}</span>
-          <span style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>AC</span>
+          <span style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: C.text }}>{ch.ac}</span>
+          <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 600 }}>AC</span>
         </div>
       </div>
 
       {/* HP bar */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: hpColor, fontWeight: 700 }}>{hpLabel}</span>
-          <span style={{ fontSize: 11, color: C.muted }}>{ch.hpCurrent} / {ch.hpMax}</span>
+          <span style={{ fontSize: "var(--fs-small)", color: hpColor, fontWeight: 700 }}>{hpLabel}</span>
+          <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>{ch.hpCurrent} / {ch.hpMax}</span>
         </div>
         <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
           <div style={{ height: "100%", borderRadius: 3, width: `${hpPct}%`, background: hpColor, transition: "width 0.4s" }} />
@@ -257,7 +257,7 @@ function CharacterRow({ ch, onOpen, onRefresh }: {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {ch.campaigns.map((c) => (
             <span key={c.id} style={{
-              fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 600,
+              fontSize: "var(--fs-small)", padding: "2px 8px", borderRadius: 20, fontWeight: 600,
               background: `${color}18`, border: `1px solid ${color}44`, color,
             }}>
               {c.campaignName}
@@ -269,9 +269,9 @@ function CharacterRow({ ch, onOpen, onRefresh }: {
       {/* Actions */}
       {confirmDelete ? (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>Delete this character?</span>
+          <span style={{ fontSize: "var(--fs-small)", color: C.colorPinkRed, flex: 1 }}>Delete this character?</span>
           <button disabled={deleting} onClick={handleDelete}
-            style={{ ...ghostBtn, color: "#f87171", borderColor: "rgba(248,113,113,0.45)", fontSize: 12 }}>
+            style={{ ...ghostBtn, color: C.colorPinkRed, borderColor: "rgba(248,113,113,0.45)", fontSize: "var(--fs-small)" }}>
             {deleting ? "…" : "Yes, delete"}
           </button>
           <button onClick={() => setConfirmDelete(false)} style={ghostBtn}>Cancel</button>
@@ -353,10 +353,10 @@ function CampaignCard({ campaign: c, characters, onOpen }: {
 
       {/* Body */}
       <div style={{ padding: "14px 16px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ fontSize: "var(--fs-title)", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {c.name}
         </div>
-        <div style={{ fontSize: 13, color: C.muted }}>
+        <div style={{ fontSize: "var(--fs-subtitle)", color: C.muted }}>
           {c.playerCount} player{c.playerCount !== 1 ? "s" : ""}
         </div>
 
@@ -365,7 +365,7 @@ function CampaignCard({ campaign: c, characters, onOpen }: {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
             {assignedChars.map((ch) => (
               <span key={ch.id} style={{
-                fontSize: 11, padding: "2px 8px", borderRadius: 20,
+                fontSize: "var(--fs-small)", padding: "2px 8px", borderRadius: 20,
                 background: `${ch.color ?? C.accentHl}22`,
                 border: `1px solid ${ch.color ?? C.accentHl}55`,
                 color: ch.color ?? C.accentHl, fontWeight: 600,
@@ -386,7 +386,7 @@ function CampaignCard({ campaign: c, characters, onOpen }: {
           Open
         </button>
         <button
-          style={{ ...ghostBtn, fontSize: 12 }}
+          style={{ ...ghostBtn, fontSize: "var(--fs-small)" }}
           onClick={() => navigate(`/characters/new?campaign=${c.id}`)}
         >
           + Assign
@@ -404,7 +404,7 @@ const accentBtn: React.CSSProperties = {
   border: "none",
   borderRadius: 8,
   padding: "8px 18px",
-  fontSize: 13,
+  fontSize: "var(--fs-subtitle)",
   fontWeight: 700,
   cursor: "pointer",
 };
@@ -415,7 +415,7 @@ const ghostBtn: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 7,
   padding: "6px 14px",
-  fontSize: 12,
+  fontSize: "var(--fs-small)",
   cursor: "pointer",
   flexShrink: 0,
 };

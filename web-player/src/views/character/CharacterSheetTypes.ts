@@ -44,7 +44,7 @@ export interface GrantedSpellCast {
   key: string;
   spellName: string;
   sourceName: string;
-  mode: "at_will" | "limited";
+  mode: "at_will" | "limited" | "known" | "always_prepared" | "expanded_list";
   note: string;
   resourceKey?: string;
   reset?: string;

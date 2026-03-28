@@ -153,7 +153,7 @@ export function CombatOrderRow(props: {
               border: `2px solid ${props.isBulkSelected ? theme.colors.accentWarning : theme.colors.muted}`,
               background: props.isBulkSelected ? theme.colors.accentWarning : "transparent",
               display: "grid", placeItems: "center",
-              color: theme.colors.text, fontSize: 12, fontWeight: 900,
+              color: theme.colors.text, fontSize: "var(--fs-small)", fontWeight: 900,
               transition: "all 120ms ease",
             }}>
               {props.isBulkSelected ? "✓" : ""}
@@ -197,11 +197,11 @@ export function CombatOrderRow(props: {
           {/* AC + HP — --fs-body for readability */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{ opacity: 0.5, fontSize: 12 }}>🛡</span>
+              <span style={{ opacity: 0.5, fontSize: "var(--fs-small)" }}>🛡</span>
               <span style={{ fontWeight: 900, fontSize: "var(--fs-body)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>{ac}</span>
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{ opacity: 0.5, fontSize: 12 }}>♥</span>
+              <span style={{ opacity: 0.5, fontSize: "var(--fs-small)" }}>♥</span>
               <span style={{ fontWeight: 900, fontSize: "var(--fs-body)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>{hpCurrent}/{hpMax}</span>
             </span>
           </div>

@@ -19,122 +19,24 @@ import {
   tableValueAtLevel,
 } from "@/views/character-creator/utils/CharacterCreatorUtils";
 import {
-  FEAT_SPELL_LIST_NAMES,
+  buildResolvedSpellChoiceEntry,
+  buildSpellListChoiceEntry,
   loadSpellChoiceOptions,
   sanitizeSpellChoiceSelections,
 } from "@/views/character-creator/utils/SpellChoiceUtils";
+import type {
+  AsiMode,
+  HpChoice,
+  LevelUpCharacter as Character,
+  LevelUpClassDetail as ClassDetail,
+  LevelUpFeatDetail as FeatDetail,
+  LevelUpFeatSummary as FeatSummary,
+  LevelUpResolvedSpellChoiceEntry,
+  LevelUpSpellListChoiceEntry,
+  LevelUpSpellSummary as SpellSummary,
+} from "@/views/level-up/LevelUpTypes";
 import { BackBtn, ChoiceBtn, ExpertiseSelectionSection, FeatSelectionSection, Section, SpellChoiceList, Wrap } from "@/views/level-up/LevelUpParts";
 import { buildLevelUpPayload, deriveAllowedInvocationIds, deriveFeatAbilityBonuses, deriveHpGain, deriveLevelUpValidation, derivePreviewScores } from "@/views/level-up/LevelUpUtils";
-
-// ---------------------------------------------------------------------------
-// Types (minimal, matching CharacterView / CharacterCreatorView shapes)
-// ---------------------------------------------------------------------------
-
-interface AutoLevel {
-  level: number;
-  scoreImprovement: boolean;
-  slots: number[] | null;
-  features: { name: string; text: string; optional: boolean }[];
-  counters: { name: string; value: number; reset: string }[];
-}
-
-interface ClassDetail {
-  id: string;
-  name: string;
-  hd: number | null;
-  autolevels: AutoLevel[];
-}
-
-interface SpellSummary {
-  id: string;
-  name: string;
-  level?: number | null;
-  text?: string | null;
-}
-
-interface ParsedFeatChoice {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  level?: number | null;
-  linkedTo?: string | null;
-  distinct?: boolean;
-  note?: string | null;
-}
-
-interface ParsedFeatGrants {
-  skills: string[];
-  tools: string[];
-  languages: string[];
-  armor: string[];
-  weapons: string[];
-  savingThrows: string[];
-  spells: string[];
-  cantrips: string[];
-  abilityIncreases: Record<string, number>;
-}
-
-interface ParsedFeat {
-  category: string | null;
-  baseName: string;
-  variant: string | null;
-  prerequisite: string | null;
-  repeatable: boolean;
-  source: string | null;
-  grants: ParsedFeatGrants;
-  choices: ParsedFeatChoice[];
-}
-
-interface FeatSummary {
-  id: string;
-  name: string;
-}
-
-interface FeatDetail {
-  id: string;
-  name: string;
-  text?: string | null;
-  parsed: ParsedFeat;
-}
-
-interface Character {
-  id: string;
-  name: string;
-  className: string;
-  level: number;
-  hpMax: number;
-  hpCurrent: number;
-  strScore: number | null;
-  dexScore: number | null;
-  conScore: number | null;
-  intScore: number | null;
-  wisScore: number | null;
-  chaScore: number | null;
-  characterData: {
-    classId?: string;
-    xp?: number;
-    subclass?: string | null;
-    chosenLevelUpFeats?: Array<{ level: number; featId: string }>;
-    chosenCantrips?: string[];
-    chosenSpells?: string[];
-    chosenInvocations?: string[];
-    chosenFeatOptions?: Record<string, string[]>;
-    proficiencies?: {
-      spells?: Array<{ name: string; source: string }>;
-      invocations?: Array<{ name: string; source: string }>;
-      skills?: Array<{ name: string; source: string }>;
-      expertise?: Array<{ name: string; source: string }>;
-      [k: string]: unknown;
-    };
-    [k: string]: unknown;
-  } | null;
-}
-
-type AsiMode = "+2" | "+1+1" | "feat" | null;
-type HpChoice = "roll" | "average" | "manual" | null;
 
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
 const ABILITY_LABELS: Record<string, string> = {
@@ -142,30 +44,7 @@ const ABILITY_LABELS: Record<string, string> = {
   int: "Intelligence", wis: "Wisdom", cha: "Charisma",
 };
 
-// Spell slot columns: index 1–9 map to spell levels
 const SLOT_LABELS = ["Cantrips", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
-interface LevelUpSpellListChoiceEntry {
-  key: string;
-  title: string;
-  count: number;
-  options: string[];
-  note?: string | null;
-}
-
-interface LevelUpResolvedSpellChoiceEntry {
-  key: string;
-  title: string;
-  count: number;
-  level: number | null;
-  note?: string | null;
-  linkedTo?: string | null;
-  listNames: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function LevelUpView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -306,20 +185,29 @@ export function LevelUpView() {
     () => (chosenFeatDetail?.parsed.choices ?? []).filter((choice) => choice.type !== "damage_type"),
     [chosenFeatDetail]
   );
+  const featSourceLabel = chosenFeatDetail ? `${chosenFeatDetail.name} (Level ${nextLevel})` : "";
   const featSpellListChoices = React.useMemo<LevelUpSpellListChoiceEntry[]>(
     () => {
       if (!chosenFeatDetail) return [];
       return featChoiceEntries
         .filter((choice) => choice.type === "spell_list")
-        .map((choice) => ({
-          key: `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`,
-          title: "Spell List Choice",
-          count: choice.count,
-          options: getFeatChoiceOptions(choice),
-          note: choice.note,
-        }));
+        .map((choice) => {
+          const entry = buildSpellListChoiceEntry({
+            key: `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`,
+            choice: { ...choice, options: getFeatChoiceOptions(choice) },
+            level: nextLevel,
+            sourceLabel: featSourceLabel,
+          });
+          return {
+            ...entry,
+            title: "Spell List",
+            note: entry.options.length === 1
+              ? (choice.note ?? "Spell list fixed by this feat.")
+              : choice.note,
+          };
+        });
     },
-    [chosenFeatDetail, featChoiceEntries, nextLevel]
+    [chosenFeatDetail, featChoiceEntries, featSourceLabel, nextLevel]
   );
   const featResolvedSpellChoices = React.useMemo<LevelUpResolvedSpellChoiceEntry[]>(
     () => {
@@ -329,23 +217,20 @@ export function LevelUpView() {
         .map((choice) => {
           const key = `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.id}`;
           const linkedChoiceKey = choice.linkedTo ? `levelupfeat:${nextLevel}:${chosenFeatDetail.id}:${choice.linkedTo}` : null;
-          const listNames = linkedChoiceKey
-            ? (chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
-            : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
           return {
-            key,
-            title: choice.level === 0 ? "Feat Cantrip Choice" : "Feat Spell Choice",
-            count: choice.count,
-            level: choice.level ?? null,
-            note: choice.note,
-            linkedTo: linkedChoiceKey,
-            listNames,
+            ...buildResolvedSpellChoiceEntry({
+              key,
+              choice,
+              level: nextLevel,
+              sourceLabel: chosenFeatDetail.name,
+              chosenOptions: chosenFeatOptions,
+              linkedChoiceKey,
+            }),
           };
         });
     },
     [chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel]
   );
-  const featSourceLabel = chosenFeatDetail ? `${chosenFeatDetail.name} (Level ${nextLevel})` : "";
   const allowedInvocationIds = React.useMemo(
     () => deriveAllowedInvocationIds({ classCantrips, classInvocations, chosenCantrips, chosenInvocations, nextLevel }),
     [chosenCantrips, chosenInvocations, classCantrips, classInvocations, nextLevel]
@@ -641,7 +526,7 @@ export function LevelUpView() {
     }
   }
 
-  const accentColor = "#38b6ff";
+  const accentColor = C.accentHl;
 
   return (
     <Wrap>
@@ -649,11 +534,11 @@ export function LevelUpView() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
         <button
           onClick={() => navigate(`/characters/${char.id}`)}
-          style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 20, padding: 0 }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: "var(--fs-title)", padding: 0 }}
         >←</button>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>{char.name}</h1>
-          <div style={{ fontSize: 13, color: accentColor, fontWeight: 700, marginTop: 2 }}>
+          <h1 style={{ margin: 0, fontSize: "var(--fs-title)", fontWeight: 900, color: C.text }}>{char.name}</h1>
+          <div style={{ fontSize: "var(--fs-subtitle)", color: accentColor, fontWeight: 700, marginTop: 2 }}>
             Level {char.level} → <span style={{ color: "#fff" }}>{nextLevel}</span>
             {classDetail && <span style={{ color: C.muted, fontWeight: 400 }}> · {classDetail.name}</span>}
           </div>
@@ -662,7 +547,7 @@ export function LevelUpView() {
 
       {/* ── HP gain ── */}
       <Section title={`HP at Level ${nextLevel}`} accent={accentColor}>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+        <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 10 }}>
           Hit Die: d{hd} · CON modifier: {formatModifier(conMod)}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -678,7 +563,7 @@ export function LevelUpView() {
             accent={C.green}
           >
             {hpChoice === "roll" && rolledHp !== null
-              ? <>🎲 Rolled — <strong>+{rolledHp}</strong> <span style={{ fontSize: 10, color: C.muted }}>(click to re-roll)</span></>
+              ? <>🎲 Rolled — <strong>+{rolledHp}</strong> <span style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>(click to re-roll)</span></>
               : <>🎲 Roll 1d{hd}</>}
           </ChoiceBtn>
           <ChoiceBtn
@@ -705,18 +590,18 @@ export function LevelUpView() {
                 border: "1px solid rgba(255,255,255,0.10)",
                 background: "rgba(255,255,255,0.04)",
                 color: C.text,
-                fontSize: 14,
+                fontSize: "var(--fs-medium)",
                 fontWeight: 700,
                 outline: "none",
               }}
             />
-            <div style={{ fontSize: 12, color: C.muted }}>
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
               Enter the final HP gained after applying Constitution.
             </div>
           </div>
         )}
         {hpGain !== null && (
-          <div style={{ marginTop: 10, fontSize: 13, color: C.muted }}>
+          <div style={{ marginTop: 10, fontSize: "var(--fs-subtitle)", color: C.muted }}>
             New HP max: <span style={{ color: "#fff", fontWeight: 700 }}>{char.hpMax} + {hpGain}{featHpBonus > 0 ? ` + ${featHpBonus}` : ""} = {char.hpMax + hpGain + featHpBonus}</span>
           </div>
         )}
@@ -725,7 +610,7 @@ export function LevelUpView() {
       {/* ── ASI ── */}
       {isAsiLevel && (
         <Section title="Ability Score Improvement" accent={accentColor}>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 12 }}>
             +2 to one ability score, +1 to two different scores, or take a feat.
           </div>
 
@@ -762,13 +647,13 @@ export function LevelUpView() {
                       textAlign: "center",
                     }}
                   >
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>{ABILITY_LABELS[k]}</div>
-                    <div style={{ fontSize: 17, fontWeight: 900 }}>
+                    <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginBottom: 2 }}>{ABILITY_LABELS[k]}</div>
+                    <div style={{ fontSize: "var(--fs-large)", fontWeight: 900 }}>
                       {preview}
-                      {selected && <span style={{ fontSize: 11, color: accentColor }}> +{delta}</span>}
+                      {selected && <span style={{ fontSize: "var(--fs-small)", color: accentColor }}> +{delta}</span>}
                     </div>
-                    <div style={{ fontSize: 10, color: C.muted }}>{formatModifier(abilityMod(preview))}</div>
-                    {maxed && <div style={{ fontSize: 9, color: C.muted }}>MAX</div>}
+                    <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{formatModifier(abilityMod(preview))}</div>
+                    {maxed && <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>MAX</div>}
                   </button>
                 );
               })}
@@ -834,7 +719,7 @@ export function LevelUpView() {
 
       {needsSubclassChoice && (
         <Section title={`Subclass at Level ${nextLevel}`} accent={accentColor}>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 12 }}>
             Choose your subclass.
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
@@ -886,8 +771,8 @@ export function LevelUpView() {
               return (
                 <div key={choice.key}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{choice.title}</div>
-                    <div style={{ fontSize: 12, color: selected.length >= choice.count ? accentColor : C.muted }}>
+                    <div style={{ fontSize: "var(--fs-medium)", fontWeight: 800, color: "#fff" }}>{choice.title}</div>
+                    <div style={{ fontSize: "var(--fs-small)", color: selected.length >= choice.count ? accentColor : C.muted }}>
                       {selected.length} / {choice.count}
                     </div>
                   </div>
@@ -918,7 +803,7 @@ export function LevelUpView() {
                       );
                     })}
                   </div>
-                  {choice.note && <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>{choice.note}</div>}
+                  {choice.note && <div style={{ marginTop: 8, fontSize: "var(--fs-small)", color: C.muted }}>{choice.note}</div>}
                 </div>
               );
             })}
@@ -944,7 +829,7 @@ export function LevelUpView() {
               />
             ))}
             {featResolvedSpellChoices.some((choice) => (featSpellChoiceOptions[choice.key] ?? []).length === 0) && (
-              <div style={{ fontSize: 11, color: C.muted }}>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
                 {featResolvedSpellChoices.some((choice) => choice.linkedTo && (chosenFeatOptions[choice.linkedTo] ?? []).length === 0)
                   ? "Choose the spell list first."
                   : "No eligible spell options found."}
@@ -976,15 +861,15 @@ export function LevelUpView() {
                     style={{
                       width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
                       padding: "10px 12px", background: "none", border: "none", cursor: "pointer",
-                      color: C.text, fontWeight: 700, fontSize: 13, textAlign: "left",
+                      color: C.text, fontWeight: 700, fontSize: "var(--fs-subtitle)", textAlign: "left",
                     }}
                   >
                     <span>{f.name}</span>
-                    <span style={{ color: C.muted, fontSize: 12 }}>{expanded ? "▲" : "▼"}</span>
+                    <span style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{expanded ? "▲" : "▼"}</span>
                   </button>
                   {expanded && (
                     <div style={{
-                      padding: "0 12px 12px", fontSize: 12, color: C.muted, lineHeight: 1.6,
+                      padding: "0 12px 12px", fontSize: "var(--fs-small)", color: C.muted, lineHeight: 1.6,
                       whiteSpace: "pre-wrap",
                     }}>
                       {f.text}
@@ -1009,8 +894,8 @@ export function LevelUpView() {
                   border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
                   textAlign: "center",
                 }}>
-                  <div style={{ fontSize: 10, color: C.muted }}>{SLOT_LABELS[i] ?? `L${i}`}</div>
-                  <div style={{ fontWeight: 800, fontSize: 16, color: accentColor }}>{count}</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{SLOT_LABELS[i] ?? `L${i}`}</div>
+                  <div style={{ fontWeight: 800, fontSize: "var(--fs-body)", color: accentColor }}>{count}</div>
                 </div>
               );
             })}
@@ -1023,7 +908,7 @@ export function LevelUpView() {
         <button
           onClick={() => navigate(`/characters/${char.id}`)}
           style={{
-            padding: "12px 20px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600,
+            padding: "12px 20px", borderRadius: 10, cursor: "pointer", fontSize: "var(--fs-medium)", fontWeight: 600,
             background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: C.muted,
           }}
         >Cancel</button>
@@ -1032,7 +917,7 @@ export function LevelUpView() {
           disabled={!canConfirm || !extraFeatSpellSelectionsValid || saving}
           style={{
             flex: 1, padding: "12px 20px", borderRadius: 10, cursor: canConfirm && !saving ? "pointer" : "not-allowed",
-            fontSize: 14, fontWeight: 800, border: "none",
+            fontSize: "var(--fs-medium)", fontWeight: 800, border: "none",
             background: canConfirm ? accentColor : "rgba(255,255,255,0.08)",
             color: canConfirm ? "#fff" : C.muted,
             opacity: saving ? 0.6 : 1,

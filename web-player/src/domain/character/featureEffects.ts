@@ -118,6 +118,7 @@ export interface SpellGrantEffect extends FeatureEffectBase {
   spellName: string;
   spellList?: string | null;
   mode: "known" | "always_prepared" | "at_will" | "free_cast" | "expanded_list";
+  requiredLevel?: number;
   uses?: ScalingValue;
   reset?: ResetKind;
   castsWithoutSlot?: boolean;

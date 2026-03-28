@@ -44,14 +44,14 @@ export function CharacterAbilitiesPanels({
               return (
                 <div key={k} style={{ minWidth: 0 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "44px minmax(56px, 1fr) 40px 40px", columnGap: 10, alignItems: "center" }}>
-                    <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
+                    <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
                       {ABILITY_LABELS[k]}
                     </div>
-                    <div style={{ padding: "8px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: 14, fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
+                    <div style={{ padding: "8px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: "var(--fs-medium)", fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
                       {score ?? "-"}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: C.text }}>{fmtMod(m)}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: showSaveDisadvantage ? "#f87171" : isProfSave ? accentColor : C.text, position: "relative" }}>
+                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: C.text }}>{fmtMod(m)}</div>
+                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: showSaveDisadvantage ? C.colorPinkRed : isProfSave ? accentColor : C.text, position: "relative" }}>
                       <span title={showSaveDisadvantage ? "Disadvantage while wearing armor or a shield without proficiency" : undefined}>
                         {fmtMod(save)}{showSaveDisadvantage ? " D" : ""}
                       </span>
@@ -92,7 +92,7 @@ export function CharacterAbilitiesPanels({
                 <ProfDot filled={isProfSkill} color={isExpertise ? accentColor : C.green} />
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: "var(--fs-tiny)",
                     fontWeight: 700,
                     color: "rgba(160,180,220,0.45)",
                     letterSpacing: "0.04em",
@@ -104,7 +104,7 @@ export function CharacterAbilitiesPanels({
                 </span>
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: "var(--fs-small)",
                     color: isProfSkill ? C.text : C.muted,
                     flex: 1,
                     fontWeight: isProfSkill ? 600 : 400,
@@ -116,7 +116,7 @@ export function CharacterAbilitiesPanels({
                 >
                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
                   {isExpertise && (
-                    <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>EXP</span>
+                    <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: accentColor }}>EXP</span>
                   )}
                   {showDisadvantage && (
                     <span
@@ -130,8 +130,8 @@ export function CharacterAbilitiesPanels({
                         borderRadius: 999,
                         border: "1px solid rgba(248,113,113,0.55)",
                         background: "rgba(248,113,113,0.14)",
-                        color: "#f87171",
-                        fontSize: 11,
+                        color: C.colorPinkRed,
+                        fontSize: "var(--fs-small)",
                         fontWeight: 800,
                         lineHeight: 1,
                         flexShrink: 0,
@@ -143,11 +143,11 @@ export function CharacterAbilitiesPanels({
                 </span>
                 <span
                   style={{
-                    fontSize: 13,
+                    fontSize: "var(--fs-subtitle)",
                     fontWeight: 700,
                     minWidth: 26,
                     textAlign: "right",
-                    color: showDisadvantage ? "#f87171" : isExpertise ? accentColor : isProfSkill ? C.green : C.text,
+                    color: showDisadvantage ? C.colorPinkRed : isExpertise ? accentColor : isProfSkill ? C.green : C.text,
                   }}
                 >
                   {isProfSkill && (src || expertiseSrc)
@@ -173,12 +173,12 @@ export function CharacterProficienciesPanel({
 }) {
   if (!prof) return null;
   const sections = [
-    { label: "Armor", items: prof.armor, color: "#a78bfa" },
-    { label: "Weapons", items: prof.weapons, color: "#f87171" },
-    { label: "Weapon Masteries", items: prof.masteries, color: "#fbbf24" },
-    { label: "Tools", items: prof.tools, color: "#fb923c" },
+    { label: "Armor", items: prof.armor, color: C.colorMagic },
+    { label: "Weapons", items: prof.weapons, color: C.colorPinkRed },
+    { label: "Weapon Masteries", items: prof.masteries, color: C.colorGold },
+    { label: "Tools", items: prof.tools, color: C.colorOrange },
     { label: "Expertise", items: prof.expertise, color: accentColor },
-    { label: "Languages", items: prof.languages, color: "#60a5fa" },
+    { label: "Languages", items: prof.languages, color: C.colorRitual },
   ].filter((s) => s.items.length > 0);
   if (!sections.length) return null;
   return (
@@ -186,7 +186,7 @@ export function CharacterProficienciesPanel({
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sections.map((s) => (
           <div key={s.label}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+            <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
               {s.label}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -194,7 +194,7 @@ export function CharacterProficienciesPanel({
                 <Tooltip key={i} text={item.source}>
                   <span
                     style={{
-                      fontSize: 12,
+                      fontSize: "var(--fs-small)",
                       padding: "3px 9px",
                       borderRadius: 5,
                       cursor: "default",

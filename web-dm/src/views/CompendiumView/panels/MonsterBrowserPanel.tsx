@@ -55,7 +55,7 @@ function MonsterBrowserRow(props: {
         }}
       >
         <div style={{ fontWeight: 700, lineHeight: 1.15 }}>{m.name}</div>
-        <div style={{ color: theme.colors.muted, fontSize: 12, marginTop: 2 }}>
+        <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
           {crLabel}{type ? ` • ${type}` : ""}{m.environment ? ` • ${m.environment}` : ""}
         </div>
       </button>
@@ -70,7 +70,7 @@ function MonsterBrowserRow(props: {
         }}>
           {props.confirmingDelete ? (
             <>
-              <span style={{ fontSize: 11, color: theme.colors.muted, marginRight: 2 }}>Delete?</span>
+              <span style={{ fontSize: "var(--fs-small)", color: theme.colors.muted, marginRight: 2 }}>Delete?</span>
               <button type="button" onClick={props.onConfirmDelete} disabled={props.deleteBusy}
                 style={actionBtnStyle(theme.colors.red)} title="Yes, delete">Yes</button>
               <button type="button" onClick={props.onCancelDelete}
@@ -197,7 +197,7 @@ export function MonsterBrowserPanel(props: {
         title="Monsters"
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               {loading ? "Loading…" : `${filteredRows.length.toLocaleString()} / ${baseRows.length.toLocaleString()}`}
             </div>
             {props.editable && (
@@ -241,7 +241,7 @@ export function MonsterBrowserPanel(props: {
                   padding: "2px 7px", borderRadius: 6,
                   border: `1px solid ${theme.colors.panelBorder}`,
                   background: "transparent", color: theme.colors.muted,
-                  cursor: "pointer", fontSize: 11, fontWeight: 700,
+                  cursor: "pointer", fontSize: "var(--fs-small)", fontWeight: 700,
                 }}
               >
                 {letter}
@@ -300,15 +300,15 @@ export function MonsterBrowserPanel(props: {
             onClick={(e) => e.stopPropagation()}
             style={{ background: theme.colors.modalBg, border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 10, width: 260 }}
           >
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>New Monster</div>
+            <div style={{ fontWeight: 700, fontSize: "var(--fs-body)", marginBottom: 4 }}>New Monster</div>
             <button type="button"
               onClick={() => { setShowCreateChoice(false); setFormTarget({ mode: "create" }); }}
-              style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: theme.colors.accentPrimary, color: theme.colors.textDark, fontWeight: 700, cursor: "pointer", fontSize: 13, textAlign: "left" }}>
+              style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: theme.colors.accentPrimary, color: theme.colors.textDark, fontWeight: 700, cursor: "pointer", fontSize: "var(--fs-subtitle)", textAlign: "left" }}>
               Create New
             </button>
             <button type="button"
               onClick={() => { setShowCreateChoice(false); setDupPickerOpen(true); }}
-              style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: "transparent", color: theme.colors.text, fontWeight: 600, cursor: "pointer", fontSize: 13, textAlign: "left" }}>
+              style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: "transparent", color: theme.colors.text, fontWeight: 600, cursor: "pointer", fontSize: "var(--fs-subtitle)", textAlign: "left" }}>
               Duplicate Existing…
             </button>
           </div>
@@ -326,9 +326,9 @@ export function MonsterBrowserPanel(props: {
             style={{ background: theme.colors.modalBg, border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 12, width: "min(480px, 95vw)", display: "flex", flexDirection: "column", maxHeight: "80vh" }}
           >
             <div style={{ padding: "14px 20px", borderBottom: `1px solid ${theme.colors.panelBorder}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <span style={{ fontWeight: 700, fontSize: 15 }}>Pick a monster to duplicate</span>
+              <span style={{ fontWeight: 700, fontSize: "var(--fs-body)" }}>Pick a monster to duplicate</span>
               <button type="button" onClick={() => { setDupPickerOpen(false); setDupSearchQ(""); }}
-                style={{ background: "none", border: "none", color: theme.colors.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+                style={{ background: "none", border: "none", color: theme.colors.muted, cursor: "pointer", fontSize: "var(--fs-hero)", lineHeight: 1 }}>×</button>
             </div>
             <div style={{ padding: "10px 16px", borderBottom: `1px solid ${theme.colors.panelBorder}`, flexShrink: 0 }}>
               <input
@@ -337,7 +337,7 @@ export function MonsterBrowserPanel(props: {
                 placeholder="Search monsters…"
                 value={dupSearchQ}
                 onChange={(e) => setDupSearchQ(e.target.value)}
-                style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: theme.colors.inputBg, color: theme.colors.text, fontSize: 13, boxSizing: "border-box" }}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: `1px solid ${theme.colors.panelBorder}`, background: theme.colors.inputBg, color: theme.colors.text, fontSize: "var(--fs-subtitle)", boxSizing: "border-box" }}
               />
             </div>
             <div style={{ overflowY: "auto", flex: 1 }}>
@@ -347,14 +347,14 @@ export function MonsterBrowserPanel(props: {
                   onClick={() => handleDuplicateClick(m.id)}
                   style={{ width: "100%", padding: "10px 16px", border: "none", borderBottom: `1px solid ${theme.colors.panelBorder}`, background: "transparent", color: theme.colors.text, cursor: dupLoading === m.id ? "wait" : "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: 2, opacity: dupLoading === m.id ? 0.5 : 1 }}
                 >
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{m.name}</div>
-                  <div style={{ color: theme.colors.muted, fontSize: 11 }}>
+                  <div style={{ fontWeight: 600, fontSize: "var(--fs-subtitle)" }}>{m.name}</div>
+                  <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
                     {m.cr != null ? `CR ${formatCr(m.cr)}` : "CR —"}{m.type ? ` • ${m.type}` : ""}
                   </div>
                 </button>
               ))}
               {dupFilteredRows.length === 0 && (
-                <div style={{ padding: 16, color: theme.colors.muted, fontSize: 13 }}>No monsters found.</div>
+                <div style={{ padding: 16, color: theme.colors.muted, fontSize: "var(--fs-subtitle)" }}>No monsters found.</div>
               )}
             </div>
           </div>

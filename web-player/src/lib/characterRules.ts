@@ -1,3 +1,5 @@
+import type { ParsedFeatChoiceLike, ParsedFeatLike as SharedParsedFeatLike, ParsedFeatDetailLike as SharedParsedFeatDetailLike } from "@/views/character-creator/utils/FeatChoiceTypes";
+
 export type Ruleset = "5.5e";
 
 export interface RuleTaggedRecord {
@@ -5,27 +7,10 @@ export interface RuleTaggedRecord {
   name?: string | null;
 }
 
-export interface ParsedFeatChoiceLike {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  level?: number | null;
-  linkedTo?: string | null;
-  distinct?: boolean;
-  note?: string | null;
-}
+export type ParsedFeatLike = SharedParsedFeatLike<ParsedFeatChoiceLike>;
+export type { ParsedFeatChoiceLike };
 
-export interface ParsedFeatLike {
-  choices: ParsedFeatChoiceLike[];
-}
-
-export interface BackgroundFeatLike {
-  name: string;
-  parsed: ParsedFeatLike;
-}
+export type BackgroundFeatLike = SharedParsedFeatDetailLike<ParsedFeatChoiceLike>;
 
 export interface BackgroundDetailLike {
   proficiencies?: {
@@ -118,6 +103,8 @@ export function getBackgroundFeatChoices(bgDetail: BackgroundDetailLike | null):
         || choice.type === "weapon_mastery"
         || choice.type === "expertise"
         || choice.type === "ability_score"
+        || choice.type === "spell"
+        || choice.type === "spell_list"
       )
       .map((choice) => ({
         featName: feat.name,

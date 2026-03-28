@@ -55,6 +55,7 @@ import { registerCombatRoutes } from "../routes/combat.js";
 import { registerReorderRoutes } from "../routes/reorder.js";
 import { registerTreasureRoutes } from "../routes/treasure.js";
 import { registerExportImportRoutes } from "../routes/exportImport.js";
+import { registerUpdateCheckRoutes } from "../routes/updateCheck.js";
 import { registerWebUiRoutes } from "../routes/webUi.js";
 
 export function createServer() {
@@ -148,6 +149,7 @@ export function createServer() {
   registerReorderRoutes(app, ctx);
   registerTreasureRoutes(app, ctx);
   registerExportImportRoutes(app, ctx);
+  registerUpdateCheckRoutes(app, ctx);
   registerWebUiRoutes(app, ctx);
 
   // --- error handling -------------------------------------------------------

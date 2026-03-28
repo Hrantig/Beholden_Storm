@@ -13,7 +13,7 @@ export function MiniTable(props: { cols: string[]; rows: Array<Array<string | nu
         }}
       >
         {props.cols.map((c) => (
-          <div key={c} style={{ padding: "8px 10px", fontWeight: 800, fontSize: 12, color: theme.colors.muted }}>
+          <div key={c} style={{ padding: "8px 10px", fontWeight: 800, fontSize: "var(--fs-small)", color: theme.colors.muted }}>
             {c}
           </div>
         ))}
@@ -28,7 +28,7 @@ export function MiniTable(props: { cols: string[]; rows: Array<Array<string | nu
           }}
         >
           {r.map((cell, i) => (
-            <div key={i} style={{ padding: "8px 10px", fontSize: 13, color: theme.colors.text }}>
+            <div key={i} style={{ padding: "8px 10px", fontSize: "var(--fs-subtitle)", color: theme.colors.text }}>
               {cell}
             </div>
           ))}

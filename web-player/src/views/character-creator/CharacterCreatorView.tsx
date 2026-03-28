@@ -60,11 +60,36 @@ import {
   tableValueAtLevel,
 } from "@/views/character-creator/utils/CharacterCreatorUtils";
 import {
-  FEAT_SPELL_LIST_NAMES,
+  buildResolvedSpellChoiceEntry,
+  buildSpellListChoiceEntry,
   loadSpellChoiceOptions,
   sanitizeSpellChoiceSelections,
   type SharedSpellSummary,
 } from "@/views/character-creator/utils/SpellChoiceUtils";
+import type {
+  ParsedFeatChoiceLike as ParsedFeatChoice,
+  ParsedFeatLike as ParsedFeat,
+  ParsedFeatDetailLike as BackgroundFeat,
+} from "@/views/character-creator/utils/FeatChoiceTypes";
+import type {
+  BgDetail,
+  BgSummary,
+  Campaign,
+  ClassDetail,
+  ClassFeatChoice,
+  ClassFeatureEntry,
+  ClassSummary,
+  CreatorResolvedSpellChoiceEntry,
+  CreatorSpellListChoiceEntry,
+  ItemSummary,
+  LevelUpFeatDetail,
+  LevelUpFeatSelection,
+  ProficiencyChoice,
+  RaceDetail,
+  RaceSummary,
+  SpellSummary,
+  StructuredBgProficiencies,
+} from "@/views/character-creator/utils/CharacterCreatorTypes";
 import { Select } from "@/ui/Select";
 import { NavButtons, SpellPicker, StepHeader } from "@/views/character-creator/shared/CharacterCreatorParts";
 import {
@@ -98,160 +123,6 @@ import {
   getWeaponMasteryChoice as getWeaponMasteryChoiceFromUtils,
 } from "@/views/character-creator/utils/CharacterCreatorProficiencyUtils";
 import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
-
-// ---------------------------------------------------------------------------
-// API types
-// ---------------------------------------------------------------------------
-
-interface ClassSummary { id: string; name: string; hd: number | null; ruleset?: Ruleset | null }
-interface ClassDetail {
-  id: string; name: string; hd: number | null; ruleset?: Ruleset | null;
-  numSkills: number;        // how many skill proficiencies to pick
-  proficiency: string;      // comma-separated skill options
-  slotsReset: string;       // "L" = long rest, "S" = short rest (Warlock)
-  armor: string; weapons: string; tools: string;
-  description: string;
-  autolevels: {
-    level: number; scoreImprovement: boolean;
-    slots: number[] | null; // [cantrips, L1_slots, L2_slots, ...] or null
-    features: { name: string; text: string; optional: boolean }[];
-    counters: { name: string; value: number; reset: string }[];
-  }[];
-}
-interface SpellSummary { id: string; name: string; level: number | null; school: string | null; classes: string | null; text: string | null }
-interface ItemSummary {
-  id: string;
-  name: string;
-  type: string | null;
-  rarity?: string | null;
-  magic?: boolean;
-  attunement?: boolean;
-  weight?: number | null;
-  value?: number | null;
-  ac?: number | null;
-  stealthDisadvantage?: boolean;
-  dmg1?: string | null;
-  dmg2?: string | null;
-  dmgType?: string | null;
-  properties?: string[];
-}
-interface RaceSummary { id: string; name: string; size: string | null; speed: number | null; ruleset?: Ruleset | null }
-interface RaceDetail {
-  id: string; name: string; size: string | null; speed: number | null; ruleset?: Ruleset | null;
-  resist: string | null;
-  vision: { type: string; range: number }[];
-  parsedChoices?: import("@/lib/characterRules").RaceChoices;
-  traits: { name: string; text: string; category: string | null; modifier: string[] }[];
-}
-interface BgSummary { id: string; name: string; ruleset?: Ruleset | null }
-interface ProficiencyChoice {
-  fixed: string[];
-  choose: number;
-  from: string[] | null;  // null = "any"
-}
-interface ParsedFeatChoice {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  level?: number | null;
-  linkedTo?: string | null;
-  distinct?: boolean;
-  note?: string | null;
-}
-interface ParsedFeatGrants {
-  skills: string[];
-  tools: string[];
-  languages: string[];
-  armor: string[];
-  weapons: string[];
-  savingThrows: string[];
-  spells: string[];
-  cantrips: string[];
-  abilityIncreases: Record<string, number>;
-  bonuses: Array<{ target: string; value: number }>;
-}
-interface ParsedFeat {
-  category: string | null;
-  baseName: string;
-  variant: string | null;
-  prerequisite: string | null;
-  repeatable: boolean;
-  source: string | null;
-  grants: ParsedFeatGrants;
-  choices: ParsedFeatChoice[];
-}
-interface BackgroundFeat {
-  name: string;
-  text?: string;
-  parsed: ParsedFeat;
-}
-interface LevelUpFeatSelection {
-  level: number;
-  featId: string;
-}
-interface LevelUpFeatDetail {
-  level: number;
-  featId: string;
-  feat: BackgroundFeat;
-}
-interface StructuredBgProficiencies {
-  skills: ProficiencyChoice;
-  tools: ProficiencyChoice;
-  languages: ProficiencyChoice;
-  feats: BackgroundFeat[];
-  featChoice: number;
-  abilityScores: string[];
-}
-interface BgDetail {
-  id: string; name: string; proficiency: string; ruleset?: Ruleset | null;
-  proficiencies?: StructuredBgProficiencies;
-  traits: { name: string; text: string }[];
-  equipment?: string;
-}
-interface Campaign {
-  id: string;
-  name: string;
-  updatedAt: number;
-  playerCount: number;
-  imageUrl: string | null;
-}
-
-interface ClassFeatureEntry {
-  id: string;
-  name: string;
-  text: string;
-}
-
-interface CreatorSpellListChoiceEntry {
-  key: string;
-  title: string;
-  sourceLabel?: string;
-  options: string[];
-  count: number;
-  note?: string | null;
-}
-
-interface CreatorResolvedSpellChoiceEntry {
-  key: string;
-  title: string;
-  sourceLabel?: string;
-  count: number;
-  level: number | null;
-  note?: string | null;
-  linkedTo?: string | null;
-  listNames: string[];
-}
-
-
-
-interface ClassFeatChoice {
-  featureName: string;
-  featGroup: string;
-  options: Array<{ id: string; name: string }>;
-}
 
 function matchesClassFeatGroup(featName: string, featGroup: string): boolean {
   const normalizedGroup = featGroup.trim().toLowerCase();
@@ -435,7 +306,7 @@ function initForm(user: { name?: string } | null, params: URLSearchParams): Form
     characterName: "", playerName: user?.name ?? "",
     alignment: "", hair: "", skin: "", heightText: "",
     age: "", weight: "", gender: "",
-    color: "#38b6ff",
+    color: C.accentHl,
     campaignIds: preselectedCampaign ? [preselectedCampaign] : [],
   };
 }
@@ -603,36 +474,42 @@ export function CharacterCreatorView() {
   const step6FeatSpellListChoices = React.useMemo<CreatorSpellListChoiceEntry[]>(
     () => step5ChoiceState.allFeatChoices
       .filter(({ choice }) => choice.type === "spell_list")
-      .map(({ featName, choice, key, sourceLabel }) => ({
-        key,
-        title: "Spell List Choice",
-        sourceLabel: sourceLabel ?? featName,
-        options: getFeatChoiceOptionsForStep5(choice),
-        count: choice.count,
-        note: choice.note,
-      })),
-    [step5ChoiceState]
+      .map(({ featName, choice, key, sourceLabel }) => {
+        const resolvedSourceLabel = sourceLabel ?? featName;
+        const entry = buildSpellListChoiceEntry({
+          key,
+          choice: { ...choice, options: getFeatChoiceOptionsForStep5(choice) },
+          level: form.level,
+          sourceLabel: resolvedSourceLabel,
+        });
+        return {
+          ...entry,
+          title: "Spell List",
+          note: entry.options.length === 1 && resolvedSourceLabel !== featName
+            ? (choice.note ?? "Spell list fixed by this feat.")
+            : choice.note,
+        };
+      }),
+    [form.level, step5ChoiceState]
   );
   const step6FeatResolvedSpellChoices = React.useMemo<CreatorResolvedSpellChoiceEntry[]>(
     () => step5ChoiceState.allFeatChoices
       .filter(({ choice }) => choice.type === "spell")
       .map(({ featName, choice, key, sourceLabel }) => {
+        const resolvedSourceLabel = sourceLabel ?? featName;
         const linkedChoiceKey = choice.linkedTo ? key.replace(`:${choice.id}`, `:${choice.linkedTo}`) : null;
-        const listNames = linkedChoiceKey
-          ? (form.chosenFeatOptions[linkedChoiceKey] ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name))
-          : (choice.options ?? []).filter((name) => FEAT_SPELL_LIST_NAMES.has(name));
         return {
-          key,
-          title: choice.level === 0 ? "Spell Choice: Cantrips" : "Spell Choice",
-          sourceLabel: sourceLabel ?? featName,
-          count: choice.count,
-          level: choice.level ?? null,
-          note: choice.note,
-          linkedTo: linkedChoiceKey,
-          listNames,
+          ...buildResolvedSpellChoiceEntry({
+            key,
+            choice,
+            level: form.level,
+            sourceLabel: resolvedSourceLabel,
+            chosenOptions: form.chosenFeatOptions,
+            linkedChoiceKey,
+          }),
         };
       }),
-    [form.chosenFeatOptions, step5ChoiceState]
+    [form.chosenFeatOptions, form.level, step5ChoiceState]
   );
   const step6OptionalSpellChoices = React.useMemo<CreatorResolvedSpellChoiceEntry[]>(
     () => selectedClassOptionalSpellChoices.flatMap((effect) => {
@@ -738,7 +615,7 @@ export function CharacterCreatorView() {
           age: typeof cd.age === "string" ? cd.age : "",
           weight: typeof cd.weight === "string" ? cd.weight : "",
           gender: typeof cd.gender === "string" ? cd.gender : "",
-          color: ch.color ?? "#38b6ff",
+          color: ch.color ?? C.accentHl,
           campaignIds: (ch.campaigns ?? []).map((c: any) => c.campaignId),
         }));
         // Capture so handleSubmit can diff removals
@@ -1182,30 +1059,30 @@ export function CharacterCreatorView() {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {(classDetail || raceDetail || bgDetail) && (
           <div style={detailBoxStyle}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: C.accentHl, marginBottom: 10 }}>Character Summary</div>
+            <div style={{ fontWeight: 700, fontSize: "var(--fs-subtitle)", color: C.accentHl, marginBottom: 10 }}>Character Summary</div>
             {classDetail && (
               <div style={{ marginBottom: 6 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Class </span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{classDetail.name}</span>
-                {classDetail.hd && <span style={{ color: C.muted, fontSize: 11, marginLeft: 6 }}>d{classDetail.hd}</span>}
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Class </span>
+                <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>{classDetail.name}</span>
+                {classDetail.hd && <span style={{ color: C.muted, fontSize: "var(--fs-small)", marginLeft: 6 }}>d{classDetail.hd}</span>}
               </div>
             )}
             {raceDetail && (
               <div style={{ marginBottom: 6 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Species </span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{raceDetail.name}</span>
-                {raceDetail.speed && <span style={{ color: C.muted, fontSize: 11, marginLeft: 6 }}>{raceDetail.speed} ft</span>}
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Species </span>
+                <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>{raceDetail.name}</span>
+                {raceDetail.speed && <span style={{ color: C.muted, fontSize: "var(--fs-small)", marginLeft: 6 }}>{raceDetail.speed} ft</span>}
               </div>
             )}
             {bgDetail && (
               <div style={{ marginBottom: 6 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Background </span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{bgDetail.name}</span>
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Background </span>
+                <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>{bgDetail.name}</span>
               </div>
             )}
             <div style={{ marginBottom: 10 }}>
-              <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Level </span>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{form.level}</span>
+              <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Level </span>
+              <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>{form.level}</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4 }}>
               {ABILITY_KEYS.map(k => {
@@ -1213,9 +1090,9 @@ export function CharacterCreatorView() {
                 const mod = abilityMod(score);
                 return (
                   <div key={k} style={{ textAlign: "center", padding: "5px 4px", borderRadius: 6, background: "rgba(255,255,255,0.04)" }}>
-                    <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{ABILITY_LABELS[k]}</div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{score}</div>
-                    <div style={{ color: C.muted, fontSize: 11 }}>{mod >= 0 ? "+" : ""}{mod}</div>
+                    <div style={{ color: C.muted, fontSize: "var(--fs-tiny)", fontWeight: 700, textTransform: "uppercase" }}>{ABILITY_LABELS[k]}</div>
+                    <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)" }}>{score}</div>
+                    <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{mod >= 0 ? "+" : ""}{mod}</div>
                   </div>
                 );
               })}
@@ -1674,7 +1551,7 @@ export function CharacterCreatorView() {
         <h1 style={{ fontWeight: 900, fontSize: "var(--fs-hero)", margin: "0 0 8px", letterSpacing: -0.5 }}>
           {isEditing ? "Edit Character" : "Create Character"}
         </h1>
-        <p style={{ margin: "0 0 24px", color: "rgba(160,180,220,0.55)", fontSize: 13 }}>
+        <p style={{ margin: "0 0 24px", color: "rgba(160,180,220,0.55)", fontSize: "var(--fs-subtitle)" }}>
           {isEditing ? "Update your character details below." : "Build your character step by step."}
         </p>
         <StepHeader current={step} onStepClick={(s) => setStep(s as Step)} />

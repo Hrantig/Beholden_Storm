@@ -31,7 +31,7 @@ export function MonsterDetailPanel(props: { monsterId: string }) {
       title={monster ? monster.name : busy ? "Loading…" : "Monster"}
       actions={
         monster ? (
-          <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+          <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
             {[type, cr ? `CR ${cr}` : null].filter(Boolean).join(" · ")}
           </div>
         ) : null
@@ -42,7 +42,7 @@ export function MonsterDetailPanel(props: { monsterId: string }) {
       {busy && <div style={{ color: theme.colors.muted }}>Loading…</div>}
 
       {error && (
-        <div style={{ color: theme.colors.red, fontSize: 13 }}>Error: {error}</div>
+        <div style={{ color: theme.colors.red, fontSize: "var(--fs-subtitle)" }}>Error: {error}</div>
       )}
 
       {!busy && !error && (

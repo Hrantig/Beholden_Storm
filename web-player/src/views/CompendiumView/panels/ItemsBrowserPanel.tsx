@@ -56,7 +56,7 @@ export function ItemsBrowserPanel(props: {
   return (
     <Panel
       title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--fs-large)" }}><IconChest size={28} /><span>Items</span></span>}
-      actions={<div style={{ color: C.muted, fontSize: 12 }}>{busy ? "Loading…" : rows.length}</div>}
+      actions={<div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{busy ? "Loading…" : rows.length}</div>}
       style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}
       bodyStyle={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}
     >
@@ -143,14 +143,14 @@ function ItemRow({ item, active, onClick }: { item: ItemSearchRow; active: boole
         </span>
         {item.magic && (
           <span style={{
-            fontSize: 11, fontWeight: 700, color: "#a78bfa",
+            fontSize: "var(--fs-small)", fontWeight: 700, color: C.colorMagic,
             border: "1px solid #6d28d966", borderRadius: 6,
             padding: "1px 6px", whiteSpace: "nowrap",
           }}>✦ Magic</span>
         )}
       </div>
       {subtitle && (
-        <div style={{ color: C.muted, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {subtitle}
         </div>
       )}

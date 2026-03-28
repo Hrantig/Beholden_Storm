@@ -1,35 +1,9 @@
 import { classifyFeatSelection } from "./CharacterCreatorUtils";
+import type { ParsedFeatChoiceLike as FeatGrantChoiceLike, ParsedFeatDetailLike as FeatGrantDetailLike } from "./FeatChoiceTypes";
 
 export interface FeatGrantTaggedEntry {
   name: string;
   source: string;
-}
-
-export interface FeatGrantChoiceLike {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count?: number;
-  options: unknown[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  note?: string | null;
-}
-
-export interface FeatGrantDetailLike {
-  name: string;
-  parsed: {
-    grants: {
-      skills: string[];
-      tools: string[];
-      languages: string[];
-      armor: string[];
-      weapons: string[];
-      savingThrows: string[];
-      spells: string[];
-      cantrips: string[];
-    };
-    choices?: FeatGrantChoiceLike[];
-  };
 }
 
 export interface FeatGrantCollections {

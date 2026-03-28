@@ -1,36 +1,9 @@
 import { ALL_LANGUAGES, ALL_SKILLS, ALL_TOOLS } from "../constants/CharacterCreatorConstants";
 import { getFeatChoiceOptions, normalizeChoiceKey } from "./CharacterCreatorUtils";
 import { getBackgroundFeatChoices } from "@/lib/characterRules";
+import type { ParsedFeatChoiceLike as Step5FeatChoiceLike, ParsedFeatLike as Step5ParsedFeatLike, ParsedFeatDetailLike as Step5BackgroundFeatLike } from "./FeatChoiceTypes";
 
-export interface Step5FeatChoiceLike {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  level?: number | null;
-  linkedTo?: string | null;
-  distinct?: boolean;
-  note?: string | null;
-}
-
-export interface Step5ParsedFeatLike {
-  grants: {
-    skills: string[];
-    tools: string[];
-    languages: string[];
-    weapons: string[];
-    armor: string[];
-  };
-  choices: Step5FeatChoiceLike[];
-}
-
-export interface Step5BackgroundFeatLike {
-  name: string;
-  text?: string;
-  parsed: Step5ParsedFeatLike;
-}
+export type { Step5FeatChoiceLike, Step5ParsedFeatLike, Step5BackgroundFeatLike };
 
 export interface Step5ClassFeatChoiceLike {
   featureName: string;

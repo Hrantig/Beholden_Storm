@@ -16,7 +16,7 @@ function btnStyle(primary: boolean, disabled: boolean): React.CSSProperties {
         ? C.accentHl
         : "rgba(255,255,255,0.08)",
     color: disabled ? "rgba(160,180,220,0.40)" : primary ? C.textDark : C.text,
-    fontSize: 14,
+    fontSize: "var(--fs-medium)",
     transition: "opacity 0.15s",
   };
 }
@@ -40,7 +40,7 @@ export function StepHeader({ current, onStepClick }: { current: number; onStepCl
               background: active ? C.accentHl : done ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.06)",
               color: active ? C.textDark : done ? C.accentHl : "rgba(160,180,220,0.50)",
               fontWeight: active ? 700 : done ? 600 : 500,
-              fontSize: 12,
+              fontSize: "var(--fs-small)",
               border: `1px solid ${active ? C.accentHl : done ? "rgba(56,182,255,0.35)" : "rgba(255,255,255,0.10)"}`,
               cursor: active ? "default" : "pointer",
               transition: "opacity 0.12s, background 0.12s",
@@ -115,9 +115,9 @@ export function SelectableCard({
         transition: "border-color 0.12s, background 0.12s",
       }}
     >
-      <div style={{ fontWeight: 700, fontSize: 14, color: selected ? C.accentHl : C.text }}>{title}</div>
+      <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)", color: selected ? C.accentHl : C.text }}>{title}</div>
       {subtitle && (
-        <div style={{ color: selected ? "rgba(56,182,255,0.75)" : "rgba(160,180,220,0.6)", fontSize: 12, marginTop: 3 }}>
+        <div style={{ color: selected ? "rgba(56,182,255,0.75)" : "rgba(160,180,220,0.6)", fontSize: "var(--fs-small)", marginTop: 3 }}>
           {subtitle}
         </div>
       )}
@@ -127,6 +127,7 @@ export function SelectableCard({
 
 export function SpellPicker<T extends { id: string; name: string; level: number | null; text?: string | null }>({
   title,
+  sourceLabel,
   spells,
   chosen,
   max,
@@ -135,6 +136,7 @@ export function SpellPicker<T extends { id: string; name: string; level: number 
   isAllowed,
 }: {
   title: string;
+  sourceLabel?: string | null;
   spells: T[];
   chosen: string[];
   max: number;
@@ -146,14 +148,17 @@ export function SpellPicker<T extends { id: string; name: string; level: number 
   const filtered = q ? spells.filter((spell) => spell.name.toLowerCase().includes(q.toLowerCase())) : spells;
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-        <div style={{ ...labelStyle, margin: 0 }}>{title}</div>
-        <span style={{ fontSize: 12, color: chosen.length >= max ? C.accentHl : C.muted }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ ...labelStyle, margin: 0 }}>
+          {title}
+          {sourceLabel ? <span style={{ marginLeft: 8, fontSize: "var(--fs-small)", color: C.accentHl }}>{sourceLabel}</span> : null}
+        </div>
+        <span style={{ fontSize: "var(--fs-small)", color: chosen.length >= max ? C.accentHl : C.muted }}>
           {chosen.length} / {max}
         </span>
       </div>
       {spells.length === 0 ? (
-        <p style={{ color: C.muted, fontSize: 12 }}>{emptyMsg}</p>
+        <p style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{emptyMsg}</p>
       ) : (
         <>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" style={{ ...inputStyle, width: "100%", marginBottom: 8 }} />
@@ -173,7 +178,7 @@ export function SpellPicker<T extends { id: string; name: string; level: number 
                   style={{
                     padding: "5px 12px",
                     borderRadius: 6,
-                    fontSize: 12,
+                    fontSize: "var(--fs-small)",
                     cursor: locked ? "default" : "pointer",
                     border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                     background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -191,20 +196,20 @@ export function SpellPicker<T extends { id: string; name: string; level: number 
                     ) : null}
                   </div>
                   {prerequisite && (
-                    <div style={{ marginTop: 5, fontSize: 10, lineHeight: 1.35 }}>
-                      <span style={{ color: allowed ? "#fbbf24" : "#f87171", fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    <div style={{ marginTop: 5, fontSize: "var(--fs-tiny)", lineHeight: 1.35 }}>
+                      <span style={{ color: allowed ? C.colorGold : C.colorPinkRed, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
                         Prerequisite
                       </span>
                       <span style={{ color: allowed ? "rgba(251,191,36,0.92)" : "#fca5a5" }}> {prerequisite}</span>
                     </div>
                   )}
                   {!allowed && prerequisite && (
-                    <div style={{ marginTop: 3, fontSize: 10, color: "#f87171", fontWeight: 700 }}>
+                    <div style={{ marginTop: 3, fontSize: "var(--fs-tiny)", color: C.colorPinkRed, fontWeight: 700 }}>
                       Prerequisite not met
                     </div>
                   )}
                   {preview && (
-                    <div style={{ marginTop: 5, fontSize: 10, lineHeight: 1.35, color: sel ? "rgba(191,227,255,0.82)" : "rgba(160,180,220,0.7)", whiteSpace: "normal" }}>
+                    <div style={{ marginTop: 5, fontSize: "var(--fs-tiny)", lineHeight: 1.35, color: sel ? "rgba(191,227,255,0.82)" : "rgba(160,180,220,0.7)", whiteSpace: "normal" }}>
                       {preview.slice(0, 150)}{preview.length > 150 ? "…" : ""}
                     </div>
                   )}
@@ -217,4 +222,3 @@ export function SpellPicker<T extends { id: string; name: string; level: number 
     </div>
   );
 }
-

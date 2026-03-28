@@ -21,7 +21,7 @@ export function Tooltip({ text, children, multiline }: { text: string; children:
           background: "rgba(10,15,28,0.97)",
           border: "1px solid rgba(255,255,255,0.14)",
           borderRadius: 6, padding: "6px 10px",
-          fontSize: 11, color: "rgba(160,180,220,0.85)",
+          fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.85)",
           whiteSpace: multiline ? "normal" : "nowrap",
           maxWidth: multiline ? 280 : undefined,
           zIndex: 200, pointerEvents: "none",
@@ -58,7 +58,7 @@ export function Panel({ children }: { children: React.ReactNode }) {
 export function PanelTitle({ children, color, actions, style }: { children: React.ReactNode; color: string; actions?: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+      fontSize: "var(--fs-tiny)", fontWeight: 700, textTransform: "uppercase",
       letterSpacing: "0.1em", color,
       marginBottom: 10,
       display: "flex", alignItems: "center", gap: 8,
@@ -107,7 +107,7 @@ export function CollapsiblePanel({
           marginBottom: open ? 10 : 0,
         }}
       >
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color, display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color, display: "flex", alignItems: "center", gap: 6 }}>
           {title}
         </span>
         <div style={{ flex: 1, height: 1, background: `${color}30` }} />
@@ -115,7 +115,7 @@ export function CollapsiblePanel({
           <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>{actions}</div>
         )}
         <span style={{
-          color, fontSize: 10, lineHeight: 1,
+          color, fontSize: "var(--fs-tiny)", lineHeight: 1,
           transform: open ? "rotate(0deg)" : "rotate(-90deg)",
           transition: "transform 120ms ease",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -182,13 +182,13 @@ export function MiniStat({ label, value, accent, icon }: { label: string; value:
       border: `1px solid ${accent ? accent + "33" : "rgba(255,255,255,0.09)"}`,
     }}>
       <div style={{
-        fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase",
+        fontSize: "var(--fs-tiny)", fontWeight: 700, color: C.muted, textTransform: "uppercase",
         letterSpacing: "0.06em", marginBottom: 3,
         display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
       }}>
         {icon}{label}
       </div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: accent ?? C.text }}>
+      <div style={{ fontSize: "var(--fs-body)", fontWeight: 800, color: accent ?? C.text }}>
         {value}
       </div>
     </div>
@@ -203,7 +203,7 @@ export function inventoryEquipBtn(active: boolean, color: string): React.CSSProp
     border: `1px solid ${active ? color : C.panelBorder}`,
     background: active ? withAlpha(color, 0.14) : "transparent",
     color: active ? color : C.muted,
-    fontSize: 11,
+    fontSize: "var(--fs-small)",
     fontWeight: 800,
     cursor: "pointer",
     flexShrink: 0,
@@ -220,7 +220,7 @@ export function panelHeaderAddBtn(color: string): React.CSSProperties {
     background: withAlpha(color, 0.18),
     color,
     cursor: "pointer",
-    fontSize: 20,
+    fontSize: "var(--fs-title)",
     lineHeight: 1,
     fontWeight: 800,
     display: "inline-flex",
@@ -234,7 +234,7 @@ export function addBtnStyle(accent: string): React.CSSProperties {
   return {
     background: accent, color: "#000",
     border: "none", borderRadius: 7,
-    padding: "6px 14px", fontSize: 13,
+    padding: "6px 14px", fontSize: "var(--fs-subtitle)",
     fontWeight: 700, cursor: "pointer",
   };
 }
@@ -243,14 +243,14 @@ export const cancelBtnStyle: React.CSSProperties = {
   background: "transparent",
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 7, padding: "6px 14px",
-  fontSize: 13, color: C.muted, cursor: "pointer",
+  fontSize: "var(--fs-subtitle)", color: C.muted, cursor: "pointer",
 };
 
 export const inventoryCheckboxLabel: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  fontSize: 12,
+  fontSize: "var(--fs-small)",
   color: C.muted,
 };
 
@@ -282,7 +282,7 @@ export const inventoryPickerDetailStyle: React.CSSProperties = {
   padding: 12,
   whiteSpace: "pre-wrap",
   lineHeight: 1.5,
-  fontSize: 13,
+  fontSize: "var(--fs-subtitle)",
   color: C.text,
 };
 
@@ -306,7 +306,7 @@ export function toggleFilterPill(active: boolean, accentColor: string): React.CS
     background: active ? `${accentColor}18` : "rgba(255,255,255,0.04)",
     color: active ? accentColor : C.muted,
     cursor: "pointer",
-    fontSize: 11,
+    fontSize: "var(--fs-small)",
     fontWeight: 700,
   };
 }
@@ -320,7 +320,7 @@ export function miniPillBtn(enabled: boolean): React.CSSProperties {
     background: enabled ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
     color: enabled ? C.text : C.muted,
     cursor: enabled ? "pointer" : "default",
-    fontSize: 16,
+    fontSize: "var(--fs-body)",
     fontWeight: 800,
     lineHeight: 1,
     display: "inline-flex",
@@ -337,7 +337,7 @@ export function restBtnStyle(color: string): React.CSSProperties {
     background: withAlpha(color, 0.12),
     color,
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: "var(--fs-small)",
     fontWeight: 800,
     minWidth: 102,
   };
@@ -364,14 +364,14 @@ export function NoteItem(props: {
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onToggle(); }}
-          style={{ all: "unset", cursor: "pointer", fontWeight: 700, color: C.text, flex: 1, fontSize: 13, lineHeight: 1.4 }}
+          style={{ all: "unset", cursor: "pointer", fontWeight: 700, color: C.text, flex: 1, fontSize: "var(--fs-subtitle)", lineHeight: 1.4 }}
         >
           {label}
         </button>
         {props.onEdit && (
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit!(); }}
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: C.muted, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: C.muted, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}
           >
             Edit
           </button>
@@ -379,14 +379,14 @@ export function NoteItem(props: {
         {props.onDelete && (
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onDelete!(); }}
-            style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: C.red, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+            style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: C.red, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}
           >
             ×
           </button>
         )}
       </div>
       {expanded && note.text && (
-        <div style={{ marginTop: 6, color: C.muted, fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+        <div style={{ marginTop: 6, color: C.muted, fontSize: "var(--fs-small)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
           {note.text}
         </div>
       )}
@@ -417,14 +417,14 @@ export function ClassFeatureItem(props: {
           width: "100%",
           fontWeight: 700,
           color: C.text,
-          fontSize: 13,
+          fontSize: "var(--fs-subtitle)",
           lineHeight: 1.4,
         }}
       >
         {feature.name}
       </button>
       {expanded && feature.text && (
-        <div style={{ marginTop: 6, color: C.muted, fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+        <div style={{ marginTop: 6, color: C.muted, fontSize: "var(--fs-small)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
           {feature.text}
         </div>
       )}
@@ -466,47 +466,47 @@ export function NoteEditDrawer(props: {
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span style={{ fontWeight: 900, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", color }}>
+          <span style={{ fontWeight: 900, fontSize: "var(--fs-subtitle)", letterSpacing: "0.08em", textTransform: "uppercase", color }}>
             {props.note ? `Edit ${label}` : `New ${label}`}
           </span>
-          <button onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, color: C.muted, cursor: "pointer", padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>
+          <button onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, color: C.muted, cursor: "pointer", padding: "4px 10px", fontSize: "var(--fs-small)", fontWeight: 700 }}>
             Close
           </button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Title</div>
+            <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Title</div>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Note title..."
-              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px", fontFamily: "inherit" }}
+              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: C.text, fontSize: "var(--fs-subtitle)", padding: "8px 10px", fontFamily: "inherit" }}
             />
           </div>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Text</div>
+            <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Text</div>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Write..."
               rows={12}
-              style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 10px", fontFamily: "inherit", lineHeight: 1.5 }}
+              style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: C.text, fontSize: "var(--fs-subtitle)", padding: "8px 10px", fontFamily: "inherit", lineHeight: 1.5 }}
             />
           </div>
         </div>
         <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", gap: 8 }}>
           <div>
             {props.note && props.onDelete && (
-              <button onClick={props.onDelete} style={{ background: "rgba(255,93,93,0.12)", border: "1px solid rgba(255,93,93,0.3)", borderRadius: 8, color: C.red, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+              <button onClick={props.onDelete} style={{ background: "rgba(255,93,93,0.12)", border: "1px solid rgba(255,93,93,0.3)", borderRadius: 8, color: C.red, cursor: "pointer", padding: "8px 16px", fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>
                 Delete
               </button>
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontSize: 13 }}>
+            <button onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontSize: "var(--fs-subtitle)" }}>
               Cancel
             </button>
-            <button onClick={() => props.onSave(title.trim() || "Note", text)} style={{ background: `${color}22`, border: `1px solid ${color}55`, borderRadius: 8, color, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+            <button onClick={() => props.onSave(title.trim() || "Note", text)} style={{ background: `${color}22`, border: `1px solid ${color}55`, borderRadius: 8, color, cursor: "pointer", padding: "8px 16px", fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>
               Save
             </button>
           </div>

@@ -60,7 +60,7 @@ function choiceButtonStyle(selected: boolean, locked = false): React.CSSProperti
   return {
     padding: "6px 14px",
     borderRadius: 6,
-    fontSize: 13,
+    fontSize: "var(--fs-subtitle)",
     cursor: locked ? "default" : "pointer",
     border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
     background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -129,7 +129,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                 <div style={{ marginBottom: 8 }}>
                   <span style={{ ...labelStyle, display: "inline", margin: 0 }}>Skill Proficiencies </span>
                   <span style={sourceTagStyle}>{bgDetail.name}</span>
-                  <span style={{ marginLeft: 8, fontSize: 12, color: form.chosenBgSkills.length >= prof.skills.choose ? C.accentHl : C.muted }}>
+                  <span style={{ marginLeft: 8, fontSize: "var(--fs-small)", color: form.chosenBgSkills.length >= prof.skills.choose ? C.accentHl : C.muted }}>
                     {form.chosenBgSkills.length} / {prof.skills.choose}
                   </span>
                 </div>
@@ -208,7 +208,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                         style={{
                           padding: "6px 14px",
                           borderRadius: 6,
-                          fontSize: 13,
+                          fontSize: "var(--fs-subtitle)",
                           cursor: "pointer",
                           border: `2px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                           background: selected ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
@@ -239,7 +239,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                 )}
                 {tools.choose > 0 && (
                   <>
-                    <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>
+                    <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 6 }}>
                       Choose {tools.choose} ({form.chosenBgTools.length}/{tools.choose})
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -314,18 +314,18 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                           padding: "4px 12px",
                           borderRadius: 20,
                           cursor: "pointer",
-                          fontSize: 11,
+                          fontSize: "var(--fs-small)",
                           fontWeight: 600,
-                          border: `1px solid ${mode === option ? "#a78bfa" : "rgba(255,255,255,0.15)"}`,
+                          border: `1px solid ${mode === option ? C.colorMagic : "rgba(255,255,255,0.15)"}`,
                           background: mode === option ? "rgba(167,139,250,0.18)" : "rgba(255,255,255,0.04)",
-                          color: mode === option ? "#a78bfa" : C.muted,
+                          color: mode === option ? C.colorMagic : C.muted,
                         }}
                       >
                         {option === "split" ? "+2 / +1" : "+1 each"}
                       </button>
                     ))}
                   </div>
-                  <div style={{ color: C.muted, fontSize: 11, marginBottom: 8 }}>
+                  <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 8 }}>
                     {mode === "split"
                       ? splitDone
                         ? "All bonuses assigned"
@@ -353,10 +353,10 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                             padding: "6px 16px",
                             borderRadius: 6,
                             cursor: canSelect || isSelected ? "pointer" : "default",
-                            border: `1px solid ${isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.12)"}`,
+                            border: `1px solid ${isSelected ? C.colorMagic : canSelect ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.12)"}`,
                             background: isSelected ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.055)",
-                            color: isSelected ? "#a78bfa" : canSelect ? "rgba(167,139,250,0.7)" : C.muted,
-                            fontSize: 13,
+                            color: isSelected ? C.colorMagic : canSelect ? "rgba(167,139,250,0.7)" : C.muted,
+                            fontSize: "var(--fs-subtitle)",
                             fontWeight: isSelected ? 700 : 400,
                             opacity: !canSelect && !isSelected ? 0.45 : 1,
                           }}
@@ -389,7 +389,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                           padding: "6px 16px",
                           borderRadius: 6,
                           cursor: "pointer",
-                          fontSize: 13,
+                          fontSize: "var(--fs-subtitle)",
                           fontWeight: selected ? 700 : 400,
                           border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                           background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -402,7 +402,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                   })}
                 </div>
                 {form.chosenBgEquipmentOption && (
-                  <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
+                  <div style={{ color: C.accentHl, fontSize: "var(--fs-small)", marginTop: 8 }}>
                     Inventory will start with option {form.chosenBgEquipmentOption}.
                   </div>
                 )}
@@ -422,11 +422,11 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
 
         return (
           <div style={detailBoxStyle}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: C.accentHl }}>{bgDetail.name}</div>
+            <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)", marginBottom: 10, color: C.accentHl }}>{bgDetail.name}</div>
 
             {(skills.fixed.length > 0 || skills.choose > 0) && (
               <div style={{ marginBottom: 10 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Skills </span>
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Skills </span>
                 <span style={sourceTagStyle}>{bgDetail.name}</span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
                   {skills.fixed.map((skill) => <span key={skill} style={profChipStyle}>{skill}</span>)}
@@ -441,7 +441,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
 
             {languages.fixed.length > 0 && (
               <div style={{ marginBottom: 10 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Languages </span>
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Languages </span>
                 <span style={sourceTagStyle}>{bgDetail.name}</span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
                   {languages.fixed.map((language) => <span key={language} style={profChipStyle}>{language}</span>)}
@@ -451,7 +451,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
 
             {((prof?.feats && prof.feats.length > 0) || (prof?.featChoice ?? 0) > 0) && (
               <div style={{ marginBottom: 10 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Feat </span>
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Feat </span>
                 <span style={sourceTagStyle}>{bgDetail.name}</span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
                   {prof?.feats.map((feat) => (
@@ -471,15 +471,15 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
 
             {bgDetail.equipment && (
               <div style={{ marginBottom: 10 }}>
-                <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Equipment </span>
-                <div style={{ color: C.muted, fontSize: 12, marginTop: 4, lineHeight: 1.6 }}>
+                <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Equipment </span>
+                <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 4, lineHeight: 1.6 }}>
                   {bgDetail.equipment.slice(0, 300)}{bgDetail.equipment.length > 300 ? "..." : ""}
                 </div>
               </div>
             )}
 
             {flavorTraits.map((trait) => (
-              <div key={trait.name} style={{ marginBottom: 6, fontSize: 12 }}>
+              <div key={trait.name} style={{ marginBottom: 6, fontSize: "var(--fs-small)" }}>
                 <span style={{ fontWeight: 700, color: C.accentHl }}>{trait.name}. </span>
                 <span style={{ color: "rgba(160,180,220,0.65)" }}>{trait.text.replace(/Source:.*$/m, "").trim()}</span>
               </div>
@@ -488,7 +488,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
         );
       })()
     : (
-      <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a background to see its details.</div>
+      <div style={{ color: C.muted, fontSize: "var(--fs-subtitle)", padding: "12px 0" }}>Select a background to see its details.</div>
     );
 
   const main = (
@@ -534,7 +534,7 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
                     color: selected ? C.accentHl : C.text,
                     cursor: "pointer",
                     fontWeight: selected ? 700 : 500,
-                    fontSize: 13,
+                    fontSize: "var(--fs-subtitle)",
                     transition: "border-color 0.12s, background 0.12s",
                     whiteSpace: "nowrap",
                     overflow: "hidden",

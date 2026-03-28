@@ -86,16 +86,16 @@ export function CharacterSupportPanels(props: {
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.08)",
             }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
+              <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
                 Hit Dice
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ fontSize: 19, fontWeight: 900, color: C.text }}>
+                  <div style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: C.text }}>
                     {hitDiceCurrent} / {hitDiceMax}
                   </div>
                   {hitDieSize != null && (
-                    <div style={{ fontSize: 11, color: C.muted }}>
+                    <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
                       d{hitDieSize}{hitDieConMod >= 0 ? ` + ${hitDieConMod}` : ` - ${Math.abs(hitDieConMod)}`} per die
                     </div>
                   )}
@@ -122,7 +122,7 @@ export function CharacterSupportPanels(props: {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 180 }}>
-              <button type="button" onClick={() => void onShortRest()} style={restBtnStyle("#60a5fa")}>
+              <button type="button" onClick={() => void onShortRest()} style={restBtnStyle(C.colorRitual)}>
                 Short Rest
               </button>
               <button type="button" onClick={() => void onLongRest()} style={restBtnStyle("#34d399")}>
@@ -133,7 +133,7 @@ export function CharacterSupportPanels(props: {
 
           {classResources.length > 0 && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+              <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
                 Resources
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -152,8 +152,8 @@ export function CharacterSupportPanels(props: {
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{resource.name}</div>
-                      <div style={{ fontSize: 10, color: C.muted }}>
+                      <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: C.text }}>{resource.name}</div>
+                      <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>
                         {resource.reset === "S" ? "Resets on Short Rest" : resource.reset === "L" ? "Resets on Long Rest" : `Reset ${resource.reset}`}
                       </div>
                     </div>
@@ -165,7 +165,7 @@ export function CharacterSupportPanels(props: {
                     >
                       -
                     </button>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.text, minWidth: 52, textAlign: "center" }}>
+                    <div style={{ fontSize: "var(--fs-medium)", fontWeight: 800, color: C.text, minWidth: 52, textAlign: "center" }}>
                       {resource.current} / {resource.max}
                     </div>
                     <button
@@ -211,7 +211,7 @@ export function CharacterSupportPanels(props: {
             }}
           />
         ) : (
-          <div style={{ color: C.muted, fontSize: 12 }}>No notes yet.</div>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>No notes yet.</div>
         )}
       </CollapsiblePanel>
 
@@ -242,7 +242,7 @@ export function CharacterSupportPanels(props: {
             }}
           />
         ) : (
-          <div style={{ color: C.muted, fontSize: 12 }}>No notes yet.</div>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>No notes yet.</div>
         )}
       </CollapsiblePanel>}
 
@@ -276,7 +276,7 @@ export function CharacterSupportPanels(props: {
           style={{
             background: "transparent", border: "1px solid rgba(255,255,255,0.14)",
             borderRadius: 8, padding: "7px 16px", color: C.muted,
-            cursor: "pointer", fontSize: 13,
+            cursor: "pointer", fontSize: "var(--fs-subtitle)",
           }}
         >
           ← Back

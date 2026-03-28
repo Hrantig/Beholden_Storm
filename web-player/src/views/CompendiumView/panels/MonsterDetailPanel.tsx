@@ -28,7 +28,7 @@ export function MonsterDetailPanel(props: { monsterId: string }) {
       title={monster ? monster.name : busy ? "Loading…" : "Monster"}
       actions={
         monster ? (
-          <div style={{ color: C.muted, fontSize: 12 }}>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>
             {[type, cr ? `CR ${cr}` : null].filter(Boolean).join(" · ")}
           </div>
         ) : null
@@ -37,7 +37,7 @@ export function MonsterDetailPanel(props: { monsterId: string }) {
       bodyStyle={{ flex: 1, minHeight: 0, overflow: "auto" }}
     >
       {busy && <div style={{ color: C.muted }}>Loading…</div>}
-      {error && <div style={{ color: C.red, fontSize: 13 }}>Error: {error}</div>}
+      {error && <div style={{ color: C.red, fontSize: "var(--fs-subtitle)" }}>Error: {error}</div>}
       {!busy && !error && <MonsterStatblock monster={monster} />}
     </Panel>
   );

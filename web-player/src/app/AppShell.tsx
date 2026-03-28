@@ -10,8 +10,6 @@ const NAV_LINKS = [
 ];
 
 interface Meta {
-  ips: string[];
-  port: number;
   support: boolean;
 }
 
@@ -23,14 +21,20 @@ function useServerMeta() {
   return meta;
 }
 
+function useUpdateCheck() {
+  const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  React.useEffect(() => {
+    api<{ ok: boolean; updateAvailable?: boolean }>("/api/update-check")
+      .then((r) => { if (r.ok && r.updateAvailable) setUpdateAvailable(true); })
+      .catch(() => {});
+  }, []);
+  return updateAvailable;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const meta = useServerMeta();
-
-  const ips = meta?.ips ?? [];
-  const lanIps = ips.filter((ip) => ip.startsWith("192.168."));
-  const primaryIp = lanIps[0] ?? null;
-  const otherIps = ips.filter((ip) => ip !== primaryIp);
+  const updateAvailable = useUpdateCheck();
   const showSupport = meta?.support === true;
 
   return (
@@ -98,7 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           borderTop: `1px solid ${C.panelBorder}`,
           padding: "10px 16px",
           color: C.muted,
-          fontSize: "var(--fs-md)",
+          fontSize: "var(--fs-medium)",
           background: withAlpha(C.panelBg, 0.12),
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) auto auto minmax(0, 1fr)",
@@ -145,21 +149,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Column 4 — Right */}
-        <div style={{ justifySelf: "end", textAlign: "right", fontSize: 12, opacity: 0.75 }}>
-          {primaryIp && (
-            <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-              <code>http://{primaryIp}:{meta?.port}</code>
-              {otherIps.length > 0 && (
-                <details>
-                  <summary style={{ cursor: "pointer", userSelect: "none" }}>more</summary>
-                  <div style={{ marginTop: 6, display: "grid", gap: 4, justifyItems: "end" }}>
-                    {otherIps.map((ip) => (
-                      <code key={ip}>http://{ip}:{meta?.port}</code>
-                    ))}
-                  </div>
-                </details>
-              )}
-            </div>
+        <div style={{ justifySelf: "end", textAlign: "right", fontSize: "var(--fs-small)" }}>
+          {updateAvailable && (
+            <a
+              href="https://github.com/cbgfx/beholden"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: C.accent, textDecoration: "none", fontWeight: 600 }}
+            >
+              Update available →
+            </a>
           )}
         </div>
       </footer>

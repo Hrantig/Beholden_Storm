@@ -46,7 +46,7 @@ export function ItemDetailPanel(props: { itemId: string }) {
   return (
     <Panel
       title={item ? item.name : "Item"}
-      actions={<div style={{ color: theme.colors.muted, fontSize: 12 }}>{busy ? "Loading…" : meta}</div>}
+      actions={<div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>{busy ? "Loading…" : meta}</div>}
       style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
       bodyStyle={{ minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}
     >
@@ -84,7 +84,7 @@ function Tag({ label, color }: { label: string; color: string }) {
       padding: "2px 8px", borderRadius: 999,
       border: `1px solid ${color}33`,
       background: `${color}1a`,
-      color, fontSize: 11, fontWeight: 700,
+      color, fontSize: "var(--fs-small)", fontWeight: 700,
     }}>
       {label}
     </span>

@@ -31,6 +31,7 @@ import {
 } from "@/domain/character/parseFeatureEffects";
 import type { ParsedFeatureEffects } from "@/domain/character/featureEffects";
 import type { ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
+import type { ParsedFeatChoiceLike as CreatorParsedFeatChoiceLike, ParsedFeatDetailLike } from "./FeatChoiceTypes";
 
 export interface CreatorItemSummaryLike {
   id: string;
@@ -64,29 +65,7 @@ export interface CreatorInventoryItemSeed {
   attunement?: boolean;
 }
 
-export interface CreatorParsedFeatChoiceLike {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-}
-
-export interface CreatorBackgroundFeatLike {
-  name: string;
-  parsed: {
-    grants: {
-      skills: string[];
-      tools: string[];
-      languages: string[];
-      armor: string[];
-      weapons: string[];
-      savingThrows: string[];
-      spells: string[];
-      cantrips: string[];
-    };
-    choices: CreatorParsedFeatChoiceLike[];
-  };
-}
+export type CreatorBackgroundFeatLike = ParsedFeatDetailLike<CreatorParsedFeatChoiceLike>;
 
 export interface CreatorLevelUpFeatDetailLike {
   level: number;
@@ -331,6 +310,7 @@ export function buildProficiencyMap(args: {
     optionalFeatureGrants.weapons.forEach((entry) => pushWeapon(entry.name, entry.source));
     optionalFeatureGrants.tools.forEach((entry) => tools.push(entry));
     optionalFeatureGrants.skills.forEach((entry) => skills.push(entry));
+    optionalFeatureGrants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
     optionalFeatureGrants.languages.forEach((entry) => pushLanguage(entry.name, entry.source));
     const optionalSpellChoices = collectSpellChoicesFromEffects(parsedOptionalFeatures);
     optionalSpellChoices.forEach((choice) => {

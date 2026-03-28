@@ -73,7 +73,7 @@ export function SpellDrawer(props: { drawer: SpellDrawerState; close: () => void
           <div style={{ color: theme.colors.muted, marginTop: 4 }}>{metaTop}</div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: theme.colors.muted, fontSize: 12 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
           {spell.time ? <span>Cast: {spell.time}</span> : null}
           {spell.range ? <span>Range: {spell.range}</span> : null}
           {spell.duration ? <span>Duration: {spell.duration}</span> : null}
@@ -94,7 +94,7 @@ export function SpellDrawer(props: { drawer: SpellDrawerState; close: () => void
           {bodyText}
         </div>
 
-        {spell.classes ? <div style={{ color: theme.colors.muted, fontSize: 12 }}>Classes: {spell.classes}</div> : null}
+        {spell.classes ? <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>Classes: {spell.classes}</div> : null}
       </div>
     )
   };

@@ -33,6 +33,14 @@ export const theme = {
     bloody: "#ff8c42",
     green:  "#5ecb6b",   // slightly punchier green — more visible on very dark bg
     blue:   "#38b6ff",   // matches accentHighlight — player colour
+
+    // ── Domain palette (D&D item/spell types) ──────────────────────
+    // Use these instead of inlining the same hex values across files.
+    colorMagic:   "#a78bfa",   // magic items, spell slots, arcane
+    colorRitual:  "#60a5fa",   // ritual spells, concentration, ranged
+    colorGold:    "#fbbf24",   // masteries, primary highlights, currency
+    colorOrange:  "#fb923c",   // tools, fire damage, orange category
+    colorPinkRed: "#f87171",   // damage taken, disadvantage, wounds
   },
 
   radius:  { panel: 14, control: 10 },

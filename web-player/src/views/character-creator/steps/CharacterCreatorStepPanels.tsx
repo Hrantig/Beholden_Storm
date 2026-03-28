@@ -118,7 +118,7 @@ export function renderChoiceChipGroup({
           {title}
           {sourceLabel ? <span style={sourceStyle ?? sourceTagStyle}> {sourceLabel}</span> : null}
         </div>
-        <span style={{ fontSize: 12, color: selectedCount >= maxCount ? C.accentHl : C.muted }}>
+        <span style={{ fontSize: "var(--fs-small)", color: selectedCount >= maxCount ? C.accentHl : C.muted }}>
           {selectedCount} / {maxCount}
         </span>
       </div>
@@ -142,7 +142,7 @@ export function renderChoiceChipGroup({
               style={{
                 padding: "6px 14px",
                 borderRadius: 6,
-                fontSize: 13,
+                fontSize: "var(--fs-subtitle)",
                 cursor: locked ? "default" : "pointer",
                 border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                 background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -155,7 +155,7 @@ export function renderChoiceChipGroup({
           );
         })}
       </div>
-      {note ? <div style={{ color: C.muted, fontSize: 12, marginTop: 8 }}>{note}</div> : null}
+      {note ? <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 8 }}>{note}</div> : null}
     </div>
   );
 }
@@ -179,7 +179,7 @@ export function renderClassFeatSingleChoicePanel({
         <div style={{ ...labelStyle, margin: 0 }}>
           {getChoiceLabel(choice.featGroup)} <span style={sourceTagStyle}>{choice.featureName}</span>
         </div>
-        <span style={{ fontSize: 12, color: selectedId ? C.accentHl : C.muted }}>
+        <span style={{ fontSize: "var(--fs-small)", color: selectedId ? C.accentHl : C.muted }}>
           {selectedId ? "1 / 1" : "Required"}
         </span>
       </div>
@@ -194,7 +194,7 @@ export function renderClassFeatSingleChoicePanel({
               style={{
                 padding: "6px 14px",
                 borderRadius: 6,
-                fontSize: 13,
+                fontSize: "var(--fs-subtitle)",
                 cursor: "pointer",
                 border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                 background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -290,7 +290,7 @@ export function renderClassStep({
                     color: sel ? C.accentHl : C.text,
                     cursor: "pointer",
                     fontWeight: sel ? 700 : 500,
-                    fontSize: 13,
+                    fontSize: "var(--fs-subtitle)",
                     transition: "border-color 0.12s, background 0.12s",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -298,7 +298,7 @@ export function renderClassStep({
                   }}
                 >
                   {c.name}
-                  {c.hd && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: 11, marginLeft: 6 }}>d{c.hd}</span>}
+                  {c.hd && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: "var(--fs-small)", marginLeft: 6 }}>d{c.hd}</span>}
                 </button>
               );
             })}
@@ -312,7 +312,7 @@ export function renderClassStep({
 
   const side = classDetail ? (
     <div style={detailBoxStyle}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: C.accentHl, marginBottom: 12 }}>{classDetail.name}</div>
+      <div style={{ fontWeight: 700, fontSize: "var(--fs-body)", color: C.accentHl, marginBottom: 12 }}>{classDetail.name}</div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
         {classDetail.hd && (
           <div>
@@ -340,31 +340,31 @@ export function renderClassStep({
       </div>
       {classDetail.armor && (
         <div style={{ marginBottom: 6 }}>
-          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Armor </span>
-          <span style={{ fontSize: 12 }}>{classDetail.armor}</span>
+          <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Armor </span>
+          <span style={{ fontSize: "var(--fs-small)" }}>{classDetail.armor}</span>
         </div>
       )}
       {classDetail.weapons && (
         <div style={{ marginBottom: 6 }}>
-          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Weapons </span>
-          <span style={{ fontSize: 12 }}>{classDetail.weapons}</span>
+          <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Weapons </span>
+          <span style={{ fontSize: "var(--fs-small)" }}>{classDetail.weapons}</span>
         </div>
       )}
       {classDetail.numSkills > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Skills </span>
-          <span style={{ fontSize: 12 }}>Choose {classDetail.numSkills} from: {parseSkillList(classDetail.proficiency).join(", ")}</span>
+          <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>Skills </span>
+          <span style={{ fontSize: "var(--fs-small)" }}>Choose {classDetail.numSkills} from: {parseSkillList(classDetail.proficiency).join(", ")}</span>
         </div>
       )}
       {classDetail.description && (
-        <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.6, marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
+        <div style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.6, marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
           {classDetail.description.slice(0, 500)}
           {classDetail.description.length > 500 ? "…" : ""}
         </div>
       )}
     </div>
   ) : (
-    <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a class to see its details.</div>
+    <div style={{ color: C.muted, fontSize: "var(--fs-subtitle)", padding: "12px 0" }}>Select a class to see its details.</div>
   );
 
   return { main, side };
@@ -469,7 +469,7 @@ export function renderSpeciesStep({
                     color: sel ? C.accentHl : C.text,
                     cursor: "pointer",
                     fontWeight: sel ? 700 : 500,
-                    fontSize: 13,
+                    fontSize: "var(--fs-subtitle)",
                     transition: "border-color 0.12s, background 0.12s",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -477,7 +477,7 @@ export function renderSpeciesStep({
                   }}
                 >
                   {r.name}
-                  {r.speed && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: 11, marginLeft: 6 }}>{r.speed}ft</span>}
+                  {r.speed && <span style={{ color: "rgba(160,180,220,0.5)", fontSize: "var(--fs-small)", marginLeft: 6 }}>{r.speed}ft</span>}
                 </button>
               );
             })}
@@ -501,7 +501,7 @@ export function renderSpeciesStep({
                       style={{
                         padding: "6px 16px",
                         borderRadius: 6,
-                        fontSize: 13,
+                        fontSize: "var(--fs-subtitle)",
                         cursor: "pointer",
                         border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                         background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -521,7 +521,7 @@ export function renderSpeciesStep({
             <div>
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
                 <div style={{ ...labelStyle, margin: 0 }}>Skill Proficiency <span style={sourceTagStyle}>{raceDetail.name}</span></div>
-                <span style={{ fontSize: 12, color: chosenRaceSkills.length >= skillChoice.count ? C.accentHl : C.muted }}>
+                <span style={{ fontSize: "var(--fs-small)", color: chosenRaceSkills.length >= skillChoice.count ? C.accentHl : C.muted }}>
                   {chosenRaceSkills.length} / {skillChoice.count}
                 </span>
               </div>
@@ -538,7 +538,7 @@ export function renderSpeciesStep({
                       style={{
                         padding: "6px 14px",
                         borderRadius: 6,
-                        fontSize: 13,
+                        fontSize: "var(--fs-subtitle)",
                         cursor: locked ? "default" : "pointer",
                         border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                         background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -558,7 +558,7 @@ export function renderSpeciesStep({
             <div>
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
                 <div style={{ ...labelStyle, margin: 0 }}>Tool Proficiency <span style={sourceTagStyle}>{raceDetail.name}</span></div>
-                <span style={{ fontSize: 12, color: chosenRaceTools.length >= toolChoice.count ? C.accentHl : C.muted }}>
+                <span style={{ fontSize: "var(--fs-small)", color: chosenRaceTools.length >= toolChoice.count ? C.accentHl : C.muted }}>
                   {chosenRaceTools.length} / {toolChoice.count}
                 </span>
               </div>
@@ -575,7 +575,7 @@ export function renderSpeciesStep({
                       style={{
                         padding: "6px 14px",
                         borderRadius: 6,
-                        fontSize: 13,
+                        fontSize: "var(--fs-subtitle)",
                         cursor: locked ? "default" : "pointer",
                         border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                         background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -595,7 +595,7 @@ export function renderSpeciesStep({
             <div>
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
                 <div style={{ ...labelStyle, margin: 0 }}>Language <span style={sourceTagStyle}>{raceDetail.name}</span></div>
-                <span style={{ fontSize: 12, color: chosenRaceLanguages.length >= languageChoice.count ? C.accentHl : C.muted }}>
+                <span style={{ fontSize: "var(--fs-small)", color: chosenRaceLanguages.length >= languageChoice.count ? C.accentHl : C.muted }}>
                   {chosenRaceLanguages.length} / {languageChoice.count}
                 </span>
               </div>
@@ -612,7 +612,7 @@ export function renderSpeciesStep({
                       style={{
                         padding: "6px 14px",
                         borderRadius: 6,
-                        fontSize: 13,
+                        fontSize: "var(--fs-subtitle)",
                         cursor: locked ? "default" : "pointer",
                         border: `1px solid ${sel ? C.accentHl : "rgba(255,255,255,0.12)"}`,
                         background: sel ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.055)",
@@ -654,7 +654,7 @@ export function renderSpeciesStep({
                         background: sel ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
                         color: sel ? C.accentHl : C.text,
                         fontWeight: sel ? 700 : 400,
-                        fontSize: 13,
+                        fontSize: "var(--fs-subtitle)",
                         transition: "border-color 0.12s, background 0.12s",
                       }}
                     >
@@ -674,7 +674,7 @@ export function renderSpeciesStep({
 
   const side = raceDetail ? (
     <div style={detailBoxStyle}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: C.accentHl, marginBottom: 10 }}>{raceDetail.name}</div>
+      <div style={{ fontWeight: 700, fontSize: "var(--fs-body)", color: C.accentHl, marginBottom: 10 }}>{raceDetail.name}</div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
         {raceDetail.speed != null && <div><div style={statLabelStyle}>Speed</div><div style={statValueStyle}>{raceDetail.speed} ft</div></div>}
         {raceDetail.size && <div><div style={statLabelStyle}>Size</div><div style={statValueStyle}>{raceDetail.size}</div></div>}
@@ -683,17 +683,17 @@ export function renderSpeciesStep({
       </div>
       {raceDetail.traits.map((t) => (
         <div key={t.name} style={{ marginBottom: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>{t.name}. </span>
-          <span style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 700, fontSize: "var(--fs-small)", color: C.accentHl }}>{t.name}. </span>
+          <span style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.5 }}>
             {t.text.replace(/Source:.*$/m, "").trim()}
           </span>
         </div>
       ))}
       {chosenRaceFeatId && raceFeatDetail && (
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ fontWeight: 700, color: C.accentHl, fontSize: 13, marginBottom: 8 }}>{raceFeatDetail.name}</div>
+          <div style={{ fontWeight: 700, color: C.accentHl, fontSize: "var(--fs-subtitle)", marginBottom: 8 }}>{raceFeatDetail.name}</div>
           {raceFeatDetail.text && (
-            <div style={{ fontSize: 12, color: "rgba(160,180,220,0.75)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.75)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
               {raceFeatDetail.text.replace(/Source:.*$/m, "").trim()}
             </div>
           )}
@@ -701,7 +701,7 @@ export function renderSpeciesStep({
       )}
     </div>
   ) : (
-    <div style={{ color: C.muted, fontSize: 13, padding: "12px 0" }}>Select a species to see its details.</div>
+    <div style={{ color: C.muted, fontSize: "var(--fs-subtitle)", padding: "12px 0" }}>Select a species to see its details.</div>
   );
 
   return { main, side };
@@ -728,7 +728,7 @@ export function renderIdentityStep({
   onNext: () => void;
   side: React.ReactNode;
 }): { main: React.ReactNode; side: React.ReactNode } {
-  const colors = ["#38b6ff", "#5ecb6b", "#f0a500", "#ff5d5d", "#a78bfa", "#fb923c", "#e879f9", "#94a3b8"];
+  const colors = [C.accentHl, C.green, C.accent, C.red, C.colorMagic, C.colorOrange, "#e879f9", "#94a3b8"];
   const detailFields: Array<{ key: string; label: string; placeholder: string }> = [
     { key: "alignment", label: "Alignment", placeholder: "Chaotic Good" },
     { key: "hair", label: "Hair", placeholder: "Black, braided" },
@@ -787,13 +787,13 @@ export function renderIdentityStep({
                 paddingBottom: 6,
               }}
             >
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", background: "rgba(0,0,0,0.55)", padding: "2px 6px", borderRadius: 4 }}>
+              <span style={{ fontSize: "var(--fs-tiny)", color: "rgba(255,255,255,0.55)", background: "rgba(0,0,0,0.55)", padding: "2px 6px", borderRadius: 4 }}>
                 {portraitPreview ? "Change" : "Add photo"}
               </span>
             </div>
           </div>
           {portraitPreview && (
-            <button type="button" onClick={() => { setPortraitFile(null); setPortraitPreview(null); }} style={{ fontSize: 11, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>
+            <button type="button" onClick={() => { setPortraitFile(null); setPortraitPreview(null); }} style={{ fontSize: "var(--fs-small)", color: C.muted, background: "none", border: "none", cursor: "pointer" }}>
               Remove
             </button>
           )}
@@ -912,7 +912,7 @@ export function renderCampaignsStep({
       {error && <div style={{ color: C.red, marginBottom: 10 }}>{error}</div>}
 
       <div style={{ display: "flex", gap: 10, justifyContent: "space-between" }}>
-        <button type="button" onClick={onBack} style={{ padding: "9px 22px", borderRadius: 8, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)", color: C.text, fontSize: 14 }}>
+        <button type="button" onClick={onBack} style={{ padding: "9px 22px", borderRadius: 8, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)", color: C.text, fontSize: "var(--fs-medium)" }}>
           ← Back
         </button>
         <button
@@ -927,7 +927,7 @@ export function renderCampaignsStep({
             border: "none",
             background: busy ? "rgba(255,255,255,0.06)" : C.accentHl,
             color: busy ? "rgba(160,180,220,0.40)" : C.textDark,
-            fontSize: 14,
+            fontSize: "var(--fs-medium)",
           }}
         >
           {busy ? "Saving…" : isEditing ? "Save Changes ✓" : "Create Character ✓"}
@@ -1022,11 +1022,11 @@ export function renderLevelStep({
                 const chosen = chosenOptionals.includes(f.name);
                 const grants = parseFeatureGrants(f.text);
                 const grantBadges: FeatureGrantBadge[] = [
-                  ...grants.armor.map((n) => ({ label: n, color: "#a78bfa" })),
-                  ...grants.weapons.map((n) => ({ label: n, color: "#f87171" })),
-                  ...grants.tools.map((n) => ({ label: n, color: "#fb923c" })),
+                  ...grants.armor.map((n) => ({ label: n, color: C.colorMagic })),
+                  ...grants.weapons.map((n) => ({ label: n, color: C.colorPinkRed })),
+                  ...grants.tools.map((n) => ({ label: n, color: C.colorOrange })),
                   ...grants.skills.map((n) => ({ label: n, color: "#34d399" })),
-                  ...grants.languages.map((n) => ({ label: `${n} (lang)`, color: "#60a5fa" })),
+                  ...grants.languages.map((n) => ({ label: `${n} (lang)`, color: C.colorRitual })),
                 ];
                 return (
                   <button
@@ -1043,9 +1043,9 @@ export function renderLevelStep({
                       transition: "border-color 0.12s, background 0.12s",
                     }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14, color: chosen ? C.accentHl : C.text }}>{f.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)", color: chosen ? C.accentHl : C.text }}>{f.name}</div>
                     {f.text && (
-                      <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>
+                      <div style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", marginTop: 3, lineHeight: 1.45 }}>
                         {f.text.replace(/Source:.*$/m, "").trim().slice(0, 140)}
                         {f.text.length > 140 ? "…" : ""}
                       </div>
@@ -1053,7 +1053,7 @@ export function renderLevelStep({
                     {grantBadges.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 7 }}>
                         {grantBadges.map((b, i) => (
-                          <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: b.color + "22", border: `1px solid ${b.color}66`, color: b.color, letterSpacing: "0.02em" }}>
+                          <span key={i} style={{ fontSize: "var(--fs-small)", fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: b.color + "22", border: `1px solid ${b.color}66`, color: b.color, letterSpacing: "0.02em" }}>
                             {b.label}
                           </span>
                         ))}
@@ -1085,7 +1085,7 @@ export function renderLevelStep({
                       padding: "4px 12px",
                       borderRadius: 20,
                       cursor: "pointer",
-                      fontSize: 11,
+                      fontSize: "var(--fs-small)",
                       fontWeight: 600,
                       border: `1px solid ${selected ? C.accentHl : "rgba(255,255,255,0.15)"}`,
                       background: selected ? "rgba(56,182,255,0.18)" : "rgba(255,255,255,0.04)",
@@ -1100,7 +1100,7 @@ export function renderLevelStep({
           )}
           <div style={{ color: C.muted, fontSize: "var(--fs-small)", lineHeight: 1.6 }}>{classEquipmentText}</div>
           {chosenClassEquipmentOption && classEquipmentOptions.length > 0 && (
-            <div style={{ color: C.accentHl, fontSize: 12, marginTop: 8 }}>
+            <div style={{ color: C.accentHl, fontSize: "var(--fs-small)", marginTop: 8 }}>
               Inventory will start with class option {chosenClassEquipmentOption}.
             </div>
           )}
@@ -1110,13 +1110,13 @@ export function renderLevelStep({
       {levelUpFeatChoices.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ ...labelStyle, marginBottom: 8 }}>Level-Up Feats</div>
-          <div style={{ color: C.muted, fontSize: 12, marginBottom: 10 }}>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginBottom: 10 }}>
             Choose feats for each Ability Score Improvement level included in this starting level.
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {levelUpFeatChoices.map((choice) => (
               <div key={choice.level}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.accentHl, marginBottom: 6 }}>Level {choice.level}</div>
+                <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.accentHl, marginBottom: 6 }}>Level {choice.level}</div>
                 <Select value={choice.selectedFeatId ?? ""} onChange={(e) => chooseLevelUpFeat(choice.level, e.target.value)} style={{ width: "100%", maxWidth: 380 }}>
                   <option value="">- Choose feat -</option>
                   {choice.options.map((feat) => (
@@ -1127,7 +1127,7 @@ export function renderLevelStep({
             ))}
           </div>
           {levelUpFeatConflict && (
-            <div style={{ color: C.red, fontSize: 12, marginTop: 10 }}>
+            <div style={{ color: C.red, fontSize: "var(--fs-small)", marginTop: 10 }}>
               A non-repeatable feat has been selected more than once.
             </div>
           )}
@@ -1145,12 +1145,12 @@ export function renderLevelStep({
 
   const side = (
     <div style={{ ...detailBoxStyle, maxHeight: 600, overflowY: "auto" }}>
-      <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: C.accentHl }}>Class Features — Level {level}</div>
-      {features.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>No features yet. Select a class first.</div>}
+      <div style={{ fontWeight: 700, marginBottom: 8, fontSize: "var(--fs-subtitle)", color: C.accentHl }}>Class Features — Level {level}</div>
+      {features.length === 0 && <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>No features yet. Select a class first.</div>}
       {features.map((f, i) => (
         <div key={i} style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: C.accentHl }}>Lv{f.level} · {f.name}</div>
-          <div style={{ color: "rgba(160,180,220,0.65)", fontSize: 12, lineHeight: 1.4 }}>
+          <div style={{ fontWeight: 700, fontSize: "var(--fs-small)", color: C.accentHl }}>Lv{f.level} · {f.name}</div>
+          <div style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.4 }}>
             {f.text.slice(0, 300)}{f.text.length > 300 ? "…" : ""}
           </div>
         </div>
@@ -1267,7 +1267,7 @@ export function renderSpellsStep<T extends { id: string; name: string; level: nu
             note: entry.note,
           })}
           {entry.options.length === 0 && (
-            <div style={{ marginTop: -16, marginBottom: 16, fontSize: 11, color: C.muted }}>
+            <div style={{ marginTop: -16, marginBottom: 16, fontSize: "var(--fs-small)", color: C.muted }}>
               {entry.emptyMsg ?? "No eligible options found."}
             </div>
           )}
@@ -1276,7 +1276,8 @@ export function renderSpellsStep<T extends { id: string; name: string; level: nu
       {extraSpellChoices.map((entry) => (
         <div key={entry.key}>
           <SpellPicker
-            title={entry.sourceLabel ? `${entry.title} (${entry.sourceLabel})` : entry.title}
+            title={entry.title}
+            sourceLabel={entry.sourceLabel}
             spells={entry.spells}
             chosen={entry.chosen}
             max={entry.max}
@@ -1284,13 +1285,13 @@ export function renderSpellsStep<T extends { id: string; name: string; level: nu
             onToggle={entry.onToggle}
           />
           {entry.note && (
-            <div style={{ marginTop: -16, marginBottom: 16, fontSize: 11, color: C.muted }}>
+            <div style={{ marginTop: -16, marginBottom: 16, fontSize: "var(--fs-small)", color: C.muted }}>
               {entry.note}
             </div>
           )}
         </div>
       ))}
-      {!hasAnything && <p style={{ color: C.muted, fontSize: 14 }}>This class has no spellcasting choices at this level.</p>}
+      {!hasAnything && <p style={{ color: C.muted, fontSize: "var(--fs-medium)" }}>This class has no spellcasting choices at this level.</p>}
       <NavButtons step={6} onBack={onBack} onNext={onNext} nextDisabled={nextDisabled} />
     </div>
   );
@@ -1345,10 +1346,10 @@ export function renderAbilityScoresStep({
     const isPrimary = primaryKeys.includes(k);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
-        <span style={{ color: isPrimary ? "#fbbf24" : C.muted, fontSize: "var(--fs-small)", fontWeight: isPrimary ? 800 : 600 }}>{abilityLabels[k]}</span>
-        {isPrimary && <span style={{ fontSize: 10, color: "#fbbf24", opacity: 0.75 }}>★ Primary</span>}
+        <span style={{ color: isPrimary ? C.colorGold : C.muted, fontSize: "var(--fs-small)", fontWeight: isPrimary ? 800 : 600 }}>{abilityLabels[k]}</span>
+        {isPrimary && <span style={{ fontSize: "var(--fs-tiny)", color: C.colorGold, opacity: 0.75 }}>★ Primary</span>}
         {bonus != null && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: "rgba(167,139,250,0.18)", border: "1px solid rgba(167,139,250,0.4)", color: "#a78bfa" }}>
+          <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: "rgba(167,139,250,0.18)", border: "1px solid rgba(167,139,250,0.4)", color: C.colorMagic }}>
             +{bonus} {backgroundName ?? "bg"}
           </span>
         )}
@@ -1361,7 +1362,7 @@ export function renderAbilityScoresStep({
       <h2 style={headingStyle}>Ability Scores</h2>
       {hasBgBonuses && (
         <div style={{ ...detailBoxStyle, marginBottom: 16, padding: "10px 14px" }}>
-          <span style={{ fontSize: 12, color: "#a78bfa" }}>
+          <span style={{ fontSize: "var(--fs-small)", color: C.colorMagic }}>
             Background bonuses applied: {Object.entries(bgBonuses).map(([k, v]) => `${abilityLabels[k]} +${v}`).join(", ")}
           </span>
         </div>
@@ -1380,7 +1381,7 @@ export function renderAbilityScoresStep({
               background: form.abilityMethod === m ? "rgba(56,182,255,0.15)" : "rgba(255,255,255,0.055)",
               color: form.abilityMethod === m ? C.accentHl : "rgba(160,180,220,0.7)",
               fontWeight: form.abilityMethod === m ? 700 : 500,
-              fontSize: 13,
+              fontSize: "var(--fs-subtitle)",
             }}
           >
             {m === "standard" ? "Standard Array" : m === "pointbuy" ? "Point Buy" : "Manual"}
@@ -1404,7 +1405,7 @@ export function renderAbilityScoresStep({
                     {standardArray.map((v, i) => (!usedIndices.includes(i) || i === assigned ? <option key={i} value={String(i)}>{v}</option> : null))}
                   </Select>
                   <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2, textAlign: "center" }}>
-                    {totalVal != null ? <>{baseVal !== totalVal && <span style={{ color: "#a78bfa", marginRight: 4 }}>{totalVal}</span>}{`mod ${abilityMod(totalVal) >= 0 ? "+" : ""}${abilityMod(totalVal)}`}</> : null}
+                    {totalVal != null ? <>{baseVal !== totalVal && <span style={{ color: C.colorMagic, marginRight: 4 }}>{totalVal}</span>}{`mod ${abilityMod(totalVal) >= 0 ? "+" : ""}${abilityMod(totalVal)}`}</> : null}
                   </div>
                 </div>
               );
@@ -1428,7 +1429,7 @@ export function renderAbilityScoresStep({
                   <AbilityLabel k={k} />
                   <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
                     <button type="button" disabled={score <= 8} onClick={() => setPointBuyScore(k, score - 1)} style={{ ...smallBtnStyle, opacity: score <= 8 ? 0.4 : 1 }}>−</button>
-                    <span style={{ fontWeight: 700, minWidth: 24 }}>{score}{bgBonuses[k] ? <span style={{ color: "#a78bfa", fontSize: 11 }}> ({total})</span> : null}</span>
+                    <span style={{ fontWeight: 700, minWidth: 24 }}>{score}{bgBonuses[k] ? <span style={{ color: C.colorMagic, fontSize: "var(--fs-small)" }}> ({total})</span> : null}</span>
                     <button type="button" disabled={score >= 15 || remaining < (pointBuyCosts[score + 1] ?? 99) - (pointBuyCosts[score] ?? 0)} onClick={() => setPointBuyScore(k, score + 1)} style={{ ...smallBtnStyle, opacity: (score >= 15 || remaining < (pointBuyCosts[score + 1] ?? 99) - (pointBuyCosts[score] ?? 0)) ? 0.4 : 1 }}>+</button>
                   </div>
                   <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}</div>
@@ -1448,7 +1449,7 @@ export function renderAbilityScoresStep({
               <div key={k} style={{ padding: "8px", borderRadius: 8, border: `1px solid ${primaryKeys.includes(k) ? "rgba(251,191,36,0.3)" : "transparent"}`, background: primaryKeys.includes(k) ? "rgba(251,191,36,0.05)" : "transparent" }}>
                 <AbilityLabel k={k} />
                 <input type="number" value={score} onChange={(e) => setManualScore(k, Number(e.target.value) || 10)} style={{ ...inputStyle, width: "100%" }} />
-                <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>{bgBonuses[k] ? <span style={{ color: "#a78bfa" }}>{total} · </span> : null}mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}</div>
+                <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>{bgBonuses[k] ? <span style={{ color: C.colorMagic }}>{total} · </span> : null}mod {abilityMod(total) >= 0 ? "+" : ""}{abilityMod(total)}</div>
               </div>
             );
           })}
@@ -1513,7 +1514,7 @@ export function renderDerivedStatsStep({
       </div>
       {sections.length > 0 && (
         <div style={{ ...detailBoxStyle, marginTop: 24 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 13 }}>Your Proficiencies</div>
+          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: "var(--fs-subtitle)" }}>Your Proficiencies</div>
           {sections.map((s) => (
             <div key={s.label} style={{ marginBottom: 10 }}>
               <span style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>{s.label}</span>

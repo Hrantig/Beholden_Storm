@@ -1,5 +1,6 @@
 import { wordOrNumberToInt, type Ruleset, type RaceChoices } from "@/lib/characterRules";
 import { abilityMod } from "@/views/character/CharacterSheetUtils";
+import type { ParsedFeatChoiceLike as CreatorParsedFeatChoiceLike } from "./FeatChoiceTypes";
 import {
   ABILITY_NAME_TO_KEY,
   ABILITY_SCORE_NAMES,
@@ -47,12 +48,6 @@ export interface CreatorItemSummaryLike {
   rarity?: string | null;
   magic?: boolean;
   attunement?: boolean;
-}
-
-export interface CreatorParsedFeatChoiceLike {
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  options: unknown[] | null;
-  anyOf?: string[];
 }
 
 export interface CreatorRaceTraitLike {
@@ -474,4 +469,3 @@ export function extractClassStartingEquipment(classDetail: CreatorClassDetailLik
   }
   return "";
 }
-

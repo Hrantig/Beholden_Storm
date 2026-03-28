@@ -42,7 +42,7 @@ export function AddMemberModal({ campaignId: _campaignId, campaignName, existing
   const labelStyle: React.CSSProperties = {
     display: "block",
     marginBottom: 5,
-    fontSize: 12,
+    fontSize: "var(--fs-small)",
     fontWeight: 600,
     color: theme.colors.muted,
     textTransform: "uppercase",
@@ -68,8 +68,8 @@ export function AddMemberModal({ campaignId: _campaignId, campaignName, existing
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700 }}>Add Member</h2>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: theme.colors.muted }}>{campaignName}</p>
+        <h2 style={{ margin: "0 0 4px", fontSize: "var(--fs-title)", fontWeight: 700 }}>Add Member</h2>
+        <p style={{ margin: "0 0 20px", fontSize: "var(--fs-subtitle)", color: theme.colors.muted }}>{campaignName}</p>
 
         <form onSubmit={handleAdd}>
           <div style={{ marginBottom: 14 }}>
@@ -110,7 +110,7 @@ export function AddMemberModal({ campaignId: _campaignId, campaignName, existing
                     border: `1px solid ${role === r ? theme.colors.accentPrimary : theme.colors.panelBorder}`,
                     background: role === r ? `${theme.colors.accentPrimary}22` : "transparent",
                     color: role === r ? theme.colors.accentPrimary : theme.colors.muted,
-                    cursor: "pointer", fontWeight: 700, fontSize: 13,
+                    cursor: "pointer", fontWeight: 700, fontSize: "var(--fs-subtitle)",
                     textTransform: "uppercase", letterSpacing: "0.05em",
                   }}
                 >
@@ -126,7 +126,7 @@ export function AddMemberModal({ campaignId: _campaignId, campaignName, existing
               borderRadius: theme.radius.control,
               background: `${theme.colors.red}22`,
               border: `1px solid ${theme.colors.red}55`,
-              color: theme.colors.red, fontSize: 13,
+              color: theme.colors.red, fontSize: "var(--fs-subtitle)",
             }}>
               {error}
             </div>

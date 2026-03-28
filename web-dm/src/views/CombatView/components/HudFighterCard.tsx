@@ -159,7 +159,7 @@ export function HudFighterCard(props: Props) {
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              <span style={{ opacity: 0.7, fontSize: 11 }}>🛡</span>
+              <span style={{ opacity: 0.7, fontSize: "var(--fs-small)" }}>🛡</span>
               {Math.max(0, Number(c.ac ?? 0) + Number(c.overrides?.acBonus ?? 0))}
             </span>
           ) : null}

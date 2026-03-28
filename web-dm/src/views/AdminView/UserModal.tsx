@@ -48,7 +48,7 @@ export function UserModal({ title, initial, passwordRequired, onSave, onClose }:
   const labelStyle: React.CSSProperties = {
     display: "block",
     marginBottom: 5,
-    fontSize: 12,
+    fontSize: "var(--fs-small)",
     fontWeight: 600,
     color: theme.colors.muted,
     textTransform: "uppercase",
@@ -77,7 +77,7 @@ export function UserModal({ title, initial, passwordRequired, onSave, onClose }:
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700 }}>{title}</h2>
+        <h2 style={{ margin: "0 0 20px", fontSize: "var(--fs-title)", fontWeight: 700 }}>{title}</h2>
 
         <form onSubmit={handleSave}>
           <div style={fieldStyle}>
@@ -109,7 +109,7 @@ export function UserModal({ title, initial, passwordRequired, onSave, onClose }:
               disabled={saving}
               style={{ width: 16, height: 16, cursor: "pointer" }}
             />
-            <label htmlFor="isAdmin" style={{ fontSize: 14, cursor: "pointer" }}>
+            <label htmlFor="isAdmin" style={{ fontSize: "var(--fs-medium)", cursor: "pointer" }}>
               Admin (can access this panel and manage users)
             </label>
           </div>
@@ -120,7 +120,7 @@ export function UserModal({ title, initial, passwordRequired, onSave, onClose }:
               borderRadius: theme.radius.control,
               background: `${theme.colors.red}22`,
               border: `1px solid ${theme.colors.red}55`,
-              color: theme.colors.red, fontSize: 13,
+              color: theme.colors.red, fontSize: "var(--fs-subtitle)",
             }}>
               {error}
             </div>

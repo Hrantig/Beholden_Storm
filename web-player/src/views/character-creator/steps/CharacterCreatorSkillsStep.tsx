@@ -32,14 +32,14 @@ interface CreatorFormLike {
 
 interface SelectedClassFeatEntryLike {
   choice: Step5ClassFeatChoiceLike;
-  detail: { name: string; text?: string };
+  detail: { name: string; text?: string | null };
 }
 
 function choiceButtonStyle(selected: boolean, locked: boolean, duplicate: boolean): React.CSSProperties {
   return {
     padding: "6px 14px",
     borderRadius: 6,
-    fontSize: 13,
+    fontSize: "var(--fs-subtitle)",
     cursor: locked || duplicate ? "default" : "pointer",
     border: `1px solid ${selected ? C.accentHl : duplicate ? "rgba(160,180,220,0.12)" : "rgba(255,255,255,0.12)"}`,
     background: selected ? "rgba(56,182,255,0.18)" : duplicate ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.055)",
@@ -151,7 +151,7 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
             <div style={{ ...labelStyle, margin: 0 }}>
               Skill Proficiencies {classDetailName ? <span style={sourceTagStyle}>from {classDetailName}</span> : null}
             </div>
-            <span style={{ fontSize: 12, color: form.chosenSkills.length >= numSkills ? C.accentHl : C.muted }}>
+            <span style={{ fontSize: "var(--fs-small)", color: form.chosenSkills.length >= numSkills ? C.accentHl : C.muted }}>
               {form.chosenSkills.length} / {numSkills}
             </span>
           </div>
@@ -174,7 +174,7 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
             <div style={{ ...labelStyle, margin: 0 }}>Languages {bgDetailName ? <span style={sourceTagStyle}>from {bgDetailName}</span> : null}</div>
-            {bgLangChoice.choose > 0 && <span style={{ fontSize: 12, color: form.chosenBgLanguages.length >= bgLangChoice.choose ? C.accentHl : C.muted }}>{form.chosenBgLanguages.length} / {bgLangChoice.choose}</span>}
+            {bgLangChoice.choose > 0 && <span style={{ fontSize: "var(--fs-small)", color: form.chosenBgLanguages.length >= bgLangChoice.choose ? C.accentHl : C.muted }}>{form.chosenBgLanguages.length} / {bgLangChoice.choose}</span>}
           </div>
           {bgLangChoice.fixed.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: bgLangChoice.choose > 0 ? 10 : 0 }}>{bgLangChoice.fixed.map((language) => <span key={language} style={profChipStyle}>{language}</span>)}</div>}
           {bgLangChoice.choose > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{(bgLangChoice.from ?? ALL_LANGUAGES).map((language) => {
@@ -190,7 +190,7 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
             <div style={{ ...labelStyle, margin: 0 }}>Languages <span style={sourceTagStyle}>{coreLanguageChoice.source}</span></div>
-            <span style={{ fontSize: 12, color: form.chosenRaceLanguages.length >= coreLanguageChoice.choose ? C.accentHl : C.muted }}>{form.chosenRaceLanguages.length} / {coreLanguageChoice.choose}</span>
+            <span style={{ fontSize: "var(--fs-small)", color: form.chosenRaceLanguages.length >= coreLanguageChoice.choose ? C.accentHl : C.muted }}>{form.chosenRaceLanguages.length} / {coreLanguageChoice.choose}</span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>{coreLanguageChoice.fixed.map((language) => <span key={language} style={profChipStyle}>{language}</span>)}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{(coreLanguageChoice.from ?? ALL_LANGUAGES).map((language) => {
@@ -206,7 +206,7 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
             <div style={{ ...labelStyle, margin: 0 }}>Languages <span style={sourceTagStyle}>{classLanguageChoice.source}</span></div>
-            {classLanguageChoice.choose > 0 && <span style={{ fontSize: 12, color: form.chosenClassLanguages.length >= classLanguageChoice.choose ? C.accentHl : C.muted }}>{form.chosenClassLanguages.length} / {classLanguageChoice.choose}</span>}
+            {classLanguageChoice.choose > 0 && <span style={{ fontSize: "var(--fs-small)", color: form.chosenClassLanguages.length >= classLanguageChoice.choose ? C.accentHl : C.muted }}>{form.chosenClassLanguages.length} / {classLanguageChoice.choose}</span>}
           </div>
           {classLanguageChoice.fixed.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: classLanguageChoice.choose > 0 ? 10 : 0 }}>{classLanguageChoice.fixed.map((language) => <span key={language} style={profChipStyle}>{language}</span>)}</div>}
           {classLanguageChoice.choose > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{(classLanguageChoice.from ?? ALL_LANGUAGES).map((language) => {
@@ -227,7 +227,7 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
       }))}
 
       {renderFeatGroup(bgFeatChoices, bgDetailName ?? undefined)}
-      {renderFeatGroup(raceFeatChoices, undefined, { ...sourceTagStyle, background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.4)", color: "#fb923c" })}
+      {renderFeatGroup(raceFeatChoices, undefined, { ...sourceTagStyle, background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.4)", color: C.colorOrange })}
 
       {classExpertiseChoices.map((choice) => {
         const selected = form.chosenFeatOptions[choice.key] ?? [];
@@ -257,7 +257,7 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
         onToggle: (weapon) => toggleList("chosenWeaponMasteries", weapon, weaponMasteryChoice.count),
       })}
 
-      {!hasAnything && <p style={{ color: C.muted, fontSize: 14 }}>There are no skill, language, mastery, or expertise choices at this level.</p>}
+      {!hasAnything && <p style={{ color: C.muted, fontSize: "var(--fs-medium)" }}>There are no skill, language, mastery, or expertise choices at this level.</p>}
       <NavButtons step={5} onBack={onBack} onNext={onNext} nextDisabled={missingClassFeatChoices || missingClassExpertiseChoices || missingFeatOptionSelections || missingCoreLanguages || missingClassLanguages} />
     </div>
   );
@@ -266,9 +266,9 @@ export function renderSkillsStep<TForm extends CreatorFormLike>(args: {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {selectedClassFeatEntries.map(({ choice, detail }) => (
         <div key={choice.featureName} style={detailBoxStyle}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: C.accentHl, marginBottom: 10 }}>{getClassFeatChoiceLabel(choice.featGroup)}</div>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{getClassFeatOptionLabel(detail.name, choice.featGroup)}</div>
-          <div style={{ color: "rgba(160,180,220,0.75)", fontSize: 12, lineHeight: 1.5 }}>{(detail.text ?? "").replace(/Source:.*$/m, "").trim()}</div>
+          <div style={{ fontWeight: 700, fontSize: "var(--fs-subtitle)", color: C.accentHl, marginBottom: 10 }}>{getClassFeatChoiceLabel(choice.featGroup)}</div>
+          <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)", marginBottom: 8 }}>{getClassFeatOptionLabel(detail.name, choice.featGroup)}</div>
+          <div style={{ color: "rgba(160,180,220,0.75)", fontSize: "var(--fs-small)", lineHeight: 1.5 }}>{(detail.text ?? "").replace(/Source:.*$/m, "").trim()}</div>
         </div>
       ))}
       {sideSummary}

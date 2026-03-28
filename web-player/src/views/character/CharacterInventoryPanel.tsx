@@ -535,7 +535,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
 
   return (
     <CollapsiblePanel
-      title={<>Inventory{saving && <span style={{ fontSize: 9, color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}</>}
+      title={<>Inventory{saving && <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginLeft: 6, fontWeight: 400, textTransform: "none" }}>saving…</span>}</>}
       color={accentColor}
       storageKey="inventory"
       actions={<button type="button" onClick={() => setPickerOpen(true)} title="Add item" style={panelHeaderAddBtn(accentColor)}>+</button>}
@@ -550,7 +550,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
         padding: "0 2px",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+          <div style={{ fontSize: "var(--fs-small)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
             Currency
           </div>
           {(["PP", "GP", "SP", "CP"] as const).map((code) => (
@@ -569,7 +569,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
-                  fontSize: 11,
+                  fontSize: "var(--fs-small)",
                   color: C.text,
                   padding: "2px 10px",
                   borderRadius: 999,
@@ -599,7 +599,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                     gap: 8,
                   }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 2 }}>Edit {code}</div>
+                  <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 2 }}>Edit {code}</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <input
                       autoFocus
@@ -618,7 +618,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                         flex: 1,
                         padding: "6px 8px",
                         borderRadius: 6,
-                        fontSize: 13,
+                        fontSize: "var(--fs-subtitle)",
                         fontWeight: 700,
                         border: "1px solid rgba(255,255,255,0.15)",
                         background: "rgba(255,255,255,0.07)",
@@ -643,7 +643,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: overCapacity ? C.red : C.muted }}>
+        <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: overCapacity ? C.red : C.muted }}>
           {formatWeight(carriedWeight)} / {formatWeight(carryCapacity)} lb
         </div>
       </div>
@@ -683,7 +683,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                   aria-hidden="true"
                   style={{
                     color: C.muted,
-                    fontSize: 10,
+                    fontSize: "var(--fs-tiny)",
                     lineHeight: 1,
                     transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
                     transition: "transform 120ms ease",
@@ -715,7 +715,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                     border: "none",
                     borderBottom: "1px dashed rgba(255,255,255,0.12)",
                     color: C.muted,
-                    fontSize: 10,
+                    fontSize: "var(--fs-tiny)",
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
@@ -737,7 +737,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                   type="button"
                   onClick={() => { void addContainer(container.id); }}
                   title="Add container"
-                  style={{ ...stepperBtn, width: 24, height: 24, fontSize: 16 }}
+                  style={{ ...stepperBtn, width: 24, height: 24, fontSize: "var(--fs-body)" }}
                 >
                   +
                 </button>
@@ -746,7 +746,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                     type="button"
                     onClick={() => { void removeContainer(container.id); }}
                     title="Remove container"
-                    style={{ ...stepperBtn, width: 24, height: 24, fontSize: 16 }}
+                    style={{ ...stepperBtn, width: 24, height: 24, fontSize: "var(--fs-body)" }}
                   >
                     −
                   </button>
@@ -768,7 +768,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
                 border: "1px dashed rgba(255,255,255,0.08)",
                 borderRadius: 10,
                 color: C.muted,
-                fontSize: 11,
+                fontSize: "var(--fs-small)",
                 background: "rgba(255,255,255,0.02)",
               }}>
                 Empty.
@@ -803,7 +803,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
             value={newNotes}
             onChange={(e) => setNewNotes(e.target.value)}
             placeholder="Notes (optional)…"
-            style={{ ...inputStyle, fontSize: 11, color: C.muted }}
+            style={{ ...inputStyle, fontSize: "var(--fs-small)", color: C.muted }}
           />
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => { void addItem(); }} disabled={!newName.trim()} style={addBtnStyle(accentColor)}>
@@ -937,7 +937,7 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
             cursor: "pointer",
           }}
         >
-          <div style={{ fontSize: 13, color: C.text, fontWeight: equipped ? 600 : 400, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ fontSize: "var(--fs-subtitle)", color: C.text, fontWeight: equipped ? 600 : 400, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {item.name}
             {item.attuned && (
               <span
@@ -952,7 +952,7 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                   border: "1px solid rgba(56,189,248,0.55)",
                   background: "rgba(56,189,248,0.14)",
                   color: "#38bdf8",
-                  fontSize: 11,
+                  fontSize: "var(--fs-small)",
                   fontWeight: 800,
                   lineHeight: 1,
                 }}
@@ -972,8 +972,8 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                   borderRadius: 999,
                   border: "1px solid rgba(251,191,36,0.45)",
                   background: "rgba(251,191,36,0.14)",
-                  color: "#fbbf24",
-                  fontSize: 10,
+                  color: C.colorGold,
+                  fontSize: "var(--fs-tiny)",
                   fontWeight: 800,
                   lineHeight: 1,
                   padding: "0 6px",
@@ -994,8 +994,8 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                   borderRadius: 999,
                   border: "1px solid rgba(248,113,113,0.55)",
                   background: "rgba(248,113,113,0.14)",
-                  color: "#f87171",
-                  fontSize: 11,
+                  color: C.colorPinkRed,
+                  fontSize: "var(--fs-small)",
                   fontWeight: 800,
                   lineHeight: 1,
                 }}
@@ -1015,8 +1015,8 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
                   borderRadius: 999,
                   border: "1px solid rgba(248,113,113,0.55)",
                   background: "rgba(248,113,113,0.14)",
-                  color: "#f87171",
-                  fontSize: 11,
+                  color: C.colorPinkRed,
+                  fontSize: "var(--fs-small)",
                   fontWeight: 800,
                   lineHeight: 1,
                 }}
@@ -1026,15 +1026,15 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
             )}
           </div>
           {meta && (
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{meta}</div>
+            <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginTop: 2 }}>{meta}</div>
           )}
           {lacksArmorProficiency && (
-            <div style={{ fontSize: 10, color: "#f87171", marginTop: 2, fontWeight: 700 }}>
+            <div style={{ fontSize: "var(--fs-tiny)", color: C.colorPinkRed, marginTop: 2, fontWeight: 700 }}>
               Not proficient: AC applies, but STR/DEX rolls have disadvantage and spellcasting is blocked.
             </div>
           )}
           {item.notes && (
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{item.notes}</div>
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 4 }}>{item.notes}</div>
           )}
         </button>
 
@@ -1043,7 +1043,7 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
             <button onClick={() => onQty(item.id, -1)} style={stepperBtn}>−</button>
           )}
           {item.quantity > 1 && (
-            <span style={{ fontSize: 12, color: C.muted, minWidth: 20, textAlign: "center" }}>
+            <span style={{ fontSize: "var(--fs-small)", color: C.muted, minWidth: 20, textAlign: "center" }}>
               ×{item.quantity}
             </span>
           )}
@@ -1056,7 +1056,7 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
           style={{
             background: "transparent", border: "none",
             color: "rgba(255,255,255,0.22)", cursor: "pointer",
-            fontSize: 15, padding: "0 2px", lineHeight: 1, flexShrink: 0,
+            fontSize: "var(--fs-body)", padding: "0 2px", lineHeight: 1, flexShrink: 0,
         }}>
           ×
         </button>
@@ -1195,12 +1195,12 @@ function InventoryItemDrawer(props: {
           gap: 8,
         }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 900, fontSize: 20, color: C.text }}>{props.item.name}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+            <div style={{ fontWeight: 900, fontSize: "var(--fs-title)", color: C.text }}>{props.item.name}</div>
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 4 }}>
               Player-owned copy. Edits here affect only this character.
             </div>
           </div>
-          <button type="button" onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
+          <button type="button" onClick={props.onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 14px", fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>
             Close
           </button>
         </div>
@@ -1216,7 +1216,7 @@ function InventoryItemDrawer(props: {
               borderRadius: 12,
               background: "rgba(255,255,255,0.03)",
             }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Container
               </div>
               <Select
@@ -1235,7 +1235,7 @@ function InventoryItemDrawer(props: {
           {props.editMode ? (
             <>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Title</div>
+                <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Title</div>
                 <input
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
@@ -1245,7 +1245,7 @@ function InventoryItemDrawer(props: {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Rarity</div>
+                  <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Rarity</div>
                   <Select value={draft.rarity} onChange={(e) => setDraft((d) => ({ ...d, rarity: e.target.value }))} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
                     <option value="">None</option>
                     <option value="common">Common</option>
@@ -1257,41 +1257,41 @@ function InventoryItemDrawer(props: {
                   </Select>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Weight</div>
+                  <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Weight</div>
                   <input type="number" value={draft.weight ?? ""} onChange={(e) => setDraft((d) => ({ ...d, weight: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="Weight" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Value</div>
+                  <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Value</div>
                   <input type="number" value={draft.value ?? ""} onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="Value" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                 </div>
                 {isWeaponLike && (
                   <>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage 1</div>
+                      <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage 1</div>
                       <input value={draft.dmg1} onChange={(e) => setDraft((d) => ({ ...d, dmg1: e.target.value }))} placeholder="Damage 1" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage 2</div>
+                      <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage 2</div>
                       <input value={draft.dmg2} onChange={(e) => setDraft((d) => ({ ...d, dmg2: e.target.value }))} placeholder="Damage 2" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage Type</div>
+                      <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Damage Type</div>
                       <input value={draft.dmgType} onChange={(e) => setDraft((d) => ({ ...d, dmgType: e.target.value }))} placeholder="Damage Type" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Properties</div>
+                      <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Properties</div>
                       <input value={draft.properties.join(", ")} onChange={(e) => setDraft((d) => ({ ...d, properties: e.target.value.split(",").map((p) => p.trim()).filter(Boolean) }))} placeholder="Properties" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                     </div>
                   </>
                 )}
                 {isArmorLike && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Armor Class</div>
+                    <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Armor Class</div>
                     <input type="number" value={draft.ac ?? ""} onChange={(e) => setDraft((d) => ({ ...d, ac: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="AC" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                   </div>
                 )}
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Max Charges</div>
+                  <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 6 }}>Max Charges</div>
                   <input type="number" min={0} value={props.item.chargesMax ?? ""} onChange={async (e) => {
                     const v = e.target.value === "" ? null : Number(e.target.value);
                     await props.onSave({ chargesMax: v, charges: v ?? null });
@@ -1328,12 +1328,12 @@ function InventoryItemDrawer(props: {
                 )}
               </div>
               {draft.attunement && !canEnableAttuned && (
-                <div style={{ fontSize: 11, color: C.red }}>
+                <div style={{ fontSize: "var(--fs-small)", color: C.red }}>
                   You can have no more than 3 attuned items at a time.
                 </div>
               )}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Text</div>
+                <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Text</div>
                 <textarea
                   value={draft.description}
                   onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
@@ -1348,13 +1348,13 @@ function InventoryItemDrawer(props: {
           ) : hasAnyDetails ? (
             <>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {draft.magic && <InventoryTag label="Magic" color="#a78bfa" />}
+                {draft.magic && <InventoryTag label="Magic" color={C.colorMagic} />}
                 {draft.attunement && !draft.attuned && <InventoryTag label="Requires Attunement" color={props.accentColor} />}
                 {draft.attuned && <InventoryTag label="Attuned" color={props.accentColor} />}
                 {isMeleeWeaponLike && draft.silvered && <InventoryTag label="Silvered" color="#cbd5e1" />}
                 {draft.rarity && <InventoryTag label={titleCase(draft.rarity)} color={inventoryRarityColor(draft.rarity)} />}
                 {draft.type && <InventoryTag label={draft.type} color={C.muted} />}
-                {isArmorLike && draft.stealthDisadvantage && <InventoryTag label="D" color="#f87171" />}
+                {isArmorLike && draft.stealthDisadvantage && <InventoryTag label="D" color={C.colorPinkRed} />}
               </div>
               {((isWeaponLike && (draft.dmg1 || draft.dmg2 || draft.dmgType || draft.properties.length > 0)) || draft.weight != null || draft.value != null || (isArmorLike && (draft.ac != null || draft.stealthDisadvantage))) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
@@ -1374,7 +1374,7 @@ function InventoryItemDrawer(props: {
                 const cur = props.item.charges ?? max;
                 return (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Charges</div>
+                    <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Charges</div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                       {Array.from({ length: max }).map((_, i) => {
                         const filled = i < cur;
@@ -1392,7 +1392,7 @@ function InventoryItemDrawer(props: {
                           />
                         );
                       })}
-                      <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>{cur} / {max}</span>
+                      <span style={{ fontSize: "var(--fs-small)", color: C.muted, marginLeft: 4 }}>{cur} / {max}</span>
                     </div>
                   </div>
                 );
@@ -1403,12 +1403,12 @@ function InventoryItemDrawer(props: {
                 if (!spells.length) return null;
                 return (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Spells</div>
+                    <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Spells</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {spells.map((sp) => (
                         <div key={sp.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
-                          <span style={{ fontSize: 13, color: "#c4b5fd", fontWeight: 600 }}>{sp.name}</span>
-                          <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{sp.cost} {sp.cost === 1 ? "Charge" : "Charges"}</span>
+                          <span style={{ fontSize: "var(--fs-subtitle)", color: "#c4b5fd", fontWeight: 600 }}>{sp.name}</span>
+                          <span style={{ fontSize: "var(--fs-small)", color: C.muted, fontWeight: 600 }}>{sp.cost} {sp.cost === 1 ? "Charge" : "Charges"}</span>
                         </div>
                       ))}
                     </div>
@@ -1437,15 +1437,15 @@ function InventoryItemDrawer(props: {
         <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {props.editMode ? (
             <>
-              <button type="button" onClick={props.onCancelEdit} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontSize: 13 }}>
+              <button type="button" onClick={props.onCancelEdit} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontSize: "var(--fs-subtitle)" }}>
                 Cancel
               </button>
-              <button type="button" onClick={() => { void handleSave(); }} style={{ background: `${props.accentColor}22`, border: `1px solid ${props.accentColor}55`, borderRadius: 8, color: props.accentColor, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+              <button type="button" onClick={() => { void handleSave(); }} style={{ background: `${props.accentColor}22`, border: `1px solid ${props.accentColor}55`, borderRadius: 8, color: props.accentColor, cursor: "pointer", padding: "8px 16px", fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>
                 Save
               </button>
             </>
           ) : (
-            <button type="button" onClick={props.onStartEdit} style={{ background: `${props.accentColor}22`, border: `1px solid ${props.accentColor}55`, borderRadius: 8, color: props.accentColor, cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>
+            <button type="button" onClick={props.onStartEdit} style={{ background: `${props.accentColor}22`, border: `1px solid ${props.accentColor}55`, borderRadius: 8, color: props.accentColor, cursor: "pointer", padding: "8px 16px", fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>
               Edit
             </button>
           )}
@@ -1574,7 +1574,7 @@ function InventoryItemPickerModal(props: {
       >
         <div style={inventoryPickerColumnStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#fbbf24" }}>
+            <div style={{ fontSize: "var(--fs-small)", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.colorGold }}>
               Browse Items
             </div>
             <button
@@ -1589,7 +1589,7 @@ function InventoryItemPickerModal(props: {
                 color: createMode ? props.accentColor : C.muted,
                 borderRadius: 8,
                 padding: "6px 10px",
-                fontSize: 12,
+                fontSize: "var(--fs-small)",
                 fontWeight: 700,
                 cursor: "pointer",
               }}
@@ -1632,7 +1632,7 @@ function InventoryItemPickerModal(props: {
             )}
           </div>
 
-          <div style={{ fontSize: 12, color: C.muted }}>
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
             {busy ? "Loading..." : error ? error : totalCount === rows.length ? `${rows.length} items` : `${rows.length} of ${totalCount}`}
           </div>
 
@@ -1671,7 +1671,7 @@ function InventoryItemPickerModal(props: {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     {item.rarity && <span style={{ width: 9, height: 9, borderRadius: "50%", background: inventoryRarityColor(item.rarity), flexShrink: 0 }} />}
-                    <span style={{ fontWeight: 800, fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontWeight: 800, fontSize: "var(--fs-subtitle)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {item.name}
                     </span>
                     {item.magic && (
@@ -1679,9 +1679,9 @@ function InventoryItemPickerModal(props: {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 3,
-                        fontSize: 11,
+                        fontSize: "var(--fs-small)",
                         fontWeight: 700,
-                        color: "#a78bfa",
+                        color: C.colorMagic,
                         border: "1px solid #6d28d966",
                         borderRadius: 6,
                         padding: "1px 6px",
@@ -1690,7 +1690,7 @@ function InventoryItemPickerModal(props: {
                       }}>Magic</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2 }}>
                     {[item.rarity ? titleCase(item.rarity) : null, item.type, item.attunement ? "Attunement" : null].filter(Boolean).join(" • ")}
                   </div>
                 </button>
@@ -1702,7 +1702,7 @@ function InventoryItemPickerModal(props: {
 
         <div style={inventoryPickerColumnStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>
+            <div style={{ fontSize: "var(--fs-medium)", fontWeight: 800, color: C.text }}>
               {createMode ? "Create Item" : detail?.name ?? "Select an item"}
             </div>
             <div style={{ flex: 1 }} />
@@ -1809,11 +1809,11 @@ function InventoryItemPickerModal(props: {
           ) : detail ? (
             <>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {detail.magic && <InventoryTag label="Magic" color="#a78bfa" />}
+                {detail.magic && <InventoryTag label="Magic" color={C.colorMagic} />}
                 {detail.attunement && <InventoryTag label="Attunement" color={props.accentColor} />}
                 {detail.rarity && <InventoryTag label={titleCase(detail.rarity)} color={inventoryRarityColor(detail.rarity)} />}
                 {detail.type && <InventoryTag label={detail.type} color={C.muted} />}
-                {hasStealthDisadvantage(detail) && <InventoryTag label="D" color="#f87171" />}
+                {hasStealthDisadvantage(detail) && <InventoryTag label="D" color={C.colorPinkRed} />}
               </div>
               {(detail.dmg1 || detail.dmg2 || detail.dmgType || detail.weight != null || detail.value != null || detail.properties.length > 0) && (
                 <div style={{
@@ -1848,7 +1848,7 @@ function InventoryItemPickerModal(props: {
 function InventoryTag({ label, color }: { label: string; color: string }) {
   return (
     <span style={{
-      fontSize: 11,
+      fontSize: "var(--fs-small)",
       fontWeight: 700,
       padding: "2px 8px",
       borderRadius: 999,
@@ -1870,10 +1870,10 @@ function InventoryStat({ label, value }: { label: string; value: string }) {
       padding: "8px 10px",
       minWidth: 0,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginBottom: 4 }}>
+      <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis" }}>
+      <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis" }}>
         {value}
       </div>
     </div>
@@ -1881,7 +1881,7 @@ function InventoryStat({ label, value }: { label: string; value: string }) {
 }
 
 const subLabelStyle: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, color: C.muted,
+  fontSize: "var(--fs-tiny)", fontWeight: 700, color: C.muted,
   textTransform: "uppercase", letterSpacing: "0.07em",
   marginBottom: 6,
 };
@@ -1890,14 +1890,14 @@ const inputStyle: React.CSSProperties = {
   flex: 1, background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.16)",
   borderRadius: 7, padding: "6px 10px",
-  color: C.text, fontSize: 13, outline: "none",
+  color: C.text, fontSize: "var(--fs-subtitle)", outline: "none",
 };
 
 const stepperBtn: React.CSSProperties = {
   background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 4, width: 20, height: 20,
-  color: C.muted, cursor: "pointer", fontSize: 13,
+  color: C.muted, cursor: "pointer", fontSize: "var(--fs-subtitle)",
   display: "flex", alignItems: "center", justifyContent: "center",
   padding: 0, lineHeight: 1,
 };

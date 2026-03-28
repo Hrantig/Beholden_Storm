@@ -93,7 +93,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: {
     margin: "0 0 6px",
-    fontSize: 26,
+    fontSize: "var(--fs-hero)",
     fontWeight: 800,
     color: "var(--accent)",
     letterSpacing: "-0.5px",
@@ -101,7 +101,7 @@ const styles: Record<string, React.CSSProperties> = {
   subtitle: {
     margin: "0 0 28px",
     color: "var(--muted)",
-    fontSize: 14,
+    fontSize: "var(--fs-medium)",
   },
   field: {
     marginBottom: 16,
@@ -109,7 +109,7 @@ const styles: Record<string, React.CSSProperties> = {
   label: {
     display: "block",
     marginBottom: 6,
-    fontSize: 13,
+    fontSize: "var(--fs-subtitle)",
     fontWeight: 600,
   },
   input: {
@@ -119,7 +119,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid var(--panel-border)",
     borderRadius: "var(--radius-ctrl)",
     color: "var(--text)",
-    fontSize: 14,
+    fontSize: "var(--fs-medium)",
     fontFamily: "inherit",
     boxSizing: "border-box",
     outline: "none",
@@ -131,16 +131,16 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(224,80,80,0.13)",
     border: "1px solid rgba(224,80,80,0.33)",
     color: "var(--red)",
-    fontSize: 13,
+    fontSize: "var(--fs-subtitle)",
   },
   button: {
     width: "100%",
     padding: "10px 0",
     background: "var(--accent)",
-    color: "#0d1525",
+    color: "var(--bg)",
     border: "none",
     borderRadius: "var(--radius-ctrl)",
-    fontSize: 15,
+    fontSize: "var(--fs-body)",
     fontWeight: 700,
     fontFamily: "inherit",
   },

@@ -27,7 +27,7 @@ function NavButton({ label, Icon, active, onClick }: { label: string; Icon: Reac
         display: "flex", alignItems: "center", gap: 10, width: "100%",
         padding: "10px 14px", border: "none", borderRadius: 10,
         cursor: "pointer", textAlign: "left",
-        fontWeight: active ? 800 : 500, fontSize: 14,
+        fontWeight: active ? 800 : 500, fontSize: "var(--fs-medium)",
         color: active ? C.accentHl : C.text,
         background: active ? withAlpha(C.accentHl, 0.12) : "transparent",
         fontFamily: "inherit",

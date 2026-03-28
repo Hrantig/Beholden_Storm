@@ -41,7 +41,7 @@ export function searchStyle(): React.CSSProperties {
     borderRadius: 10,
     padding: "8px 12px",
     outline: "none",
-    fontSize: 14,
+    fontSize: "var(--fs-medium)",
     width: "100%",
     boxSizing: "border-box",
   };
@@ -55,7 +55,7 @@ export function fieldInput(): React.CSSProperties {
     borderRadius: 8,
     padding: "7px 10px",
     outline: "none",
-    fontSize: 14,
+    fontSize: "var(--fs-medium)",
     width: "100%",
     boxSizing: "border-box",
   };
@@ -65,8 +65,8 @@ export function MagicBadge() {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 3,
-      fontSize: 11, fontWeight: 700,
-      color: "#a78bfa",
+      fontSize: "var(--fs-small)", fontWeight: 700,
+      color: theme.colors.colorMagic,
       border: "1px solid #6d28d966",
       borderRadius: 6, padding: "1px 6px",
       lineHeight: 1.4, whiteSpace: "nowrap",
@@ -92,7 +92,7 @@ export function RarityDot({ rarity }: { rarity: string | null }) {
 export function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: theme.colors.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+      <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: theme.colors.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
       {children}
     </label>
   );
@@ -100,7 +100,7 @@ export function FormField({ label, children }: { label: string; children: React.
 
 export function CheckRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: theme.colors.text }}>
+    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--fs-subtitle)", color: theme.colors.text }}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ width: 15, height: 15 }} />
       {label}
     </label>
@@ -110,7 +110,7 @@ export function CheckRow({ label, checked, onChange }: { label: string; checked:
 export function Chip({ label, color }: { label: string; color: string }) {
   return (
     <span style={{
-      padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+      padding: "2px 8px", borderRadius: 999, fontSize: "var(--fs-small)", fontWeight: 700,
       border: `1px solid ${color}44`, background: `${color}1a`, color,
     }}>{label}</span>
   );

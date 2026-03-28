@@ -45,7 +45,7 @@ export function SectionTitle({
       )}
       {collapsed !== undefined && (
         <span style={{
-          color, fontSize: 10, lineHeight: 1,
+          color, fontSize: "var(--fs-tiny)", lineHeight: 1,
           transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
           transition: "transform 120ms ease",
           display: "inline-flex", alignItems: "center", justifyContent: "center",

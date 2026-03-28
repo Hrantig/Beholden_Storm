@@ -98,7 +98,7 @@ export function ItemFormModal(props: Props) {
           color: theme.colors.text,
         }}
       >
-        <div style={{ fontWeight: 800, fontSize: 18 }}>
+        <div style={{ fontWeight: 800, fontSize: "var(--fs-title)" }}>
           {isEdit ? `Edit: "${props.item!.name}"` : "New Item"}
         </div>
 
@@ -149,7 +149,7 @@ export function ItemFormModal(props: Props) {
           />
         </Field>
 
-        {error && <div style={{ color: theme.colors.red, fontSize: 13 }}>{error}</div>}
+        {error && <div style={{ color: theme.colors.red, fontSize: "var(--fs-subtitle)" }}>{error}</div>}
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -165,8 +165,8 @@ export function ItemFormModal(props: Props) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600, color: theme.colors.muted }}>
-      <span style={{ textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 11 }}>{label}</span>
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--fs-subtitle)", fontWeight: 600, color: theme.colors.muted }}>
+      <span style={{ textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--fs-small)" }}>{label}</span>
       {children}
     </label>
   );
@@ -174,7 +174,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: theme.colors.text }}>
+    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--fs-subtitle)", color: theme.colors.text }}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ width: 16, height: 16 }} />
       {label}
     </label>
@@ -191,14 +191,14 @@ function inputStyle(): React.CSSProperties {
     outline: "none",
     width: "100%",
     boxSizing: "border-box",
-    fontSize: 14,
+    fontSize: "var(--fs-medium)",
   };
 }
 
 function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {
   const isPrimary = variant === "primary";
   return {
-    padding: "8px 20px", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 14,
+    padding: "8px 20px", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: "var(--fs-medium)",
     border: `1px solid ${isPrimary ? theme.colors.accentPrimary : theme.colors.panelBorder}`,
     background: isPrimary ? theme.colors.accentPrimary : "transparent",
     color: isPrimary ? theme.colors.textDark : theme.colors.text,

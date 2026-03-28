@@ -14,7 +14,7 @@ function MemberRow({ member, onChangeRole, onRemove }: {
   onRemove: (id: string, name: string) => void;
 }) {
   const tdStyle: React.CSSProperties = {
-    padding: "10px 14px", fontSize: 14,
+    padding: "10px 14px", fontSize: "var(--fs-medium)",
     borderBottom: `1px solid ${theme.colors.panelBorder}`,
     verticalAlign: "middle",
   };
@@ -23,7 +23,7 @@ function MemberRow({ member, onChangeRole, onRemove }: {
     <tr>
       <td style={tdStyle}>
         <span style={{ fontWeight: 600 }}>{member.user.name}</span>
-        <span style={{ marginLeft: 6, color: theme.colors.muted, fontSize: 12 }}>
+        <span style={{ marginLeft: 6, color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
           @{member.user.username}
         </span>
       </td>
@@ -37,7 +37,7 @@ function MemberRow({ member, onChangeRole, onRemove }: {
             border: `1px solid ${ROLE_COLORS[member.role]}55`,
             background: `${ROLE_COLORS[member.role]}18`,
             color: ROLE_COLORS[member.role],
-            fontWeight: 700, fontSize: 12,
+            fontWeight: 700, fontSize: "var(--fs-small)",
             cursor: "pointer", outline: "none",
           }}
         >
@@ -48,7 +48,7 @@ function MemberRow({ member, onChangeRole, onRemove }: {
       <td style={{ ...tdStyle, textAlign: "right" }}>
         <Button
           variant="danger"
-          style={{ fontSize: 12, padding: "4px 10px" }}
+          style={{ fontSize: "var(--fs-small)", padding: "4px 10px" }}
           onClick={() => onRemove(member.id, member.user.name)}
         >
           Remove
@@ -114,8 +114,8 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
         onClick={() => setExpanded((x) => !x)}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{campaign.name}</span>
-          <span style={{ fontSize: 12, color: theme.colors.muted }}>
+          <span style={{ fontWeight: 700, fontSize: "var(--fs-body)" }}>{campaign.name}</span>
+          <span style={{ fontSize: "var(--fs-small)", color: theme.colors.muted }}>
             {dmCount > 0 && `${dmCount} DM${dmCount > 1 ? "s" : ""}`}
             {dmCount > 0 && playerCount > 0 && "  ·  "}
             {playerCount > 0 && `${playerCount} player${playerCount > 1 ? "s" : ""}`}
@@ -126,22 +126,22 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
           {expanded && (
             <Button
               variant="primary"
-              style={{ fontSize: 12, padding: "5px 10px" }}
+              style={{ fontSize: "var(--fs-small)", padding: "5px 10px" }}
               onClick={(e) => { e.stopPropagation(); setAddModal(true); }}
             >
               + Add Member
             </Button>
           )}
-          <span style={{ color: theme.colors.muted, fontSize: 18 }}>{expanded ? "▲" : "▼"}</span>
+          <span style={{ color: theme.colors.muted, fontSize: "var(--fs-title)" }}>{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
 
       {expanded && (
         <div style={{ borderTop: `1px solid ${theme.colors.panelBorder}` }}>
           {loading ? (
-            <div style={{ padding: "16px 18px", color: theme.colors.muted, fontSize: 13 }}>Loading…</div>
+            <div style={{ padding: "16px 18px", color: theme.colors.muted, fontSize: "var(--fs-subtitle)" }}>Loading…</div>
           ) : members.length === 0 ? (
-            <div style={{ padding: "16px 18px", color: theme.colors.muted, fontSize: 13 }}>
+            <div style={{ padding: "16px 18px", color: theme.colors.muted, fontSize: "var(--fs-subtitle)" }}>
               No members assigned. Click "+ Add Member" to add someone.
             </div>
           ) : (
@@ -151,7 +151,7 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
                   {["Member", "Role", ""].map((h, i) => (
                     <th key={i} style={{
                       padding: "8px 14px", textAlign: i === 2 ? "right" : "left",
-                      fontSize: 11, fontWeight: 700, color: theme.colors.muted,
+                      fontSize: "var(--fs-small)", fontWeight: 700, color: theme.colors.muted,
                       textTransform: "uppercase", letterSpacing: "0.06em",
                       borderBottom: `1px solid ${theme.colors.panelBorder}`,
                     }}>{h}</th>

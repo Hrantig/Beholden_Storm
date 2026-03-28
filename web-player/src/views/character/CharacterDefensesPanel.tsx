@@ -27,13 +27,13 @@ function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentC
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted }}>
+        <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted }}>
           {label}
         </span>
         {!adding && remaining.length > 0 && (
           <button
             onClick={() => setAdding(true)}
-            style={{ all: "unset", cursor: "pointer", fontSize: 11, color: accentColor, fontWeight: 800, lineHeight: 1 }}
+            style={{ all: "unset", cursor: "pointer", fontSize: "var(--fs-small)", color: accentColor, fontWeight: 800, lineHeight: 1 }}
             title={`Add ${label.toLowerCase()}`}
           >
             +
@@ -49,7 +49,7 @@ function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentC
               border: "1px solid rgba(255,255,255,0.15)",
               borderRadius: 6,
               color: C.text,
-              fontSize: 12,
+              fontSize: "var(--fs-small)",
               padding: "3px 6px",
               cursor: "pointer",
             }}
@@ -68,7 +68,7 @@ function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentC
         </div>
       )}
       {allItems.length === 0 ? (
-        <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>None</span>
+        <span style={{ fontSize: "var(--fs-small)", color: C.muted, fontStyle: "italic" }}>None</span>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {allItems.map((item) => {
@@ -78,7 +78,7 @@ function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentC
                 key={item}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 3,
-                  fontSize: 11, fontWeight: 700,
+                  fontSize: "var(--fs-small)", fontWeight: 700,
                   color: color,
                   background: `${color}18`,
                   border: `1px solid ${color}44`,
@@ -90,7 +90,7 @@ function DefenseRow({ label, color, items, customItems, onAdd, onRemove, accentC
                 {isCustom && (
                   <button
                     onClick={() => onRemove(item)}
-                    style={{ all: "unset", cursor: "pointer", fontSize: 10, color: C.muted, lineHeight: 1, marginLeft: 2 }}
+                    style={{ all: "unset", cursor: "pointer", fontSize: "var(--fs-tiny)", color: C.muted, lineHeight: 1, marginLeft: 2 }}
                     title="Remove"
                   >
                     ×
@@ -114,11 +114,11 @@ interface ReadonlyTagRowProps {
 function ReadonlyTagRow({ label, color, items }: ReadonlyTagRowProps) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, marginBottom: 5 }}>
+      <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, marginBottom: 5 }}>
         {label}
       </div>
       {items.length === 0 ? (
-        <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>None</span>
+        <span style={{ fontSize: "var(--fs-small)", color: C.muted, fontStyle: "italic" }}>None</span>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {items.map((item) => (
@@ -127,7 +127,7 @@ function ReadonlyTagRow({ label, color, items }: ReadonlyTagRowProps) {
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                fontSize: 11,
+                fontSize: "var(--fs-small)",
                 fontWeight: 700,
                 color,
                 background: `${color}18`,
@@ -186,7 +186,7 @@ export function CharacterDefensesPanel({
         />
         <DefenseRow
           label="Immunities"
-          color="#60a5fa"
+          color={C.colorRitual}
           items={immunities}
           customItems={customImmunities}
           accentColor={accentColor}
@@ -195,7 +195,7 @@ export function CharacterDefensesPanel({
         />
         <ReadonlyTagRow
           label="Senses"
-          color="#fbbf24"
+          color={C.colorGold}
           items={senses}
         />
       </div>

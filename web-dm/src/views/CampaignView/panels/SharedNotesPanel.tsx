@@ -187,7 +187,7 @@ export function SharedNotesPanel(props: {
               <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 {editTarget.noteId === null ? "New Shared Note" : "Edit Shared Note"}
               </span>
-              <button onClick={() => setEditTarget(null)} style={{ all: "unset", cursor: "pointer", color: theme.colors.muted, fontSize: 18, lineHeight: 1 }}>×</button>
+              <button onClick={() => setEditTarget(null)} style={{ all: "unset", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-title)", lineHeight: 1 }}>×</button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
@@ -244,13 +244,13 @@ function NoteRow(props: {
         </button>
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit(); }}
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: theme.colors.muted, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: theme.colors.muted, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}
         >
           Edit
         </button>
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onDelete(); }}
-          style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: theme.colors.red, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+          style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: theme.colors.red, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}
         >
           ×
         </button>

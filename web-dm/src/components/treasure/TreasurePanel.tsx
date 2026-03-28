@@ -131,7 +131,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 900 }}>
                     {t.name}
                     {t.magic ? (
-                      <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: "#a78bfa", border: "1px solid #6d28d966", borderRadius: 6, padding: "1px 6px", lineHeight: 1.4 }}>
+                      <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: theme.colors.colorMagic, border: "1px solid #6d28d966", borderRadius: 6, padding: "1px 6px", lineHeight: 1.4 }}>
                         ✦ Magic
                       </span>
                     ) : null}
@@ -147,7 +147,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
                     <button
                       type="button" title="Decrease quantity"
                       onClick={() => updateQty(t.id, Math.max(1, (t.qty ?? 1) - 1))}
-                      style={{ width: 26, height: 26, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: 15, fontWeight: 700, flexShrink: 0 }}
+                      style={{ width: 26, height: 26, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: "var(--fs-body)", fontWeight: 700, flexShrink: 0 }}
                     >−</button>
                     <input
                       type="number" min={1}
@@ -157,7 +157,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
                         if (v >= 1) updateQty(t.id, v);
                       }}
                       style={{
-                        width: 40, textAlign: "center", fontSize: 13, fontWeight: 700,
+                        width: 40, textAlign: "center", fontSize: "var(--fs-subtitle)", fontWeight: 700,
                         background: "transparent", color: theme.colors.text,
                         border: "none", outline: "none",
                         appearance: "textfield", MozAppearance: "textfield", WebkitAppearance: "none",
@@ -166,7 +166,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
                     <button
                       type="button" title="Increase quantity"
                       onClick={() => updateQty(t.id, (t.qty ?? 1) + 1)}
-                      style={{ width: 26, height: 26, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: 15, fontWeight: 700, flexShrink: 0 }}
+                      style={{ width: 26, height: 26, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: "var(--fs-body)", fontWeight: 700, flexShrink: 0 }}
                     >+</button>
                   </div>
                   <IconButton title="Remove" onClick={() => remove(t.id)}>

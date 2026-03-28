@@ -27,7 +27,7 @@ export function RulesReferencePanel() {
               cols={["Condition", "Definition"]}
               rows={CONDITIONS.map((c) => [c.name, c.bullets.join(" • ")])}
             />
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               Note: This is a quick reference for play speed, not full rules text.
             </div>
           </div>
@@ -52,7 +52,7 @@ export function RulesReferencePanel() {
               cols={["School", "Definition"]}
               rows={SCHOOLS_OF_MAGIC.map((s) => [s.name, s.bullets.join(" ")])}
             />
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               Examples are for quick vibes: {SCHOOLS_OF_MAGIC.map((s) => `${s.name}: ${s.examples.slice(0, 2).join(", ")}`).join(" • ")}
             </div>
           </div>
@@ -67,7 +67,7 @@ export function RulesReferencePanel() {
               cols={["Level", "Effect"]}
               rows={EXHAUSTION_2024.map((e) => [e.level, e.effect])}
             />
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               This is the updated exhaustion rules from the 2024 PHB. The main change is that exhaustion now imposes a flat penalty to all d20 rolls, rather than specific mechanical effects at each level.
             </div>
           </div>
@@ -82,7 +82,7 @@ export function RulesReferencePanel() {
               cols={["Pace", "Miles / Hour", "Miles / Day", "Notes"]}
               rows={TRAVEL_PACE.map((r) => [r.pace, r.mph, r.perDay, r.notes || "—"])}
             />
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               Tip: This is for overland travel. Difficult terrain and mounts can change outcomes.
             </div>
           </div>

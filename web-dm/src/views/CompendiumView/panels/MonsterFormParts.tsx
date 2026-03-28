@@ -70,7 +70,7 @@ export const baseInput: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 8px",
   outline: "none",
-  fontSize: 13,
+  fontSize: "var(--fs-subtitle)",
   width: "100%",
   boxSizing: "border-box",
 };
@@ -78,7 +78,7 @@ export const baseInput: React.CSSProperties = {
 export function SectionHeader({ title }: { title: string }) {
   return (
     <div style={{
-      fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
+      fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
       color: theme.colors.muted, borderBottom: `1px solid ${theme.colors.panelBorder}`,
       paddingBottom: 4, marginBottom: 8,
     }}>
@@ -99,7 +99,7 @@ export function Field({ label, children, grow, style }: {
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: grow ? 1 : undefined, minWidth: 0, ...style }}>
-      <label style={{ fontSize: 11, color: theme.colors.muted, fontWeight: 600 }}>{label}</label>
+      <label style={{ fontSize: "var(--fs-small)", color: theme.colors.muted, fontWeight: 600 }}>{label}</label>
       {children}
     </div>
   );
@@ -108,7 +108,7 @@ export function Field({ label, children, grow, style }: {
 export function AbilityInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-      <label style={{ fontSize: 11, color: theme.colors.muted, fontWeight: 600 }}>{label}</label>
+      <label style={{ fontSize: "var(--fs-small)", color: theme.colors.muted, fontWeight: 600 }}>{label}</label>
       <input
         type="number" min={1} max={30} value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -136,7 +136,7 @@ export function BlockEditor({ label, blocks, onChange }: {
         <button
           type="button" onClick={addBlock}
           style={{
-            fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, cursor: "pointer",
+            fontSize: "var(--fs-small)", fontWeight: 700, padding: "2px 8px", borderRadius: 6, cursor: "pointer",
             border: `1px solid ${theme.colors.panelBorder}`,
             background: withAlpha(theme.colors.accentPrimary, 0.15),
             color: theme.colors.accentPrimary,
@@ -164,7 +164,7 @@ export function BlockEditor({ label, blocks, onChange }: {
                   flexShrink: 0, width: 24, height: 24, borderRadius: 6, cursor: "pointer",
                   border: `1px solid ${withAlpha(theme.colors.red, 0.35)}`,
                   background: withAlpha(theme.colors.red, 0.12),
-                  color: theme.colors.red, fontSize: 14, display: "flex",
+                  color: theme.colors.red, fontSize: "var(--fs-medium)", display: "flex",
                   alignItems: "center", justifyContent: "center",
                 }}
               >
@@ -180,7 +180,7 @@ export function BlockEditor({ label, blocks, onChange }: {
           </div>
         ))}
         {blocks.length === 0 && (
-          <div style={{ color: theme.colors.muted, fontSize: 12, fontStyle: "italic" }}>None</div>
+          <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", fontStyle: "italic" }}>None</div>
         )}
       </div>
     </div>

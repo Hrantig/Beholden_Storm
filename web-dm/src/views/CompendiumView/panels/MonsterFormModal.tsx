@@ -101,7 +101,7 @@ export function MonsterFormModal(props: {
   }
 
   const btnBase: React.CSSProperties = {
-    padding: "7px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 13,
+    padding: "7px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: "var(--fs-subtitle)",
     border: "none",
   };
 
@@ -128,11 +128,11 @@ export function MonsterFormModal(props: {
           padding: "14px 20px", borderBottom: `1px solid ${theme.colors.panelBorder}`,
           display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
         }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>
+          <span style={{ fontWeight: 700, fontSize: "var(--fs-body)" }}>
             {isEdit ? `Edit: ${m!.name}` : isDuplicate ? `Duplicate: ${m!.name}` : "New Monster"}
           </span>
           <button type="button" onClick={props.onClose}
-            style={{ background: "none", border: "none", color: theme.colors.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>
+            style={{ background: "none", border: "none", color: theme.colors.muted, cursor: "pointer", fontSize: "var(--fs-hero)", lineHeight: 1 }}>
             ×
           </button>
         </div>
@@ -259,7 +259,7 @@ export function MonsterFormModal(props: {
           <BlockEditor label="Legendary Actions" blocks={legendary} onChange={setLegendary} />
 
           {error && (
-            <div style={{ color: theme.colors.red, fontSize: 13 }}>{error}</div>
+            <div style={{ color: theme.colors.red, fontSize: "var(--fs-subtitle)" }}>{error}</div>
           )}
         </div>
 

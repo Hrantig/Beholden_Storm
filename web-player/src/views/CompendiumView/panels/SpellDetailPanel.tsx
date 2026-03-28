@@ -39,7 +39,7 @@ export function SpellDetailPanel(props: { spellId: string }) {
   return (
     <Panel
       title={spell ? spell.name : "Spell"}
-      actions={<div style={{ color: C.muted, fontSize: 12 }}>{header}</div>}
+      actions={<div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{header}</div>}
       style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
       bodyStyle={{ minHeight: 0 }}
     >
@@ -47,7 +47,7 @@ export function SpellDetailPanel(props: { spellId: string }) {
         <div style={{ color: C.muted }}>Pick a spell on the left to view details.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: C.muted, fontSize: 12 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: C.muted, fontSize: "var(--fs-small)" }}>
             {spell.time && <span>Cast: {spell.time}</span>}
             {spell.range && <span>Range: {spell.range}</span>}
             {spell.duration && <span>Duration: {spell.duration}</span>}
@@ -70,8 +70,8 @@ export function SpellDetailPanel(props: { spellId: string }) {
               : schoolFromClasses ? expandSchool(schoolFromClasses) : null;
             return (
               <>
-                {schoolDisplay && <div style={{ color: C.muted, fontSize: 12 }}>School: {schoolDisplay}</div>}
-                {raw && <div style={{ color: C.muted, fontSize: 12 }}>Classes: {raw}</div>}
+                {schoolDisplay && <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>School: {schoolDisplay}</div>}
+                {raw && <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Classes: {raw}</div>}
               </>
             );
           })()}

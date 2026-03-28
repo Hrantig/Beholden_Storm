@@ -91,7 +91,7 @@ export function CharacterCombatPanels({
             border: "1px solid rgba(248,113,113,0.35)",
             background: "rgba(248,113,113,0.10)",
             color: "#fca5a5",
-            fontSize: 11,
+            fontSize: "var(--fs-small)",
             fontWeight: 700,
           }}>
             Not proficient with equipped armor: disadvantage on STR/DEX attacks and you can't cast spells.
@@ -99,7 +99,7 @@ export function CharacterCombatPanels({
         )}
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", marginBottom: 6 }}>
           {(["ATTACK", "RANGE", "HIT / DC", "DAMAGE / NOTES"] as const).map((h) => (
-            <div key={h} style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, paddingBottom: 4, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <div key={h} style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.07em", textTransform: "uppercase", color: C.muted, paddingBottom: 4, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
               {h}
             </div>
           ))}
@@ -126,20 +126,20 @@ export function CharacterCombatPanels({
               <div key={`${it.id}:${attackState}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</span>
-                    {modeLabel && <span style={{ fontSize: 9, fontWeight: 800, color: accentColor, border: `1px solid ${accentColor}44`, background: `${accentColor}18`, borderRadius: 999, padding: "1px 5px" }}>{modeLabel}</span>}
-                    {masteryKnown && mastery && <Tooltip text={mastery.text} multiline><span style={{ fontSize: 9, fontWeight: 800, color: "#fbbf24", border: "1px solid rgba(251,191,36,0.35)", background: "rgba(251,191,36,0.12)", borderRadius: 999, padding: "1px 5px", cursor: "help" }}>{mastery.name}</span></Tooltip>}
-                    {!proficient && <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>No proficiency</span>}
-                    {attackDisadvantage && <span style={{ fontSize: 10, color: "#f87171", fontWeight: 700 }}>D</span>}
+                    <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</span>
+                    {modeLabel && <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: accentColor, border: `1px solid ${accentColor}44`, background: `${accentColor}18`, borderRadius: 999, padding: "1px 5px" }}>{modeLabel}</span>}
+                    {masteryKnown && mastery && <Tooltip text={mastery.text} multiline><span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.colorGold, border: "1px solid rgba(251,191,36,0.35)", background: "rgba(251,191,36,0.12)", borderRadius: 999, padding: "1px 5px", cursor: "help" }}>{mastery.name}</span></Tooltip>}
+                    {!proficient && <span style={{ fontSize: "var(--fs-tiny)", color: C.red, fontWeight: 700 }}>No proficiency</span>}
+                    {attackDisadvantage && <span style={{ fontSize: "var(--fs-tiny)", color: C.colorPinkRed, fontWeight: 700 }}>D</span>}
                   </div>
-                  <div style={{ fontSize: 10, color: C.muted }}>{isWeaponItem(it) ? "Melee Weapon" : it.type ?? ""}</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{isWeaponItem(it) ? "Melee Weapon" : it.type ?? ""}</div>
                 </div>
-                <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>{rangeLabel}</div>
+                <div style={{ fontSize: "var(--fs-small)", color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>{rangeLabel}</div>
                 <div
                   style={{
-                    fontSize: 18,
+                    fontSize: "var(--fs-title)",
                     fontWeight: 900,
-                    color: attackDisadvantage ? "#f87171" : C.text,
+                    color: attackDisadvantage ? C.colorPinkRed : C.text,
                     textAlign: "center",
                     minWidth: 36,
                     border: `1px solid ${proficient ? accentColor + "55" : "rgba(255,255,255,0.15)"}`,
@@ -151,8 +151,8 @@ export function CharacterCombatPanels({
                   {formatModifier(toHit)}{attackDisadvantage ? " D" : ""}
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dmgText}</div>
-                  {props && <div style={{ fontSize: 11, color: C.muted }}>{props}</div>}
+                  <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: C.text }}>{dmgText}</div>
+                  {props && <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>{props}</div>}
                 </div>
               </div>
             );
@@ -161,32 +161,32 @@ export function CharacterCombatPanels({
           {isRogue && (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>Sneak Attack</div>
-                <div style={{ fontSize: 10, color: C.muted }}>Once per turn</div>
+                <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text }}>Sneak Attack</div>
+                <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>Once per turn</div>
               </div>
-              <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>On hit</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.muted, textAlign: "center", minWidth: 36 }}>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>On hit</div>
+              <div style={{ fontSize: "var(--fs-medium)", fontWeight: 800, color: C.muted, textAlign: "center", minWidth: 36 }}>
                 -
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{sneakAttackDice}d6</div>
-                <div style={{ fontSize: 11, color: C.muted }}>Finesse or ranged weapon</div>
+                <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: C.text }}>{sneakAttackDice}d6</div>
+                <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>Finesse or ranged weapon</div>
               </div>
             </div>
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto minmax(0,1fr)", gap: "0 8px", alignItems: "center", padding: "6px 0" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>Unarmed Strike</div>
-              <div style={{ fontSize: 10, color: C.muted }}>Melee Attack</div>
+              <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text }}>Unarmed Strike</div>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>Melee Attack</div>
             </div>
-            <div style={{ fontSize: 12, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>5 ft.</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: attackDisadvantage ? "#f87171" : C.text, textAlign: "center", minWidth: 36, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>5 ft.</div>
+            <div style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: attackDisadvantage ? C.colorPinkRed : C.text, textAlign: "center", minWidth: 36, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 6px", background: "rgba(255,255,255,0.04)" }}>
               {formatModifier(unarmedToHit)}{attackDisadvantage ? " D" : ""}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{unarmedDmg}</div>
-              <div style={{ fontSize: 11, color: C.muted }}>Bludgeoning</div>
+              <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: C.text }}>{unarmedDmg}</div>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>Bludgeoning</div>
             </div>
           </div>
         </div>

@@ -176,7 +176,7 @@ export function CombatDeltaControls(props: Props) {
                 position: "absolute", top: 2, right: 2,
                 width: 16, height: 16, borderRadius: "50%",
                 background: theme.colors.red, color: theme.colors.text,
-                fontSize: 10, fontWeight: 900, display: "grid", placeItems: "center",
+                fontSize: "var(--fs-tiny)", fontWeight: 900, display: "grid", placeItems: "center",
                 pointerEvents: "none",
               }}>
                 {bulkCount}

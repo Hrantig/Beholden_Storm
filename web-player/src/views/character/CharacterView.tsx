@@ -643,7 +643,7 @@ export function CharacterView() {
       } satisfies ParseFeatureEffectsInput)
     ),
   ];
-  const grantedSpellData = buildGrantedSpellDataFromEffects(parsedFeatureEffects, scores);
+  const grantedSpellData = buildGrantedSpellDataFromEffects(parsedFeatureEffects, scores, char.level);
   const classResourcesWithSpellCasts = mergeResourceState(char.characterData?.resources, [
     ...collectClassResources(classDetail, char.level),
     ...grantedSpellData.resources,
@@ -1060,7 +1060,7 @@ export function CharacterView() {
           </span>
           <button
             onClick={() => setConcentrationAlert(null)}
-            style={{ all: "unset", cursor: "pointer", color: C.muted, fontWeight: 900, fontSize: 18, lineHeight: 1 }}
+            style={{ all: "unset", cursor: "pointer", color: C.muted, fontWeight: 900, fontSize: "var(--fs-title)", lineHeight: 1 }}
           >
             ×
           </button>
@@ -1276,8 +1276,8 @@ export function CharacterView() {
           >
             <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <div>
-                <div style={{ fontSize: 24, fontWeight: 900, color: C.text, marginBottom: 4 }}>Character Information</div>
-                <div style={{ fontSize: 13, color: C.muted }}>Identity details and sheet overrides.</div>
+                <div style={{ fontSize: "var(--fs-hero)", fontWeight: 900, color: C.text, marginBottom: 4 }}>Character Information</div>
+                <div style={{ fontSize: "var(--fs-subtitle)", color: C.muted }}>Identity details and sheet overrides.</div>
               </div>
               <button
                 onClick={() => setInfoDrawerOpen(false)}
@@ -1297,13 +1297,13 @@ export function CharacterView() {
 
             <div style={{ flex: 1, overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: accentColor, marginBottom: 12 }}>Identity</div>
+                <div style={{ fontSize: "var(--fs-small)", fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: accentColor, marginBottom: 12 }}>Identity</div>
                 {identityFields.length > 0 ? (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
                     {identityFields.map(([label, value]) => (
                       <div key={label} style={{ padding: "12px 14px", borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{value}</div>
+                        <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
+                        <div style={{ fontSize: "var(--fs-title)", fontWeight: 700, color: C.text }}>{value}</div>
                       </div>
                     ))}
                   </div>
@@ -1315,11 +1315,11 @@ export function CharacterView() {
               </div>
 
               <div>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: accentColor, marginBottom: 12 }}>Overrides</div>
+                <div style={{ fontSize: "var(--fs-small)", fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: accentColor, marginBottom: 12 }}>Overrides</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
                   {editableOverrideFields.map((field) => (
                     <label key={field.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{field.label}</span>
+                      <span style={{ fontSize: "var(--fs-small)", color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{field.label}</span>
                       <input
                         type="number"
                         value={overridesDraft[field.key]}
@@ -1336,12 +1336,12 @@ export function CharacterView() {
                           border: "1px solid rgba(255,255,255,0.12)",
                           background: "rgba(255,255,255,0.05)",
                           color: C.text,
-                          fontSize: 16,
+                          fontSize: "var(--fs-body)",
                           fontWeight: 700,
                           outline: "none",
                         }}
                       />
-                      <span style={{ fontSize: 11, color: "rgba(160,180,220,0.6)" }}>{field.help}</span>
+                      <span style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.6)" }}>{field.help}</span>
                     </label>
                   ))}
                 </div>
@@ -1395,7 +1395,7 @@ export function CharacterView() {
 // ---------------------------------------------------------------------------
 
 const subLabelStyle: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, color: C.muted,
+  fontSize: "var(--fs-tiny)", fontWeight: 700, color: C.muted,
   textTransform: "uppercase", letterSpacing: "0.07em",
   marginBottom: 6,
 };
@@ -1404,14 +1404,14 @@ const inputStyle: React.CSSProperties = {
   flex: 1, background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.16)",
   borderRadius: 7, padding: "6px 10px",
-  color: C.text, fontSize: 13, outline: "none",
+  color: C.text, fontSize: "var(--fs-subtitle)", outline: "none",
 };
 
 const stepperBtn: React.CSSProperties = {
   background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 4, width: 20, height: 20,
-  color: C.muted, cursor: "pointer", fontSize: 13,
+  color: C.muted, cursor: "pointer", fontSize: "var(--fs-subtitle)",
   display: "flex", alignItems: "center", justifyContent: "center",
   padding: 0, lineHeight: 1,
 };

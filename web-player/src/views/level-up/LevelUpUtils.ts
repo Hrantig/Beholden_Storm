@@ -1,6 +1,9 @@
 import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 import { featPrerequisitesMet, invocationPrerequisitesMet, spellLooksLikeDamageSpell } from "@/views/character/CharacterSheetUtils";
 import { collectFeatTaggedEntries } from "@/views/character-creator/utils/FeatGrantUtils";
+import type { ParsedFeatChoiceLike as LevelUpFeatChoiceLike, ParsedFeatDetailLike as SharedLevelUpFeatDetailLike } from "@/views/character-creator/utils/FeatChoiceTypes";
+
+type LevelUpFeatDetailLike = SharedLevelUpFeatDetailLike<LevelUpFeatChoiceLike> & { id: string };
 
 export interface LevelUpTaggedEntry {
   name: string;
@@ -10,39 +13,6 @@ export interface LevelUpTaggedEntry {
 export interface LevelUpFeature {
   name: string;
   text?: string;
-}
-
-export interface LevelUpFeatChoiceLike {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  level?: number | null;
-  linkedTo?: string | null;
-  distinct?: boolean;
-  note?: string | null;
-}
-
-export interface LevelUpFeatDetailLike {
-  id: string;
-  name: string;
-  text?: string | null;
-  parsed: {
-    grants: {
-      skills: string[];
-      tools: string[];
-      languages: string[];
-      armor: string[];
-      weapons: string[];
-      savingThrows: string[];
-      spells: string[];
-      cantrips: string[];
-      abilityIncreases?: Record<string, number>;
-    };
-    choices?: LevelUpFeatChoiceLike[];
-  };
 }
 
 export interface BuildLevelUpPayloadArgs {

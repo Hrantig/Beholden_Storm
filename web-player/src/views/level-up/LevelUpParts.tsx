@@ -2,25 +2,13 @@ import React from "react";
 import { C } from "@/lib/theme";
 import { extractPrerequisite, stripPrerequisiteLine } from "@/views/character/CharacterSheetUtils";
 import { getFeatChoiceOptions } from "@/views/character-creator/utils/CharacterCreatorUtils";
+import type { ParsedFeatChoiceLike as LevelUpFeatChoice } from "@/views/character-creator/utils/FeatChoiceTypes";
 
 export interface LevelUpSpellSummary {
   id: string;
   name: string;
   level?: number | null;
   text?: string | null;
-}
-
-export interface LevelUpFeatChoice {
-  id: string;
-  type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
-  count: number;
-  options: string[] | null;
-  anyOf?: string[];
-  amount?: number | null;
-  level?: number | null;
-  linkedTo?: string | null;
-  distinct?: boolean;
-  note?: string | null;
 }
 
 export interface LevelUpFeatDetail {
@@ -53,7 +41,7 @@ export function BackBtn({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
       background: "none", border: "none", cursor: "pointer", color: C.muted,
-      fontSize: 13, padding: "6px 0",
+      fontSize: "var(--fs-subtitle)", padding: "6px 0",
     }}>← Back</button>
   );
 }
@@ -64,7 +52,7 @@ export function Section({ title, accent, children }: { title: string; accent: st
       marginBottom: 20, padding: "16px", borderRadius: 12,
       border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)",
     }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+      <div style={{ fontSize: "var(--fs-small)", fontWeight: 800, color: accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
         {title}
       </div>
       {children}
@@ -78,7 +66,7 @@ export function ChoiceBtn({ active, onClick, accent, children }: {
   accent?: string;
   children: React.ReactNode;
 }) {
-  const color = accent ?? "#38b6ff";
+  const color = accent ?? C.accentHl;
   return (
     <button
       onClick={onClick}
@@ -87,7 +75,7 @@ export function ChoiceBtn({ active, onClick, accent, children }: {
         border: `2px solid ${active ? color : "rgba(255,255,255,0.1)"}`,
         background: active ? `${color}18` : "rgba(255,255,255,0.03)",
         color: active ? "#fff" : C.muted,
-        fontSize: 13, fontWeight: active ? 700 : 500,
+        fontSize: "var(--fs-subtitle)", fontWeight: active ? 700 : 500,
         transition: "border-color 0.15s, background 0.15s",
       }}
     >
@@ -108,8 +96,8 @@ export function SpellChoiceList({ title, caption, spells, chosen, max, onToggle,
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{title}</div>
-        <div style={{ fontSize: 11, color: C.muted }}>
+        <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text }}>{title}</div>
+        <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
           {chosen.length} / {max} · {caption}
         </div>
       </div>
@@ -129,7 +117,7 @@ export function SpellChoiceList({ title, caption, spells, chosen, max, onToggle,
                 padding: "10px 12px",
                 borderRadius: 8,
                 cursor: blocked ? "not-allowed" : "pointer",
-                border: `2px solid ${active ? "#38b6ff" : "rgba(255,255,255,0.1)"}`,
+                border: `2px solid ${active ? C.accentHl : "rgba(255,255,255,0.1)"}`,
                 background: active ? "rgba(56,182,255,0.14)" : "rgba(255,255,255,0.03)",
                 color: blocked ? C.muted : C.text,
                 textAlign: "left",
@@ -137,27 +125,27 @@ export function SpellChoiceList({ title, caption, spells, chosen, max, onToggle,
                 minHeight: 92,
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{spell.name}</div>
+              <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>{spell.name}</div>
               {spell.level != null && spell.level > 0 && (
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+                <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginTop: 2 }}>
                   Level {spell.level}
                 </div>
               )}
               {prerequisite && (
-                <div style={{ marginTop: 6, fontSize: 10, lineHeight: 1.35 }}>
-                  <span style={{ color: allowed ? "#fbbf24" : "#f87171", fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <div style={{ marginTop: 6, fontSize: "var(--fs-tiny)", lineHeight: 1.35 }}>
+                  <span style={{ color: allowed ? C.colorGold : C.colorPinkRed, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
                     Prerequisite
                   </span>
                   <span style={{ color: allowed ? "rgba(251,191,36,0.92)" : "#fca5a5" }}> {prerequisite}</span>
                 </div>
               )}
               {!allowed && prerequisite && (
-                <div style={{ marginTop: 4, fontSize: 10, color: "#f87171", fontWeight: 700 }}>
+                <div style={{ marginTop: 4, fontSize: "var(--fs-tiny)", color: C.colorPinkRed, fontWeight: 700 }}>
                   Prerequisite not met
                 </div>
               )}
               {preview && (
-                <div style={{ marginTop: 6, fontSize: 10, lineHeight: 1.35, color: "rgba(160,180,220,0.72)" }}>
+                <div style={{ marginTop: 6, fontSize: "var(--fs-tiny)", lineHeight: 1.35, color: "rgba(160,180,220,0.72)" }}>
                   {preview.slice(0, 150)}{preview.length > 150 ? "…" : ""}
                 </div>
               )}
@@ -166,7 +154,7 @@ export function SpellChoiceList({ title, caption, spells, chosen, max, onToggle,
         })}
       </div>
       {spells.length === 0 && (
-        <div style={{ fontSize: 12, color: C.muted }}>No eligible options found in compendium.</div>
+        <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>No eligible options found in compendium.</div>
       )}
     </div>
   );
@@ -208,11 +196,11 @@ export function FeatSelectionSection(props: {
             border: "1px solid rgba(255,255,255,0.10)",
             background: "rgba(255,255,255,0.04)",
             color: C.text,
-            fontSize: 14,
+            fontSize: "var(--fs-medium)",
             outline: "none",
           }}
         />
-        <div style={{ fontSize: 12, color: chosenFeatId ? accentColor : C.muted }}>
+        <div style={{ fontSize: "var(--fs-small)", color: chosenFeatId ? accentColor : C.muted }}>
           {chosenFeatId ? "1 / 1 selected" : "Pick 1 feat"}
         </div>
       </div>
@@ -234,7 +222,7 @@ export function FeatSelectionSection(props: {
                 background: active ? `${accentColor}18` : "rgba(255,255,255,0.03)",
                 color: active ? "#fff" : C.text,
                 textAlign: "left",
-                fontSize: 13,
+                fontSize: "var(--fs-subtitle)",
                 fontWeight: active ? 800 : 600,
                 opacity: allowed ? 1 : 0.65,
               }}
@@ -252,24 +240,24 @@ export function FeatSelectionSection(props: {
           border: "1px solid rgba(255,255,255,0.08)",
           background: "rgba(255,255,255,0.03)",
         }}>
-          <div style={{ fontSize: 17, fontWeight: 900, color: "#fff", marginBottom: 8 }}>{chosenFeatDetail.name}</div>
+          <div style={{ fontSize: "var(--fs-large)", fontWeight: 900, color: "#fff", marginBottom: 8 }}>{chosenFeatDetail.name}</div>
           {extractPrerequisite(chosenFeatDetail.text) && (
-            <div style={{ fontSize: 11, color: featPrereqsMet ? "#fbbf24" : "#f87171", marginBottom: 8, fontWeight: 700 }}>
+            <div style={{ fontSize: "var(--fs-small)", color: featPrereqsMet ? C.colorGold : C.colorPinkRed, marginBottom: 8, fontWeight: 700 }}>
               Prerequisite: {extractPrerequisite(chosenFeatDetail.text)}
             </div>
           )}
           {!featPrereqsMet && (
-            <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, fontWeight: 800 }}>
+            <div style={{ fontSize: "var(--fs-small)", color: C.colorPinkRed, marginBottom: 8, fontWeight: 800 }}>
               Prerequisite not met. This feat can't be chosen right now.
             </div>
           )}
           {featPrereqsMet && !featRepeatableValid && (
-            <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, fontWeight: 800 }}>
+            <div style={{ fontSize: "var(--fs-small)", color: C.colorPinkRed, marginBottom: 8, fontWeight: 800 }}>
               This feat has already been taken and isn't repeatable.
             </div>
           )}
           {chosenFeatDetail.text && (
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
               {stripPrerequisiteLine(chosenFeatDetail.text).replace(/Source:.*$/ms, "").trim()}
             </div>
           )}
@@ -287,7 +275,7 @@ export function FeatSelectionSection(props: {
             return (
               <div key={choiceKey}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>
+                  <div style={{ fontSize: "var(--fs-medium)", fontWeight: 800, color: "#fff" }}>
                     {choice.type === "ability_score"
                       ? "Ability Score Choice"
                       : choice.type === "spell_list"
@@ -296,12 +284,12 @@ export function FeatSelectionSection(props: {
                           ? "Spell Choice"
                           : chosenFeatDetail.name}
                   </div>
-                  <div style={{ fontSize: 12, color: selected.length >= choice.count ? accentColor : C.muted }}>
+                  <div style={{ fontSize: "var(--fs-small)", color: selected.length >= choice.count ? accentColor : C.muted }}>
                     {selected.length} / {choice.count}
                   </div>
                 </div>
                 {choice.type === "spell" && options.length === 0 && (
-                  <div style={{ marginBottom: 8, fontSize: 11, color: C.muted }}>
+                  <div style={{ marginBottom: 8, fontSize: "var(--fs-small)", color: C.muted }}>
                     {choice.linkedTo ? "Choose the spell list first." : "No eligible spell options found."}
                   </div>
                 )}
@@ -324,7 +312,7 @@ export function FeatSelectionSection(props: {
                     );
                   })}
                 </div>
-                {choice.note && <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>{choice.note}</div>}
+                {choice.note && <div style={{ marginTop: 8, fontSize: "var(--fs-small)", color: C.muted }}>{choice.note}</div>}
               </div>
             );
           })}
@@ -354,8 +342,8 @@ export function ExpertiseSelectionSection(props: {
         return (
           <div key={choice.key}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{choice.source}</div>
-              <div style={{ fontSize: 12, color: selected.length >= choice.count ? accentColor : C.muted }}>
+              <div style={{ fontSize: "var(--fs-body)", fontWeight: 800, color: "#fff" }}>{choice.source}</div>
+              <div style={{ fontSize: "var(--fs-small)", color: selected.length >= choice.count ? accentColor : C.muted }}>
                 {selected.length} / {choice.count}
               </div>
             </div>

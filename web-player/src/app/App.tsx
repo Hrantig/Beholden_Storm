@@ -22,7 +22,7 @@ function AuthGate() {
       <div
         style={{
           minHeight: "100vh",
-          background: "#0d1525",
+          background: C.bg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -62,7 +62,6 @@ export default function App() {
     <AuthProvider>
       <WsProvider>
         <BrowserRouter
-          basename="/player"
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
           <AuthGate />

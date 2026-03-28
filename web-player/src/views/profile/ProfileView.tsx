@@ -10,14 +10,14 @@ const fieldStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: 8,
   padding: "8px 12px",
-  fontSize: 14,
+  fontSize: "var(--fs-medium)",
   width: "100%",
   fontFamily: "inherit",
   boxSizing: "border-box",
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: "var(--fs-small)",
   fontWeight: 600,
   color: "rgba(160,180,220,0.65)",
   marginBottom: 5,
@@ -102,9 +102,9 @@ export function ProfileView() {
   }
 
   const btnBase: React.CSSProperties = {
-    padding: "8px 20px", borderRadius: 8, fontWeight: 700, fontSize: 13,
+    padding: "8px 20px", borderRadius: 8, fontWeight: 700, fontSize: "var(--fs-subtitle)",
     cursor: busy ? "default" : "pointer", border: "none",
-    background: C.accentHl, color: "#0d1525", opacity: busy ? 0.6 : 1,
+    background: C.accentHl, color: C.bg, opacity: busy ? 0.6 : 1,
     alignSelf: "flex-start",
   };
 
@@ -114,15 +114,15 @@ export function ProfileView() {
 
         {/* Back */}
         <button type="button" onClick={() => navigate(-1)}
-          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13, alignSelf: "flex-start", padding: 0 }}>
+          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "var(--fs-subtitle)", alignSelf: "flex-start", padding: 0 }}>
           ← Back
         </button>
 
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Account Settings</h1>
+        <h1 style={{ margin: 0, fontSize: "var(--fs-hero)", fontWeight: 800 }}>Account Settings</h1>
 
         {/* Display name + username */}
         <form onSubmit={handleInfoSave} style={sectionStyle}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: C.accentHl, marginBottom: 2 }}>Profile</div>
+          <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)", color: C.accentHl, marginBottom: 2 }}>Profile</div>
 
           <div>
             <label style={labelStyle}>Display Name</label>
@@ -142,15 +142,15 @@ export function ProfileView() {
             </div>
           )}
 
-          {infoErr && <div style={{ color: "rgba(248,113,113,0.9)", fontSize: 13 }}>{infoErr}</div>}
-          {infoMsg && <div style={{ color: "rgba(74,222,128,0.9)", fontSize: 13 }}>{infoMsg}</div>}
+          {infoErr && <div style={{ color: "rgba(248,113,113,0.9)", fontSize: "var(--fs-subtitle)" }}>{infoErr}</div>}
+          {infoMsg && <div style={{ color: "rgba(74,222,128,0.9)", fontSize: "var(--fs-subtitle)" }}>{infoMsg}</div>}
 
           <button type="submit" style={btnBase} disabled={busy}>Save Profile</button>
         </form>
 
         {/* Password change */}
         <form onSubmit={handlePasswordSave} style={sectionStyle}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: C.accentHl, marginBottom: 2 }}>Change Password</div>
+          <div style={{ fontWeight: 700, fontSize: "var(--fs-medium)", color: C.accentHl, marginBottom: 2 }}>Change Password</div>
 
           <div>
             <label style={labelStyle}>New Password</label>
@@ -164,8 +164,8 @@ export function ProfileView() {
               placeholder="Repeat new password" autoComplete="new-password" />
           </div>
 
-          {pwErr && <div style={{ color: "rgba(248,113,113,0.9)", fontSize: 13 }}>{pwErr}</div>}
-          {pwMsg && <div style={{ color: "rgba(74,222,128,0.9)", fontSize: 13 }}>{pwMsg}</div>}
+          {pwErr && <div style={{ color: "rgba(248,113,113,0.9)", fontSize: "var(--fs-subtitle)" }}>{pwErr}</div>}
+          {pwMsg && <div style={{ color: "rgba(74,222,128,0.9)", fontSize: "var(--fs-subtitle)" }}>{pwMsg}</div>}
 
           <button type="submit" style={btnBase} disabled={busy}>Update Password</button>
         </form>

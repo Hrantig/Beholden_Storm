@@ -3,6 +3,17 @@ import { Link } from "react-router-dom";
 import { theme, withAlpha } from "@/theme/theme";
 import { useStore } from "@/store";
 import { TopBar } from "@/layout/TopBar";
+import { api } from "@/services/api";
+
+function useUpdateCheck() {
+  const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  React.useEffect(() => {
+    api<{ ok: boolean; updateAvailable?: boolean }>("/api/update-check")
+      .then((r) => { if (r.ok && r.updateAvailable) setUpdateAvailable(true); })
+      .catch(() => {});
+  }, []);
+  return updateAvailable;
+}
 
 export function ShellLayout(props: { children: React.ReactNode }) {
   const { state } = useStore();
@@ -20,6 +31,7 @@ export function ShellLayout(props: { children: React.ReactNode }) {
   const supportFromVite = parseBool((import.meta as any).env?.VITE_BEHOLDEN_SUPPORT);
   const showSupport = (supportFromVite ?? supportFromMeta ?? false) === true;
 
+  const updateAvailable = useUpdateCheck();
   const ips = state.meta?.ips ?? [];
   const lanIps = ips.filter((ip) => ip.startsWith("192.168."));
   const primaryIp = lanIps[0] ?? null;
@@ -88,6 +100,16 @@ export function ShellLayout(props: { children: React.ReactNode }) {
         </div>
 
         <div className="footerIps">
+          {updateAvailable && (
+            <a
+              href="https://github.com/cbgfx/beholden"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: theme.colors.accentPrimary, textDecoration: "none", fontWeight: 600, fontSize: "var(--fs-medium)" }}
+            >
+              Update available →
+            </a>
+          )}
           {primaryIp && (
             <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
               <code>http://{primaryIp}:{state.meta?.port}</code>

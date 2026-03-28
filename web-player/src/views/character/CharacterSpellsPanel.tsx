@@ -71,10 +71,10 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
   }
 
   return (
-    <CollapsiblePanel title="Spell Slots" color="#a78bfa" storageKey="spell-slots" actions={
+    <CollapsiblePanel title="Spell Slots" color={C.colorMagic} storageKey="spell-slots" actions={
       <button onClick={longRest} style={{
-        fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
-        background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa",
+        fontSize: "var(--fs-tiny)", fontWeight: 700, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+        background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: C.colorMagic,
       }}>Long Rest</button>
     }>
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -84,7 +84,7 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
           const ordinals = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
           return (
             <div key={sl} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, minWidth: 30 }}>{ordinals[sl]}</div>
+              <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, minWidth: 30 }}>{ordinals[sl]}</div>
               <div style={{ display: "flex", gap: 5, flex: 1 }}>
                 {Array.from({ length: count }).map((_, i) => {
                   const filled = i >= used; // filled = available, empty = expended
@@ -102,7 +102,7 @@ export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, ac
                   );
                 })}
               </div>
-              <div style={{ fontSize: 10, color: C.muted, minWidth: 36, textAlign: "right" }}>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, minWidth: 36, textAlign: "right" }}>
                 {remaining}/{count}
               </div>
             </div>
@@ -233,7 +233,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
   }
 
   return (
-    <CollapsiblePanel title="Spells" color="#a78bfa" storageKey="spells" actions={
+    <CollapsiblePanel title="Spells" color={C.colorMagic} storageKey="spells" actions={
       <div style={{ display: "flex", gap: 6 }}>
         {([
           { label: "ABILITY", value: spellAbilLabel, highlight: true },
@@ -246,8 +246,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
             background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.18)",
             minWidth: 52,
           }}>
-            <span style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
-            <span style={{ fontSize: 14, fontWeight: 900, color: spellcastingBlocked && !highlight ? "#f87171" : highlight ? accentColor : C.text }}>
+            <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
+            <span style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: spellcastingBlocked && !highlight ? C.colorPinkRed : highlight ? accentColor : C.text }}>
               {value}{spellcastingBlocked && !highlight ? " X" : ""}
             </span>
           </div>
@@ -262,14 +262,14 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
           border: "1px solid rgba(248,113,113,0.35)",
           background: "rgba(248,113,113,0.10)",
           color: "#fca5a5",
-          fontSize: 11,
+          fontSize: "var(--fs-small)",
           fontWeight: 700,
         }}>
           You can't cast spells while wearing armor or a shield without proficiency.
         </div>
       )}
       {classDetail?.slotsReset === "S" && maxSpellSlotLevel > 0 && (
-        <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 12 }}>
+        <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, marginBottom: 12 }}>
           Pact Magic: cast Warlock spells using level {maxSpellSlotLevel} slots.
         </div>
       )}
@@ -282,8 +282,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
             style={spellSectionHeaderBtn("rgba(96,165,250,0.25)")}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span aria-hidden="true" style={spellSectionArrow(Boolean(collapsedSections.granted), "#60a5fa")}>▼</span>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "#60a5fa", textTransform: "uppercase", letterSpacing: 1 }}>
+              <span aria-hidden="true" style={spellSectionArrow(Boolean(collapsedSections.granted), C.colorRitual)}>▼</span>
+              <div style={{ fontSize: "var(--fs-small)", fontWeight: 800, color: C.colorRitual, textTransform: "uppercase", letterSpacing: 1 }}>
                 Granted Spells
               </div>
             </div>
@@ -309,10 +309,10 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{entry.searchName}</div>
-                  <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{entry.sourceName}</div>
+                  <div style={{ fontWeight: 700, fontSize: "var(--fs-subtitle)", color: C.text }}>{entry.searchName}</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginTop: 1 }}>{entry.sourceName}</div>
                   {entry.note ? (
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>{entry.note}</div>
+                    <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 4, lineHeight: 1.45 }}>{entry.note}</div>
                   ) : null}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -323,12 +323,54 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                       border: "1px solid rgba(96,165,250,0.35)",
                       background: "rgba(96,165,250,0.12)",
                       color: "#93c5fd",
-                      fontSize: 10,
+                      fontSize: "var(--fs-tiny)",
                       fontWeight: 800,
                       textTransform: "uppercase",
                       letterSpacing: "0.07em",
                     }}>
                       At Will
+                    </div>
+                  ) : entry.mode === "expanded_list" ? (
+                    <div style={{
+                      padding: "5px 8px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(251,191,36,0.35)",
+                      background: "rgba(251,191,36,0.12)",
+                      color: "#fcd34d",
+                      fontSize: "var(--fs-tiny)",
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.07em",
+                    }}>
+                      Expanded
+                    </div>
+                  ) : entry.mode === "always_prepared" ? (
+                    <div style={{
+                      padding: "5px 8px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(196,181,253,0.35)",
+                      background: "rgba(196,181,253,0.12)",
+                      color: "#c4b5fd",
+                      fontSize: "var(--fs-tiny)",
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.07em",
+                    }}>
+                      Prepared
+                    </div>
+                  ) : entry.mode === "known" ? (
+                    <div style={{
+                      padding: "5px 8px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(52,211,153,0.35)",
+                      background: "rgba(52,211,153,0.12)",
+                      color: "#6ee7b7",
+                      fontSize: "var(--fs-tiny)",
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.07em",
+                    }}>
+                      Known
                     </div>
                   ) : resource ? (
                     <>
@@ -341,8 +383,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                         -
                       </button>
                       <div style={{ textAlign: "center", minWidth: 58 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{resource.current}/{resource.max}</div>
-                        <div style={{ fontSize: 9, color: C.muted }}>{resource.reset === "S" ? "Short Rest" : "Long Rest"}</div>
+                        <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text }}>{resource.current}/{resource.max}</div>
+                        <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{resource.reset === "S" ? "Short Rest" : "Long Rest"}</div>
                       </div>
                       <button
                         type="button"
@@ -379,12 +421,12 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span aria-hidden="true" style={spellSectionArrow(isCollapsed, "#ef4444")}>▼</span>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "#ef4444", textTransform: "uppercase", letterSpacing: 1 }}>
+                <div style={{ fontSize: "var(--fs-small)", fontWeight: 800, color: "#ef4444", textTransform: "uppercase", letterSpacing: 1 }}>
                 {level === -1 ? "Loading…" : level === 0 ? "Cantrips" : (LEVEL_LABELS[level] ?? `Level ${level}`)}
               </div>
               {maxSlots > 0 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ fontSize: 10, color: C.muted, marginRight: 3 }}>slots {remaining}/{maxSlots}</span>
+                  <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginRight: 3 }}>slots {remaining}/{maxSlots}</span>
                   {Array.from({ length: maxSlots }).map((_, i) => {
                     const filled = i >= usedCount;
                     return (
@@ -412,11 +454,11 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
               <>
             {/* Column headers */}
             <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto auto auto", gap: "0 8px", marginBottom: 4 }}>
-              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>PREP</div>
-              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>NAME</div>
-              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>TIME</div>
-              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>HIT / DC</div>
-              <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>EFFECT</div>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>PREP</div>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>NAME</div>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>TIME</div>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>HIT / DC</div>
+              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>EFFECT</div>
             </div>
 
             {groupEntries.map((e, i) => {
@@ -466,27 +508,27 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
 
                   {/* Name + meta */}
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: isPrepared ? C.text : C.muted }}>
+                    <div style={{ fontWeight: 700, fontSize: "var(--fs-subtitle)", color: isPrepared ? C.text : C.muted }}>
                       {e.searchName}
-                      {conc && <span title="Concentration" style={{ marginLeft: 5, fontSize: 10, color: "#60a5fa" }}>◆</span>}
+                      {conc && <span title="Concentration" style={{ marginLeft: 5, fontSize: "var(--fs-tiny)", color: C.colorRitual }}>◆</span>}
                     </div>
-                    <div style={{ fontSize: 10, color: C.muted }}>
+                    <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>
                       {[d ? `${d.level === 0 ? "Cantrip" : ORDINALS[d.level ?? 0]} ${d.school ?? ""}`.trim() : null, d?.components].filter(Boolean).join("  (") + (d?.components ? ")" : "")}
                     </div>
                   </div>
 
                   {/* Time */}
-                  <div style={{ fontSize: 11, color: C.muted, paddingTop: 3, textAlign: "center", minWidth: 28 }}>
+                  <div style={{ fontSize: "var(--fs-small)", color: C.muted, paddingTop: 3, textAlign: "center", minWidth: 28 }}>
                     {d ? abbrevTime(d.time ?? "—") : ""}
                   </div>
 
                   {/* HIT / SAVE */}
                   {d && (usesSave || usesAtk) ? (
                     <div style={{ textAlign: "center", paddingTop: 1 }}>
-                      <div style={{ fontSize: 9, color: C.muted, fontWeight: 700 }}>
+                      <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700 }}>
                         {usesSave ? (d.save ?? "SAVE") : "ATK"}
                       </div>
-                      <div style={{ fontWeight: 900, fontSize: 15, color: spellcastingBlocked ? "#f87171" : accentColor, lineHeight: 1.2 }}>
+                      <div style={{ fontWeight: 900, fontSize: "var(--fs-body)", color: spellcastingBlocked ? C.colorPinkRed : accentColor, lineHeight: 1.2 }}>
                         {usesSave ? `${saveDc}${spellcastingBlocked ? " X" : ""}` : `+${spellAtk}${spellcastingBlocked ? " X" : ""}`}
                       </div>
                     </div>
@@ -498,8 +540,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                       padding: "4px 7px", borderRadius: 6, border: `1px solid ${dmgColor}55`,
                       background: `${dmgColor}15`, textAlign: "center", whiteSpace: "nowrap",
                     }}>
-                      <span style={{ fontWeight: 800, fontSize: 13, color: C.text }}>{scaledDamage.dice}</span>
-                      <span style={{ fontSize: 12, marginLeft: 3 }}>{DMG_EMOJI[scaledDamage.type] ?? "◆"}</span>
+                      <span style={{ fontWeight: 800, fontSize: "var(--fs-subtitle)", color: C.text }}>{scaledDamage.dice}</span>
+                      <span style={{ fontSize: "var(--fs-small)", marginLeft: 3 }}>{DMG_EMOJI[scaledDamage.type] ?? "◆"}</span>
                     </div>
                   ) : <div />}
                 </div>
@@ -566,18 +608,18 @@ function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
         }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: C.text, lineHeight: 1.2 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: "var(--fs-title)", fontWeight: 900, color: C.text, lineHeight: 1.2 }}>
                 {spell.name}
               </h2>
-              <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted, fontStyle: "italic" }}>
                 {levelLabel}{spell.school ? ` · ${spell.school}` : ""}
-                {isRitual && <span style={{ marginLeft: 6, color: "#60a5fa", fontStyle: "normal", fontWeight: 700 }}>ritual</span>}
-                {isConc && <span style={{ marginLeft: 6, color: "#60a5fa", fontStyle: "normal", fontWeight: 700 }}>concentration</span>}
+                {isRitual && <span style={{ marginLeft: 6, color: C.colorRitual, fontStyle: "normal", fontWeight: 700 }}>ritual</span>}
+                {isConc && <span style={{ marginLeft: 6, color: C.colorRitual, fontStyle: "normal", fontWeight: 700 }}>concentration</span>}
               </div>
             </div>
             <button onClick={onClose} style={{
               background: "none", border: "none", cursor: "pointer",
-              color: C.muted, fontSize: 22, lineHeight: 1, padding: "2px 4px", flexShrink: 0,
+              color: C.muted, fontSize: "var(--fs-hero)", lineHeight: 1, padding: "2px 4px", flexShrink: 0,
             }}>×</button>
           </div>
         </div>
@@ -594,8 +636,8 @@ function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
             { label: "Duration",     value: spell.duration ?? "—" },
           ].map(({ label, value }) => (
             <div key={label} style={{ padding: "10px 12px", background: "#111827", textAlign: "center" }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{label}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{value}</div>
+              <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.text }}>{value}</div>
             </div>
           ))}
         </div>
@@ -603,7 +645,7 @@ function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
         {/* Components + damage summary */}
         <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap" }}>
           {spell.components && (
-            <span style={{ fontSize: 12, color: C.muted }}>{spell.components}</span>
+            <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>{spell.components}</span>
           )}
           {scaledDamage && (
             <div style={{
@@ -611,9 +653,9 @@ function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
               border: `1px solid ${dmgColor}55`, background: `${dmgColor}15`,
               display: "flex", alignItems: "center", gap: 5,
             }}>
-              <span style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{scaledDamage.dice}</span>
-              <span style={{ fontSize: 13 }}>{DMG_EMOJI[scaledDamage.type] ?? "◆"}</span>
-              <span style={{ fontSize: 11, color: dmgColor, fontWeight: 700, textTransform: "capitalize" }}>{scaledDamage.type}</span>
+              <span style={{ fontWeight: 800, fontSize: "var(--fs-medium)", color: C.text }}>{scaledDamage.dice}</span>
+              <span style={{ fontSize: "var(--fs-subtitle)" }}>{DMG_EMOJI[scaledDamage.type] ?? "◆"}</span>
+              <span style={{ fontSize: "var(--fs-small)", color: dmgColor, fontWeight: 700, textTransform: "capitalize" }}>{scaledDamage.type}</span>
             </div>
           )}
         </div>
@@ -621,12 +663,12 @@ function SpellDrawer({ spell, accentColor, onClose, charLevel, maxSlotLevel }: {
         {/* Description */}
         <div style={{ padding: "16px 20px 32px", display: "flex", flexDirection: "column", gap: 10 }}>
           {textArr.filter(Boolean).map((para, i) => (
-            <p key={i} style={{ margin: 0, fontSize: 13, color: "rgba(200,210,230,0.85)", lineHeight: 1.65 }}>
+            <p key={i} style={{ margin: 0, fontSize: "var(--fs-subtitle)", color: "rgba(200,210,230,0.85)", lineHeight: 1.65 }}>
               {para}
             </p>
           ))}
           {spell.classes && (
-            <p style={{ margin: "8px 0 0", fontSize: 11, color: C.muted, fontStyle: "italic" }}>
+            <p style={{ margin: "8px 0 0", fontSize: "var(--fs-small)", color: C.muted, fontStyle: "italic" }}>
               Classes: {spell.classes}
             </p>
           )}
@@ -760,7 +802,7 @@ function spellSectionHeaderBtn(borderColor: string, marginBottom = 8): React.CSS
 function spellSectionArrow(collapsed: boolean, color: string): React.CSSProperties {
   return {
     color,
-    fontSize: 10,
+    fontSize: "var(--fs-tiny)",
     lineHeight: 1,
     transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
     transition: "transform 120ms ease",
@@ -773,9 +815,9 @@ function spellSectionArrow(collapsed: boolean, color: string): React.CSSProperti
 }
 
 const DMG_COLORS: Record<string, string> = {
-  fire: "#f97316", cold: "#60a5fa", lightning: "#facc15", acid: "#a3e635",
+  fire: "#f97316", cold: C.colorRitual, lightning: "#facc15", acid: "#a3e635",
   poison: "#86efac", necrotic: "#818cf8", radiant: "#fde68a", thunder: "#7dd3fc",
-  psychic: "#e879f9", force: "#a78bfa", bludgeoning: "#94a3b8", piercing: "#94a3b8", slashing: "#f87171",
+  psychic: "#e879f9", force: C.colorMagic, bludgeoning: "#94a3b8", piercing: "#94a3b8", slashing: C.colorPinkRed,
 };
 const DMG_EMOJI: Record<string, string> = {
   fire: "🔥", cold: "❄️", lightning: "⚡", acid: "🧪", poison: "☠️",
@@ -862,11 +904,11 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
           <CollapsiblePanel
             key={item.id}
             title={item.name.replace(/\s*\[.+\]$/, "")}
-            color="#a78bfa"
+            color={C.colorMagic}
             storageKey={`item-spells-${item.id}`}
             actions={chargesMax > 0 ? (
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 10, color: C.muted, marginRight: 3 }}>charges {charges}/{chargesMax}</span>
+                <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginRight: 3 }}>charges {charges}/{chargesMax}</span>
                 {Array.from({ length: chargesMax }).map((_, i) => {
                   const filled = i < charges;
                   return (
@@ -889,7 +931,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
               <div style={{
                 marginBottom: 10, padding: "8px 10px", borderRadius: 8,
                 border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.10)",
-                color: "#fca5a5", fontSize: 11, fontWeight: 700,
+                color: "#fca5a5", fontSize: "var(--fs-small)", fontWeight: 700,
               }}>
                 You can't cast spells while wearing armor or a shield without proficiency.
               </div>
@@ -900,7 +942,7 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
               <div key={level} style={{ marginBottom: 14 }}>
                 {/* Level header */}
                 <div style={{
-                  fontSize: 11, fontWeight: 800, color: "#ef4444", textTransform: "uppercase",
+                  fontSize: "var(--fs-small)", fontWeight: 800, color: "#ef4444", textTransform: "uppercase",
                   letterSpacing: 1, paddingBottom: 5, borderBottom: "1px solid rgba(239,68,68,0.25)", marginBottom: 8,
                 }}>
                   {level === -1 ? "Loading…" : level === 0 ? "Cantrips" : `${ORDINALS[level] ?? `Level ${level}`} Level`}
@@ -908,11 +950,11 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
 
                 {/* Column headers */}
                 <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto auto auto", gap: "0 8px", marginBottom: 4 }}>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>CST</div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>NAME</div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>TIME</div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>HIT / DC</div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>EFFECT</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>CST</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>NAME</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>TIME</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>HIT / DC</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>EFFECT</div>
                 </div>
 
                 {groupSpells.map((sp, i) => {
@@ -940,31 +982,31 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
                         width: 20, height: 20, borderRadius: "50%", marginTop: 3,
                         background: "#dc2626", display: "grid", placeItems: "center", flexShrink: 0,
                       }}>
-                        <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>{sp.cost}</span>
+                        <span style={{ color: "#fff", fontSize: "var(--fs-tiny)", fontWeight: 900, lineHeight: 1 }}>{sp.cost}</span>
                       </div>
 
                       {/* Name + meta */}
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>
+                        <div style={{ fontWeight: 700, fontSize: "var(--fs-subtitle)", color: C.text }}>
                           {sp.name}
-                          {conc && <span title="Concentration" style={{ marginLeft: 5, fontSize: 10, color: "#60a5fa" }}>◆</span>}
+                          {conc && <span title="Concentration" style={{ marginLeft: 5, fontSize: "var(--fs-tiny)", color: C.colorRitual }}>◆</span>}
                         </div>
-                        <div style={{ fontSize: 10, color: C.muted }}>
+                        <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>
                           {d ? `${d.level === 0 ? "Cantrip" : ORDINALS[d.level ?? 0] ?? ""} ${d.school ?? ""}`.trim() : ""}
                           {compactComponents ? ` (${compactComponents})` : ""}
                         </div>
                       </div>
 
                       {/* Time */}
-                      <div style={{ fontSize: 11, color: C.muted, paddingTop: 3, textAlign: "center", minWidth: 28 }}>
+                      <div style={{ fontSize: "var(--fs-small)", color: C.muted, paddingTop: 3, textAlign: "center", minWidth: 28 }}>
                         {d ? abbrevTime(d.time ?? "—") : ""}
                       </div>
 
                       {/* HIT / DC */}
                       {d && (usesSave || usesAtk) ? (
                         <div style={{ textAlign: "center", paddingTop: 1 }}>
-                          <div style={{ fontSize: 9, color: C.muted, fontWeight: 700 }}>{usesSave ? (d.save ?? "SAVE") : "ATK"}</div>
-                          <div style={{ fontWeight: 900, fontSize: 15, color: spellcastingBlocked ? "#f87171" : accentColor, lineHeight: 1.2 }}>
+                          <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 700 }}>{usesSave ? (d.save ?? "SAVE") : "ATK"}</div>
+                          <div style={{ fontWeight: 900, fontSize: "var(--fs-body)", color: spellcastingBlocked ? C.colorPinkRed : accentColor, lineHeight: 1.2 }}>
                             {usesSave ? `${saveDc}${spellcastingBlocked ? " X" : ""}` : `+${spellAtk}${spellcastingBlocked ? " X" : ""}`}
                           </div>
                         </div>
@@ -976,8 +1018,8 @@ export function ItemSpellsPanel({ items, pb, intScore, wisScore, chaScore, accen
                           padding: "4px 7px", borderRadius: 6, border: `1px solid ${dmgColor}55`,
                           background: `${dmgColor}15`, textAlign: "center", whiteSpace: "nowrap",
                         }}>
-                          <span style={{ fontWeight: 800, fontSize: 13, color: C.text }}>{d.damage.dice}</span>
-                          <span style={{ fontSize: 12, marginLeft: 3 }}>{DMG_EMOJI[d.damage.type] ?? "◆"}</span>
+                          <span style={{ fontWeight: 800, fontSize: "var(--fs-subtitle)", color: C.text }}>{d.damage.dice}</span>
+                          <span style={{ fontSize: "var(--fs-small)", marginLeft: 3 }}>{DMG_EMOJI[d.damage.type] ?? "◆"}</span>
                         </div>
                       ) : <div />}
                     </div>

@@ -39,7 +39,7 @@ export function RowMenu(props: { items: RowMenuItem[] }) {
           background: "transparent",
           color: theme.colors.muted,
           cursor: "pointer",
-          fontSize: 16,
+          fontSize: "var(--fs-body)",
           fontWeight: 900,
           letterSpacing: 1,
           lineHeight: 1,

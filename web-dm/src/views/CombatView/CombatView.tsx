@@ -225,7 +225,7 @@ export function CombatView() {
           </span>
           <button
             onClick={dismissConcentrationAlert}
-            style={{ all: "unset", cursor: "pointer", color: theme.colors.muted, fontWeight: 900, fontSize: 18, lineHeight: 1 }}
+            style={{ all: "unset", cursor: "pointer", color: theme.colors.muted, fontWeight: 900, fontSize: "var(--fs-title)", lineHeight: 1 }}
           >
             ×
           </button>

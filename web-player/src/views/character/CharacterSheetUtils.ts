@@ -226,9 +226,9 @@ export function featPrerequisitesMet(
 
 export function hpColor(pct: number): string {
   if (pct <= 0) return "#6b7280";
-  if (pct < 25) return "#f87171";
-  if (pct < 50) return "#fb923c";
-  if (pct < 75) return "#fbbf24";
+  if (pct < 25) return C.colorPinkRed;
+  if (pct < 50) return C.colorOrange;
+  if (pct < 75) return C.colorGold;
   return "#4ade80";
 }
 

@@ -15,7 +15,7 @@ function inputStyle(): React.CSSProperties {
     background: C.bg, color: C.text,
     border: `1px solid ${C.panelBorder}`,
     borderRadius: 8, padding: "7px 8px",
-    fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%",
+    fontSize: "var(--fs-subtitle)", fontFamily: "inherit", outline: "none", width: "100%",
     boxSizing: "border-box",
   };
 }
@@ -26,7 +26,7 @@ function pillStyle(): React.CSSProperties {
     background: withAlpha(C.panelBorder, 0.3),
     color: C.text, padding: "3px 8px",
     borderRadius: 999, cursor: "pointer",
-    fontSize: 11, fontWeight: 700,
+    fontSize: "var(--fs-small)", fontWeight: 700,
   };
 }
 
@@ -72,7 +72,7 @@ export function MonsterBrowserPanel(props: {
     <Panel
       title="Monsters"
       actions={
-        <div style={{ color: C.muted, fontSize: 12 }}>
+        <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>
           {loading ? "Loading…" : `${filteredRows.length.toLocaleString()} / ${baseRows.length.toLocaleString()}`}
         </div>
       }
@@ -177,7 +177,7 @@ export function MonsterBrowserPanel(props: {
                   }}
                 >
                   <div style={{ fontWeight: 700, lineHeight: 1.15 }}>{m.name}</div>
-                  <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
+                  <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
                     {crLabel}{type ? ` • ${type}` : ""}{m.environment ? ` • ${m.environment}` : ""}
                   </div>
                 </button>

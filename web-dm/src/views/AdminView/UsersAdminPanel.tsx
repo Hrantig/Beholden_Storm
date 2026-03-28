@@ -54,13 +54,13 @@ export function UsersAdminPanel() {
 
   const thStyle: React.CSSProperties = {
     padding: "10px 14px", textAlign: "left",
-    fontSize: 11, fontWeight: 700, color: theme.colors.muted,
+    fontSize: "var(--fs-small)", fontWeight: 700, color: theme.colors.muted,
     textTransform: "uppercase", letterSpacing: "0.06em",
     borderBottom: `1px solid ${theme.colors.panelBorder}`,
   };
 
   const tdStyle: React.CSSProperties = {
-    padding: "12px 14px", fontSize: 14,
+    padding: "12px 14px", fontSize: "var(--fs-medium)",
     borderBottom: `1px solid ${theme.colors.panelBorder}`,
     verticalAlign: "middle",
   };
@@ -68,7 +68,7 @@ export function UsersAdminPanel() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Users</h2>
+        <h2 style={{ margin: 0, fontSize: "var(--fs-title)", fontWeight: 700 }}>Users</h2>
         <Button variant="primary" onClick={() => setModal("create")}>+ New User</Button>
       </div>
 
@@ -103,7 +103,7 @@ export function UsersAdminPanel() {
                   <td style={tdStyle}>
                     <span style={{ fontWeight: 600 }}>{u.name}</span>
                     {u.id === currentUser?.id && (
-                      <span style={{ marginLeft: 8, fontSize: 11, color: theme.colors.accentHighlight, fontWeight: 600 }}>
+                      <span style={{ marginLeft: 8, fontSize: "var(--fs-small)", color: theme.colors.accentHighlight, fontWeight: 600 }}>
                         (you)
                       </span>
                     )}
@@ -111,7 +111,7 @@ export function UsersAdminPanel() {
                   <td style={{ ...tdStyle, color: theme.colors.muted }}>@{u.username}</td>
                   <td style={tdStyle}>
                     <span style={{
-                      display: "inline-block", padding: "2px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700,
+                      display: "inline-block", padding: "2px 8px", borderRadius: 6, fontSize: "var(--fs-small)", fontWeight: 700,
                       background: u.isAdmin ? `${theme.colors.accentPrimary}22` : `${theme.colors.panelBorder}`,
                       color: u.isAdmin ? theme.colors.accentPrimary : theme.colors.muted,
                       border: `1px solid ${u.isAdmin ? theme.colors.accentPrimary + "55" : theme.colors.panelBorder}`,
@@ -121,11 +121,11 @@ export function UsersAdminPanel() {
                   </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <Button variant="ghost" style={{ fontSize: 13, padding: "5px 10px" }}
+                      <Button variant="ghost" style={{ fontSize: "var(--fs-subtitle)", padding: "5px 10px" }}
                         onClick={() => setModal({ type: "edit", user: u })}>
                         Edit
                       </Button>
-                      <Button variant="danger" style={{ fontSize: 13, padding: "5px 10px" }}
+                      <Button variant="danger" style={{ fontSize: "var(--fs-subtitle)", padding: "5px 10px" }}
                         onClick={() => handleDelete(u)}
                         disabled={u.id === currentUser?.id}
                         title={u.id === currentUser?.id ? "Cannot delete your own account" : undefined}>

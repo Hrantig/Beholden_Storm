@@ -9,7 +9,7 @@ export function actionBtnStyle(color: string): React.CSSProperties {
     width: 26, height: 26, padding: 0,
     border: `1px solid ${withAlpha(color, 0.3)}`,
     borderRadius: 6, background: withAlpha(color, 0.1),
-    color, cursor: "pointer", fontSize: 11, fontWeight: 700,
+    color, cursor: "pointer", fontSize: "var(--fs-small)", fontWeight: 700,
   };
 }
 

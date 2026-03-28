@@ -22,7 +22,7 @@ export const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   padding: "8px 11px",
   outline: "none",
-  fontSize: 14,
+  fontSize: "var(--fs-medium)",
 };
 
 export const labelStyle: React.CSSProperties = {
@@ -49,7 +49,7 @@ export const smallBtnStyle: React.CSSProperties = {
 
 export const statLabelStyle: React.CSSProperties = {
   color: "rgba(160,180,220,0.5)",
-  fontSize: 10,
+  fontSize: "var(--fs-tiny)",
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: 0.6,
@@ -58,12 +58,12 @@ export const statLabelStyle: React.CSSProperties = {
 
 export const statValueStyle: React.CSSProperties = {
   color: C.text,
-  fontSize: 14,
+  fontSize: "var(--fs-medium)",
   fontWeight: 700,
 };
 
 export const profChipStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: "var(--fs-small)",
   fontWeight: 600,
   background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.16)",
@@ -73,7 +73,7 @@ export const profChipStyle: React.CSSProperties = {
 };
 
 export const sourceTagStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: "var(--fs-tiny)",
   background: "rgba(56,182,255,0.12)",
   border: "1px solid rgba(56,182,255,0.25)",
   borderRadius: 4,

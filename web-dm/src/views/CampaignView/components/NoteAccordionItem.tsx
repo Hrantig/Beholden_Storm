@@ -31,14 +31,14 @@ export function NoteAccordionItem(props: {
 
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit(); }}
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: theme.colors.muted, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: theme.colors.muted, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}
         >
           Edit
         </button>
 
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onDelete(); }}
-          style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: theme.colors.red, cursor: "pointer", padding: "2px 7px", fontSize: 11 }}
+          style={{ background: "rgba(255,93,93,0.08)", border: "1px solid rgba(255,93,93,0.25)", borderRadius: 5, color: theme.colors.red, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}
         >
           ×
         </button>

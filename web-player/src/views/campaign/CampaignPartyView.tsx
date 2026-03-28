@@ -87,15 +87,15 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
             : <IconPlayer size={28} style={{ opacity: 0.4 }} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontWeight: 800, fontSize: "var(--fs-body)", color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {m.characterName || "Unnamed"}
           </div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2 }}>
             {[m.className, m.species].filter(Boolean).join(" · ")}
           </div>
-          <div style={{ fontSize: 11, color: color, fontWeight: 700, marginTop: 1 }}>Level {m.level}</div>
+          <div style={{ fontSize: "var(--fs-small)", color: color, fontWeight: 700, marginTop: 1 }}>Level {m.level}</div>
           {m.playerName && (
-            <div style={{ fontSize: 11, color: "rgba(160,180,220,0.4)", marginTop: 1 }}>
+            <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.4)", marginTop: 1 }}>
               {m.playerName}
             </div>
           )}
@@ -105,16 +105,16 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
           background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "4px 8px", flexShrink: 0,
         }}>
-          <span style={{ fontSize: 16, fontWeight: 900, color: C.text }}>{m.ac}</span>
-          <span style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>AC</span>
+          <span style={{ fontSize: "var(--fs-body)", fontWeight: 900, color: C.text }}>{m.ac}</span>
+          <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 600 }}>AC</span>
         </div>
       </div>
 
       {/* HP bar */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: hpC, fontWeight: 700 }}>{hpLabel(m.hpPercent)}</span>
-          <span style={{ fontSize: 11, color: C.muted }}>{m.hpPercent}%</span>
+          <span style={{ fontSize: "var(--fs-small)", color: hpC, fontWeight: 700 }}>{hpLabel(m.hpPercent)}</span>
+          <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>{m.hpPercent}%</span>
         </div>
         <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
           <div style={{
@@ -132,7 +132,7 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
           {m.conditions.map((c, i) => (
             <span key={i} style={{
               display: "inline-flex", alignItems: "center", gap: 3,
-              fontSize: 11, padding: "2px 7px", borderRadius: 20, fontWeight: 600,
+              fontSize: "var(--fs-small)", padding: "2px 7px", borderRadius: 20, fontWeight: 600,
               background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.3)",
               color: "#fca5a5",
             }}>
@@ -187,7 +187,7 @@ export function CampaignPartyView() {
 
   const inner = (() => {
     if (loading) return <p style={{ color: C.muted }}>Loading…</p>;
-    if (error) return <p style={{ color: "#f87171" }}>{error}</p>;
+    if (error) return <p style={{ color: C.colorPinkRed }}>{error}</p>;
     if (party.length === 0) return <p style={{ color: C.muted }}>No players in this campaign yet.</p>;
     return (
       <div style={{
@@ -206,12 +206,12 @@ export function CampaignPartyView() {
     <div style={{ height: "100%", overflowY: "auto", background: C.bg, color: C.text, fontFamily: "system-ui, Segoe UI, Arial, sans-serif" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 24px" }}>
         <button type="button" onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13, padding: 0, marginBottom: 20 }}>
+          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "var(--fs-subtitle)", padding: 0, marginBottom: 20 }}>
           ← Back
         </button>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 28 }}>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900 }}>{campaignName || "Campaign"}</h1>
-          <span style={{ fontSize: 14, color: C.muted }}>— Party</span>
+          <h1 style={{ margin: 0, fontSize: "var(--fs-hero)", fontWeight: 900 }}>{campaignName || "Campaign"}</h1>
+          <span style={{ fontSize: "var(--fs-medium)", color: C.muted }}>— Party</span>
         </div>
         {inner}
       </div>

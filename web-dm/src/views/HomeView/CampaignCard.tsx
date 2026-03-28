@@ -185,7 +185,7 @@ export function CampaignCard({ campaign: c, onOpen, onEdit, onDelete, onRefresh 
             justifyContent: "center",
             gap: 8,
             color: hovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.25)",
-            fontSize: 13,
+            fontSize: "var(--fs-subtitle)",
             fontWeight: 600,
             transition: "color 0.15s",
             pointerEvents: "none",
@@ -210,7 +210,7 @@ export function CampaignCard({ campaign: c, onOpen, onEdit, onDelete, onRefresh 
               cursor: "pointer",
               display: "grid",
               placeItems: "center",
-              fontSize: 18,
+              fontSize: "var(--fs-title)",
               lineHeight: 1,
               zIndex: 10,
             }}
@@ -222,18 +222,18 @@ export function CampaignCard({ campaign: c, onOpen, onEdit, onDelete, onRefresh 
 
       {/* ── Body ── */}
       <div style={cardBody}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: theme.colors.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: -0.3 }}>
+        <div style={{ fontSize: "var(--fs-title)", fontWeight: 800, color: theme.colors.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: -0.3 }}>
           {c.name}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           {c.playerCount !== undefined && (
-            <div style={{ fontSize: 14, color: theme.colors.muted, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, display: "flex", alignItems: "center", gap: 6 }}>
               <IconUsers size={14} />
               {c.playerCount === 1 ? "1 Player" : `${c.playerCount} Players`}
             </div>
           )}
         </div>
-        <div style={{ fontSize: 11, color: "rgba(160,180,220,0.45)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.45)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {c.id}
         </div>
       </div>

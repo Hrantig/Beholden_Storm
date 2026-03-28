@@ -39,7 +39,7 @@ export function AdminView() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontWeight: 800, fontSize: 18, color: theme.colors.accentPrimary }}>
+          <span style={{ fontWeight: 800, fontSize: "var(--fs-title)", color: theme.colors.accentPrimary }}>
             Beholden
           </span>
           <span style={{ color: theme.colors.panelBorder }}>|</span>
@@ -48,12 +48,12 @@ export function AdminView() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <a
             href="/"
-            style={{ color: theme.colors.accentHighlight, fontSize: 14, textDecoration: "none" }}
+            style={{ color: theme.colors.accentHighlight, fontSize: "var(--fs-medium)", textDecoration: "none" }}
           >
             ← Back to App
           </a>
-          <span style={{ fontSize: 14, color: theme.colors.muted }}>{user?.name}</span>
-          <Button variant="ghost" style={{ fontSize: 13, padding: "5px 10px" }} onClick={logout}>
+          <span style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted }}>{user?.name}</span>
+          <Button variant="ghost" style={{ fontSize: "var(--fs-subtitle)", padding: "5px 10px" }} onClick={logout}>
             Sign out
           </Button>
         </div>
@@ -80,7 +80,7 @@ export function AdminView() {
               borderBottom: `2px solid ${tab === t.id ? theme.colors.accentPrimary : "transparent"}`,
               color: tab === t.id ? theme.colors.accentPrimary : theme.colors.muted,
               fontWeight: tab === t.id ? 700 : 500,
-              fontSize: 14,
+              fontSize: "var(--fs-medium)",
               cursor: "pointer",
               transition: "color 150ms, border-color 150ms",
             }}

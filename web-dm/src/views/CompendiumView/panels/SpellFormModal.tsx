@@ -59,7 +59,7 @@ const labelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 5,
-  fontSize: 12,
+  fontSize: "var(--fs-small)",
   fontWeight: 600,
   color: theme.colors.muted,
 };
@@ -219,7 +219,7 @@ export function SpellFormModal(props: {
           {/* Description */}
           <label style={labelStyle}>
             Description
-            <div style={{ fontSize: 11, color: theme.colors.muted, marginTop: -2 }}>
+            <div style={{ fontSize: "var(--fs-small)", color: theme.colors.muted, marginTop: -2 }}>
               Separate paragraphs with a blank line.
             </div>
             <TextArea
@@ -231,7 +231,7 @@ export function SpellFormModal(props: {
           </label>
 
           {error && (
-            <div style={{ color: theme.colors.red, fontSize: 13, padding: "6px 8px", background: withAlpha(theme.colors.red, 0.1), borderRadius: 8 }}>
+            <div style={{ color: theme.colors.red, fontSize: "var(--fs-subtitle)", padding: "6px 8px", background: withAlpha(theme.colors.red, 0.1), borderRadius: 8 }}>
               {error}
             </div>
           )}

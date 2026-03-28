@@ -17,6 +17,9 @@ export function registerSpellRoutes(app: Express, ctx: ServerContext, anyDm: Req
     const maxLevelRaw = String(req.query.maxLevel ?? "").trim();
     const maxLevel = maxLevelRaw === "" ? null : Number(maxLevelRaw);
     const classesFilter = String(req.query.classes ?? "").trim();
+    const schoolFilter = String(req.query.school ?? "").trim();
+    const ritualRaw = String(req.query.ritual ?? "").trim().toLowerCase();
+    const ritualOnly = ritualRaw === "1" || ritualRaw === "true" || ritualRaw === "yes";
 
     const parts: string[] = [
       "SELECT id, name, level, school, ritual, concentration, components, classes, data_json FROM compendium_spells WHERE 1=1",
@@ -34,6 +37,17 @@ export function registerSpellRoutes(app: Express, ctx: ServerContext, anyDm: Req
       const orParts = cls.map(() => "classes LIKE ?");
       parts.push(`AND (${orParts.join(" OR ")})`);
       params.push(...cls.map(c => `%${c}%`));
+    }
+    if (schoolFilter) {
+      const schools = schoolFilter.split(",").map((s) => s.trim()).filter(Boolean);
+      if (schools.length > 0) {
+        const orParts = schools.map(() => "school LIKE ?");
+        parts.push(`AND (${orParts.join(" OR ")})`);
+        params.push(...schools);
+      }
+    }
+    if (ritualOnly) {
+      parts.push("AND ritual = 1");
     }
     parts.push("ORDER BY level NULLS LAST, name COLLATE NOCASE");
     parts.push(`LIMIT ${limit}`);

@@ -39,18 +39,17 @@
       small    12px  Tertiary info (timestamps, subtle metadata)
       tiny     10px  Badges, chips, micro labels
   */
-  --fs-hero:     30px;
-  --fs-stat:     18px;   /* big numerics — AC, HP, Speed */
-  --fs-title:    18px;   /* panel section headers */
+  --fs-hero:     30px;   /* app title */
+  --fs-title:    18px;   /* panel section headers, big numerics (AC/HP), dialog headings */
+  --fs-stat:     var(--fs-title); /* alias — big numerics share the same step */
   --fs-large:    17px;   /* primary row names */
   --fs-body:     15px;   /* default body text */
-  --fs-base:     var(--fs-body);
-  --fs-medium:   14px;   /* metadata labels */
+  --fs-base:     var(--fs-body); /* alias for base.css */
+  --fs-medium:   14px;   /* secondary labels */
   --fs-subtitle: 13px;   /* compact secondary text */
-  --fs-pill:     12px;   /* condition chips, tags */
   --fs-small:    12px;   /* tertiary metadata */
+  --fs-pill:     var(--fs-small); /* alias — chips and tags share this step */
   --fs-tiny:     10px;   /* micro badges */
-  --fs-h3:       18px;
 
   /* ── Spacing ─────────────────────────────────────────────────────── */
   --gap-2:      2px;

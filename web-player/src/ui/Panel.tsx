@@ -24,7 +24,7 @@ export function Panel(props: {
             margin: 0,
             color: C.text,
             fontWeight: 900,
-            fontSize: 16,
+            fontSize: "var(--fs-body)",
             display: "flex",
             alignItems: "center",
             gap: 6,

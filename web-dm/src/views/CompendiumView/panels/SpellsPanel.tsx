@@ -115,7 +115,7 @@ export function SpellsPanel(props: SpellsPanelProps) {
         }
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               {busy ? "Loading…" : `${filtered.length}`}
             </div>
             {props.editable && (
@@ -249,7 +249,7 @@ export function SpellsPanel(props: SpellsPanelProps) {
                   <div
                     style={{
                       color: theme.colors.muted,
-                      fontSize: 12,
+                      fontSize: "var(--fs-small)",
                       marginTop: 2,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
@@ -278,7 +278,7 @@ export function SpellsPanel(props: SpellsPanelProps) {
                     {isConfirmingDelete ? (
                       /* Delete confirmation inline */
                       <>
-                        <span style={{ fontSize: 11, color: theme.colors.muted, marginRight: 4 }}>Delete?</span>
+                        <span style={{ fontSize: "var(--fs-small)", color: theme.colors.muted, marginRight: 4 }}>Delete?</span>
                         <button
                           type="button"
                           onClick={() => handleDeleteConfirm(s.id)}
@@ -307,7 +307,7 @@ export function SpellsPanel(props: SpellsPanelProps) {
                           title="Edit spell"
                         >
                           {editLoading === s.id
-                            ? <span style={{ fontSize: 10 }}>…</span>
+                            ? <span style={{ fontSize: "var(--fs-tiny)" }}>…</span>
                             : <IconPencil size={13} />}
                         </button>
                         <button

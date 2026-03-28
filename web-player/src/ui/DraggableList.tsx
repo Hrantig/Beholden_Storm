@@ -143,7 +143,7 @@ export function DraggableList(props: {
                   flex: "0 0 auto", color: C.muted,
                 }}
               >
-                <span style={{ fontSize: 14, lineHeight: 1, opacity: 0.7 }}>≡</span>
+                <span style={{ fontSize: "var(--fs-medium)", lineHeight: 1, opacity: 0.7 }}>≡</span>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 {props.renderItem(it)}

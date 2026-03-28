@@ -95,7 +95,7 @@ export function ItemPickerModal(props: {
                 border: `1px solid ${theme.colors.panelBorder}`,
                 background: createMode ? theme.colors.panelBg : theme.colors.accentPrimary,
                 color: createMode ? theme.colors.muted : theme.colors.textDark,
-                cursor: "pointer", fontSize: 18, lineHeight: 1, fontWeight: 700,
+                cursor: "pointer", fontSize: "var(--fs-title)", lineHeight: 1, fontWeight: 700,
               }}
             >
               {createMode ? "×" : <IconPlus size={14} />}
@@ -131,7 +131,7 @@ export function ItemPickerModal(props: {
             </Select>
           </div>
 
-          <div style={{ fontSize: 12, color: theme.colors.muted }}>
+          <div style={{ fontSize: "var(--fs-small)", color: theme.colors.muted }}>
             {loading ? "Loading…" : `${filtered.length} of ${rows.length}`}
           </div>
 
@@ -176,7 +176,7 @@ export function ItemPickerModal(props: {
                     {r.magic && <MagicBadge />}
                   </div>
                   {subtitle && (
-                    <div style={{ color: theme.colors.muted, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</div>
+                    <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</div>
                   )}
                 </div>
               );
@@ -201,19 +201,19 @@ export function ItemPickerModal(props: {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", border: `1px solid ${theme.colors.panelBorder}`, borderRadius: 8, overflow: "hidden" }}>
                 <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))}
-                  style={{ width: 28, height: 28, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>−</button>
+                  style={{ width: 28, height: 28, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: "var(--fs-body)", fontWeight: 700, flexShrink: 0 }}>−</button>
                 <input
                   type="number" min={1} value={qty}
                   onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
                   style={{
-                    width: 48, textAlign: "center", fontSize: 14, fontWeight: 700,
+                    width: 48, textAlign: "center", fontSize: "var(--fs-medium)", fontWeight: 700,
                     background: "transparent", color: theme.colors.text,
                     border: "none", outline: "none",
                     appearance: "textfield", MozAppearance: "textfield", WebkitAppearance: "none",
                   } as React.CSSProperties}
                 />
                 <button type="button" onClick={() => setQty((q) => q + 1)}
-                  style={{ width: 28, height: 28, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>+</button>
+                  style={{ width: 28, height: 28, border: "none", background: "transparent", color: theme.colors.text, cursor: "pointer", fontSize: "var(--fs-body)", fontWeight: 700, flexShrink: 0 }}>+</button>
               </div>
               {createMode ? (
                 <Button onClick={addCustom} disabled={!customName.trim()}>
@@ -268,13 +268,13 @@ export function ItemPickerModal(props: {
                 {detail.magic && <MagicBadge />}
                 {detail.attunement && <Chip label="Attunement" color={theme.colors.accentHighlight} />}
                 {detail.rarity && <Chip label={titleCase(detail.rarity)} color={rarityChipColor(detail.rarity)} />}
-                {detail.type && <span style={{ fontSize: 12, color: theme.colors.muted }}>{detail.type}</span>}
+                {detail.type && <span style={{ fontSize: "var(--fs-small)", color: theme.colors.muted }}>{detail.type}</span>}
               </div>
               <div style={{
                 flex: 1, minHeight: 0, overflowY: "auto",
                 padding: 12, borderRadius: 10,
                 border: `1px solid ${theme.colors.panelBorder}`,
-                whiteSpace: "pre-wrap", lineHeight: 1.5, fontSize: 14,
+                whiteSpace: "pre-wrap", lineHeight: 1.5, fontSize: "var(--fs-medium)",
               }}>
                 {typeof detail.text === "string"
                   ? detail.text.trim() || <span style={{ color: theme.colors.muted }}>No description.</span>

@@ -85,6 +85,123 @@ function pushSpellChoiceEffect(
   } satisfies SpellChoiceEffect);
 }
 
+function parseKnownSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  const inferredSpellLists = parseSpellLists(text);
+  const spellList = inferredSpellLists.length === 1 ? inferredSpellLists[0] : undefined;
+
+  for (const match of text.matchAll(/you\s+(?:learn|know)\s+(?:the\s+)?([A-Z][A-Za-z' -]+?)\s+cantrip\b/gi)) {
+    const spellName = match[1]?.trim();
+    if (!spellName) continue;
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName,
+      spellList,
+      mode: "known",
+      summary: `${spellName} known cantrip`,
+    } satisfies SpellGrantEffect);
+  }
+
+  for (const match of text.matchAll(/you\s+(?:learn|know)\s+(?:the\s+)?([A-Z][A-Za-z' -]+?)\s+spell\b/gi)) {
+    const spellName = match[1]?.trim();
+    if (!spellName) continue;
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName,
+      spellList,
+      mode: "known",
+      summary: `${spellName} known spell`,
+    } satisfies SpellGrantEffect);
+  }
+}
+
+function parseAlwaysPreparedSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  const inferredSpellLists = parseSpellLists(text);
+  const spellList = inferredSpellLists.length === 1 ? inferredSpellLists[0] : undefined;
+
+  const addAlwaysPrepared = (spellName: string, requiredLevel?: number) => {
+    const cleaned = spellName.trim().replace(/^the\s+/i, "");
+    if (!cleaned || /^(that|those|these)\s+spells?$/i.test(cleaned)) return;
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName: cleaned,
+      spellList,
+      mode: "always_prepared",
+      ...(requiredLevel != null ? { requiredLevel } : {}),
+      summary: `${cleaned} always prepared`,
+    } satisfies SpellGrantEffect);
+  };
+
+  for (const match of text.matchAll(/always have\s+(.+?)\s+spells?\s+prepared/gi)) {
+    const raw = match[1]?.trim();
+    if (!raw || /^(certain|the listed)$/i.test(raw)) continue;
+    raw
+      .split(/\s*,\s*|\s+and\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach(addAlwaysPrepared);
+  }
+
+  for (const match of text.matchAll(/when you reach (?:character|cleric|bard|druid|paladin|ranger|sorcerer|warlock|wizard|artificer) level\s+(\d+),?\s+you(?:\s+also)?\s+always have\s+(.+?)\s+spells?\s+prepared/gi)) {
+    const requiredLevel = Number(match[1]);
+    const raw = match[2]?.trim();
+    if (!raw || !Number.isFinite(requiredLevel)) continue;
+    raw
+      .split(/\s*,\s*|\s+and\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((name) => addAlwaysPrepared(name, requiredLevel));
+  }
+
+  const tableMatch = text.match(/(?:[A-Za-z' ]+ Spells?)\s*:\s*(?:Spell Level|[A-Za-z]+ Level)\s*\|\s*(?:Prepared\s+)?Spells?\s+(.+)/i);
+  if (!/listed spells prepared/i.test(text) || !tableMatch?.[1]) return;
+
+  for (const row of tableMatch[1].matchAll(/(\d+)\s*\|\s*([^|]+?)(?=\s+\d+\s*\||$)/g)) {
+    const requiredLevel = Number(row[1]);
+    const rawNames = row[2]?.trim();
+    if (!rawNames || !Number.isFinite(requiredLevel)) continue;
+    rawNames
+      .split(/\s*,\s*/)
+      .map((name) => name.replace(/\*/g, "").trim())
+      .filter(Boolean)
+      .forEach((name) => addAlwaysPrepared(name, requiredLevel));
+  }
+}
+
+function parseExpandedListSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  if (!/added to (?:that feature's|your) spell list/i.test(text)) return;
+
+  const tableMatch = text.match(/(?:[A-Za-z' ]+ Spells?)\s*:\s*(?:Spell Level|[A-Za-z]+ Level)\s*\|\s*(?:Prepared\s+)?Spells?\s+(.+)/i);
+  if (!tableMatch?.[1]) return;
+
+  const rowsText = tableMatch[1];
+  for (const row of rowsText.matchAll(/(\d+)\s*\|\s*([^|]+?)(?=\s+\d+\s*\||$)/g)) {
+    const requiredLevel = Number(row[1]);
+    const rawNames = row[2]?.trim();
+    if (!rawNames || !Number.isFinite(requiredLevel)) continue;
+    rawNames
+      .split(/\s*,\s*/)
+      .map((name) => name.replace(/\*/g, "").trim())
+      .filter(Boolean)
+      .forEach((spellName) => {
+        effects.push({
+          id: createFeatureEffectId(source, "spell_grant", effects.length),
+          type: "spell_grant",
+          source,
+          spellName,
+          mode: "expanded_list",
+          requiredLevel,
+          summary: `${spellName} added to spell list`,
+        } satisfies SpellGrantEffect);
+      });
+  }
+}
+
 function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
   if (!/without expending a spell slot/i.test(text)) return;
   const spellMatch = text.match(/you can cast\s+([A-Z][A-Za-z' -]+?)\s+without expending a spell slot/i);
@@ -191,11 +308,44 @@ function parseSpellChoiceEffects(source: FeatureEffectSource, text: string, effe
   }
 }
 
+function parseResourceGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  const reset =
+    /finish a short or long rest/i.test(text) ? "short_or_long_rest"
+    : /finish a short rest/i.test(text) ? "short_rest"
+    : /finish a long rest/i.test(text) ? "long_rest"
+    : undefined;
+
+  for (const match of text.matchAll(/you have a number of ([A-Z][A-Za-z' -]+?) equal to your Proficiency Bonus/gi)) {
+    const label = match[1]?.trim();
+    if (!label || !reset) continue;
+
+    const hasSpendLanguage = new RegExp(`spend (?:the )?${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(text)
+      || /spend the points/i.test(text);
+    const hasRegainLanguage =
+      new RegExp(`regain your expended ${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(text)
+      || /regain your expended points/i.test(text);
+    if (!hasSpendLanguage || !hasRegainLanguage) continue;
+
+    effects.push({
+      id: createFeatureEffectId(source, "resource_grant", effects.length),
+      type: "resource_grant",
+      source,
+      resourceKey: normalizeResourceKey(`${source.name}:${label}`),
+      label,
+      max: { kind: "proficiency_bonus" },
+      reset,
+      restoreAmount: "all",
+      summary: `${label} equal to your Proficiency Bonus`,
+    });
+  }
+}
+
 function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
   const armor: string[] = [];
   const weapons: string[] = [];
   const tools: string[] = [];
   const skills: string[] = [];
+  const expertise: string[] = [];
   const languages = new Set<string>();
 
   const armorRe = /(?:training with|proficiency with)\s+([\w\s,]+?)\s+armor\b/gi;
@@ -227,6 +377,32 @@ function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string,
     skills.push(toTitleCase(m[1].trim()));
   }
 
+  if (/expertise in one skill of your choice/i.test(text) || /choose one skill in which you have proficiency/i.test(text)) {
+    effects.push({
+      id: createFeatureEffectId(source, "proficiency_grant", effects.length),
+      type: "proficiency_grant",
+      source,
+      category: "skill",
+      expertise: true,
+      choice: {
+        count: { kind: "fixed", value: 1 },
+        optionCategory: "skill",
+      },
+      summary: "Choose one skill for expertise",
+    } satisfies ProficiencyGrantEffect);
+  }
+
+  const expertiseRe = /(?:gain|have)\s+expertise in\s+([A-Za-z' ]+?)(?:\s+skill)?(?:\.|,|;|$)/gi;
+  while ((m = expertiseRe.exec(text)) !== null) {
+    const raw = m[1]?.trim();
+    if (!raw || /\bone\b.*\bchoice\b/i.test(raw)) continue;
+    raw
+      .split(/\s+and\s+|,/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((name) => expertise.push(toTitleCase(name)));
+  }
+
   const langRe = /(?:learn|speak|know|understand)\s+(?:the\s+)?([\w]+)\s+language/gi;
   while ((m = langRe.exec(text)) !== null) {
     languages.add(normalizeLanguageName(toTitleCase(m[1])));
@@ -249,6 +425,18 @@ function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string,
       source,
       category,
       grants: Array.from(new Set(values)),
+    } satisfies ProficiencyGrantEffect);
+  }
+
+  if (expertise.length > 0) {
+    effects.push({
+      id: createFeatureEffectId(source, "proficiency_grant", effects.length),
+      type: "proficiency_grant",
+      source,
+      category: "skill",
+      expertise: true,
+      grants: Array.from(new Set(expertise)),
+      summary: `Expertise in ${Array.from(new Set(expertise)).join(", ")}`,
     } satisfies ProficiencyGrantEffect);
   }
 }
@@ -564,7 +752,11 @@ export function parseFeatureEffects(input: ParseFeatureEffectsInput): ParsedFeat
   if (cleanText) {
     parseAbilityScoreEffects(source, cleanText, effects);
     parseSpellChoiceEffects(source, cleanText, effects);
+    parseKnownSpellGrantEffects(source, cleanText, effects);
+    parseAlwaysPreparedSpellGrantEffects(source, cleanText, effects);
+    parseExpandedListSpellGrantEffects(source, cleanText, effects);
     parseSpellGrantEffects(source, cleanText, effects);
+    parseResourceGrantEffects(source, cleanText, effects);
     parseProficiencyGrantEffects(source, cleanText, effects);
     parseWeaponMasteryEffects(source, cleanText, effects);
     parseDefenseEffects(source, cleanText, effects);
@@ -583,12 +775,13 @@ export function parseFeatureEffects(input: ParseFeatureEffectsInput): ParsedFeat
 export function buildGrantedSpellDataFromEffects(
   parsed: ParsedFeatureEffects[],
   scores: Record<AbilKey, number | null>,
+  level?: number | null,
 ): { spells: GrantedSpellCast[]; resources: ResourceCounter[] } {
   const spells: GrantedSpellCast[] = [];
   const resources: ResourceCounter[] = [];
 
   const resolveScalingValue = (value: ScalingValue | undefined): number | null =>
-    resolveScalingValueInContext(value, { scores });
+    resolveScalingValueInContext(value, { scores, level });
 
   const resourceByKey = new Map<string, ResourceCounter>();
 
@@ -616,6 +809,7 @@ export function buildGrantedSpellDataFromEffects(
   for (const parsedFeature of parsed) {
     for (const effect of parsedFeature.effects) {
       if (effect.type !== "spell_grant") continue;
+      if (effect.requiredLevel != null && level != null && level < effect.requiredLevel) continue;
       if (effect.mode === "free_cast" && effect.resourceKey) {
         const resource = resourceByKey.get(effect.resourceKey);
         if (!resource) continue;
@@ -638,6 +832,39 @@ export function buildGrantedSpellDataFromEffects(
           sourceName: effect.source.name,
           mode: "at_will",
           note: "",
+        });
+        continue;
+      }
+
+      if (effect.mode === "known") {
+        spells.push({
+          key: effect.id,
+          spellName: effect.spellName,
+          sourceName: effect.source.name,
+          mode: "known",
+          note: "Known spell.",
+        });
+        continue;
+      }
+
+      if (effect.mode === "always_prepared") {
+        spells.push({
+          key: effect.id,
+          spellName: effect.spellName,
+          sourceName: effect.source.name,
+          mode: "always_prepared",
+          note: "Always prepared.",
+        });
+        continue;
+      }
+
+      if (effect.mode === "expanded_list") {
+        spells.push({
+          key: effect.id,
+          spellName: effect.spellName,
+          sourceName: effect.source.name,
+          mode: "expanded_list",
+          note: "Added to your spell list.",
         });
       }
     }
@@ -683,6 +910,7 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
   weapons: TaggedItem[];
   tools: TaggedItem[];
   skills: TaggedItem[];
+  expertise: TaggedItem[];
   languages: TaggedItem[];
   masteries: TaggedItem[];
 } {
@@ -691,6 +919,7 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
     weapons: [] as TaggedItem[],
     tools: [] as TaggedItem[],
     skills: [] as TaggedItem[],
+    expertise: [] as TaggedItem[],
     languages: [] as TaggedItem[],
     masteries: [] as TaggedItem[],
   };
@@ -699,7 +928,8 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
     for (const effect of parsedFeature.effects) {
       if (effect.type === "proficiency_grant" && effect.grants?.length) {
         const target =
-          effect.category === "armor" ? result.armor
+          effect.expertise ? result.expertise
+          : effect.category === "armor" ? result.armor
           : effect.category === "weapon" ? result.weapons
           : effect.category === "tool" ? result.tools
           : effect.category === "skill" ? result.skills

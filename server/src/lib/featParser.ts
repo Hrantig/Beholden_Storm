@@ -26,6 +26,7 @@ export interface ParsedFeatChoice {
   id: string;
   type: "proficiency" | "expertise" | "ability_score" | "spell" | "spell_list" | "weapon_mastery" | "damage_type";
   count: number;
+  countFrom?: "proficiency_bonus";
   options: string[] | null;
   anyOf?: string[];
   amount?: number | null;
@@ -346,6 +347,34 @@ export function parseFeat(args: {
         options: splitList(match[2] ?? ""),
         level: Number(match[1] ?? "1"),
         note: "Choose a spell from one of the listed schools of magic.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/Choose a number of level (\d+) spells equal to your Proficiency Bonus that have the Ritual tag/i);
+    if (match) {
+      choices.push({
+        id: `ritual_spells_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        countFrom: "proficiency_bonus",
+        options: null,
+        level: Number(match[1] ?? "1"),
+        note: "Choose ritual spells of the stated level. The number of choices equals your Proficiency Bonus.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/You also learn one level (\d+) spell of your choice from that list/i);
+    if (match) {
+      choices.push({
+        id: `spell_level_${match[1]}_from_list`,
+        type: "spell",
+        count: 1,
+        options: null,
+        level: Number(match[1]),
+        linkedTo: "spell_list_primary",
+        note: "Choose a spell from the spell list selected earlier.",
       });
       continue;
     }

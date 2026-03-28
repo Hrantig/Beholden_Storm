@@ -177,19 +177,19 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
             {char.imageUrl ? <img src={char.imageUrl} alt={char.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconPlayer size={36} style={{ opacity: 0.35 }} />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 900, letterSpacing: -0.5, color: C.text }}>{char.name}</h1>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 3 }}>
+            <h1 style={{ margin: "0 0 2px", fontSize: "var(--fs-hero)", fontWeight: 900, letterSpacing: -0.5, color: C.text }}>{char.name}</h1>
+            <div style={{ fontSize: "var(--fs-subtitle)", color: C.muted, marginBottom: 3 }}>
               {[char.className, char.characterData?.subclass, char.species].filter(Boolean).join(" · ")}
-              <span style={{ marginLeft: 10, color: accentColor, fontWeight: 700, fontSize: 12 }}>Level {char.level}</span>
+              <span style={{ marginLeft: 10, color: accentColor, fontWeight: 700, fontSize: "var(--fs-small)" }}>Level {char.level}</span>
             </div>
-            {char.playerName && <div style={{ fontSize: 11, color: "rgba(160,180,220,0.45)", marginBottom: 3 }}>Player: {char.playerName}</div>}
+            {char.playerName && <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.45)", marginBottom: 3 }}>Player: {char.playerName}</div>}
             {identityFields.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
                 {identityFields.map((field) => (
                   <span
                     key={field.label}
                     style={{
-                      fontSize: 10,
+                      fontSize: "var(--fs-tiny)",
                       padding: "2px 7px",
                       borderRadius: 999,
                       background: "rgba(255,255,255,0.05)",
@@ -210,7 +210,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                 <span
                   key={c.id}
                   style={{
-                    fontSize: 11,
+                    fontSize: "var(--fs-small)",
                     padding: "2px 8px",
                     borderRadius: 20,
                     fontWeight: 600,
@@ -235,7 +235,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                       border: "none",
                       cursor: "pointer",
                       padding: "2px 4px",
-                      fontSize: 11,
+                      fontSize: "var(--fs-small)",
                       fontWeight: 700,
                       color: "#fff",
                       borderRadius: 6,
@@ -264,7 +264,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                         gap: 8,
                       }}
                     >
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 2 }}>Edit XP</div>
+                      <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, marginBottom: 2 }}>Edit XP</div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <input
                           autoFocus
@@ -283,7 +283,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                             flex: 1,
                             padding: "6px 8px",
                             borderRadius: 6,
-                            fontSize: 13,
+                            fontSize: "var(--fs-subtitle)",
                             fontWeight: 700,
                             border: "1px solid rgba(255,255,255,0.15)",
                             background: "rgba(255,255,255,0.07)",
@@ -301,7 +301,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                             padding: "6px 12px",
                             borderRadius: 6,
                             cursor: "pointer",
-                            fontSize: 12,
+                            fontSize: "var(--fs-small)",
                             fontWeight: 700,
                             background: accentColor,
                             border: "none",
@@ -325,7 +325,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                               padding: "4px 0",
                               borderRadius: 5,
                               cursor: "pointer",
-                              fontSize: 10,
+                              fontSize: "var(--fs-tiny)",
                               fontWeight: 700,
                               background: "rgba(255,255,255,0.07)",
                               border: "1px solid rgba(255,255,255,0.1)",
@@ -354,7 +354,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                   border: `1px solid ${accentColor}88`,
                   color: accentColor,
                   fontWeight: 700,
-                  fontSize: 12,
+                  fontSize: "var(--fs-small)",
                 }}
               >
                 ↑ Level Up
@@ -387,7 +387,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                 border: "1px solid rgba(255,255,255,0.16)",
                 color: C.muted,
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: "var(--fs-body)",
               }}
             >
               ✎
@@ -398,11 +398,11 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
         <div style={{ height: 32, borderRadius: 8, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden", position: "relative", marginBottom: 8 }}>
           <div style={{ position: "absolute", inset: 0, right: `${(1 - hpPct) * 100}%`, background: hpPct > 0.5 ? C.green : hpPct > 0.25 ? "#f59e0b" : C.red, borderRadius: 8, transition: "right 0.3s, background 0.3s" }} />
           {tempHp > 0 && tempPct > 0 && <div style={{ position: "absolute", top: 0, bottom: 0, left: `${hpPct * 100}%`, width: `${tempPct * 100}%`, background: "#f59e0b", opacity: 0.7 }} />}
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)", gap: 4 }}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--fs-body)", fontWeight: 800, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)", gap: 4 }}>
             <IconHeart size={11} style={{ opacity: 0.8 }} />
             {char.hpCurrent} / {effectiveHpMax}
-            {tempHp > 0 && <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>+{tempHp} temp</span>}
-            {hpMaxBonus !== 0 && <span style={{ fontSize: 10, color: "#f59e0b" }}>(max {hpMaxBonus > 0 ? "+" : ""}{hpMaxBonus})</span>}
+            {tempHp > 0 && <span style={{ fontSize: "var(--fs-small)", color: "#fff", fontWeight: 700 }}>+{tempHp} temp</span>}
+            {hpMaxBonus !== 0 && <span style={{ fontSize: "var(--fs-tiny)", color: "#f59e0b" }}>(max {hpMaxBonus > 0 ? "+" : ""}{hpMaxBonus})</span>}
           </div>
         </div>
 
@@ -457,12 +457,12 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                   background: "rgba(255,255,255,0.05)",
                   color: C.text,
                   fontWeight: 900,
-                  fontSize: 17,
+                  fontSize: "var(--fs-large)",
                   outline: "none",
                   animation: lastRoll !== null ? "playerRollFlash 1.6s ease forwards" : "none",
                 }}
               />
-              <span style={{ fontSize: 10, color: C.muted, minHeight: 14 }}>
+              <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, minHeight: 14 }}>
                 {lastRoll !== null ? `rolled ${lastRoll}` : hd !== null ? `HD: ${char.level}d${hd}` : ""}
               </span>
             </div>
@@ -473,18 +473,18 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
               <IconConditions size={22} />
             </HexBtn>
           </div>
-          {(hpError || hpSaving) && <div style={{ textAlign: "center", fontSize: 11, color: hpError ? C.red : C.muted }}>{hpError ?? "Saving..."}</div>}
+          {(hpError || hpSaving) && <div style={{ textAlign: "center", fontSize: "var(--fs-small)", color: hpError ? C.red : C.muted }}>{hpError ?? "Saving..."}</div>}
         </div>
 
         {char.hpCurrent === 0 && (
           <div style={{ margin: "4px 0 10px", padding: "10px 14px", borderRadius: 10, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.35)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 900, color: C.red, textTransform: "uppercase", letterSpacing: "0.1em" }}>Death Saving Throws</span>
-              {dsSaving && <span style={{ fontSize: 9, color: C.muted }}>saving...</span>}
+              <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, color: C.red, textTransform: "uppercase", letterSpacing: "0.1em" }}>Death Saving Throws</span>
+              {dsSaving && <span style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>saving...</span>}
             </div>
             <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#4ade80", textTransform: "uppercase", letterSpacing: "0.06em" }}>Success</span>
+                <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: "#4ade80", textTransform: "uppercase", letterSpacing: "0.06em" }}>Success</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   {[0, 1, 2].map((i) => {
                     const filled = i < (char.deathSaves?.success ?? 0);
@@ -514,10 +514,10 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                 </div>
               </div>
 
-              <span style={{ fontSize: 18, opacity: 0.4 }}>💀</span>
+              <span style={{ fontSize: "var(--fs-title)", opacity: 0.4 }}>💀</span>
 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: "0.06em" }}>Failure</span>
+                <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: "0.06em" }}>Failure</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   {[0, 1, 2].map((i) => {
                     const filled = i < (char.deathSaves?.fail ?? 0);
@@ -548,16 +548,16 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
               </div>
             </div>
 
-            {(char.deathSaves?.success ?? 0) >= 3 && <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "#4ade80", textAlign: "center" }}>✦ Stable - character has stabilised</div>}
-            {(char.deathSaves?.fail ?? 0) >= 3 && <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: C.red, textAlign: "center" }}>✦ Dead</div>}
+            {(char.deathSaves?.success ?? 0) >= 3 && <div style={{ marginTop: 8, fontSize: "var(--fs-small)", fontWeight: 700, color: "#4ade80", textAlign: "center" }}>✦ Stable - character has stabilised</div>}
+            {(char.deathSaves?.fail ?? 0) >= 3 && <div style={{ marginTop: 8, fontSize: "var(--fs-small)", fontWeight: 700, color: C.red, textAlign: "center" }}>✦ Dead</div>}
           </div>
         )}
 
         {(char.conditions ?? []).length > 0 && (
           <div style={{ marginTop: 2 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
               <IconConditions size={10} /> Conditions
-              {condSaving && <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", fontSize: 9 }}>saving...</span>}
+              {condSaving && <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", fontSize: "var(--fs-tiny)" }}>saving...</span>}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {[...(char.conditions ?? [])].sort((a, b) => {
@@ -565,10 +565,10 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                 const bi = CONDITIONS.findIndex((c) => c.key === b.key);
                 return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
               }).map((cond, i) => (
-                <span key={i} style={{ fontSize: 12, fontWeight: 700, padding: "4px 6px 4px 8px", borderRadius: 6, background: `${C.red}18`, border: `1px solid ${C.red}44`, color: C.red, textTransform: "capitalize", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span key={i} style={{ fontSize: "var(--fs-small)", fontWeight: 700, padding: "4px 6px 4px 8px", borderRadius: 6, background: `${C.red}18`, border: `1px solid ${C.red}44`, color: C.red, textTransform: "capitalize", display: "inline-flex", alignItems: "center", gap: 5 }}>
                   <IconConditionByKey condKey={cond.key} size={12} style={{ opacity: 0.85, flexShrink: 0 }} />
                   {conditionDisplayLabel(cond)}
-                  <button onClick={() => toggleCondition(cond.key)} style={{ border: "none", background: "transparent", color: C.red, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 0, display: "inline-flex", alignItems: "center" }}>×</button>
+                  <button onClick={() => toggleCondition(cond.key)} style={{ border: "none", background: "transparent", color: C.red, cursor: "pointer", fontSize: "var(--fs-body)", lineHeight: 1, padding: 0, display: "inline-flex", alignItems: "center" }}>×</button>
                 </span>
               ))}
             </div>
@@ -583,8 +583,8 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
             <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <IconConditions size={16} style={{ color: "#f59e0b" }} />
-                <span style={{ fontWeight: 900, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", color: "#f59e0b" }}>Conditions</span>
-                {condSaving && <span style={{ fontSize: 10, color: C.muted }}>saving...</span>}
+                <span style={{ fontWeight: 900, fontSize: "var(--fs-subtitle)", letterSpacing: "0.08em", textTransform: "uppercase", color: "#f59e0b" }}>Conditions</span>
+                {condSaving && <span style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>saving...</span>}
               </div>
               <button
                 onClick={() => setCondPickerOpen(false)}
@@ -595,7 +595,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                   color: C.muted,
                   cursor: "pointer",
                   padding: "4px 10px",
-                  fontSize: 12,
+                  fontSize: "var(--fs-small)",
                   fontWeight: 700,
                 }}
               >
@@ -627,8 +627,8 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                       }}
                     >
                       <IconConditionByKey condKey={cd.key} size={22} style={{ opacity: active ? 1 : 0.5 }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>{cd.name}</span>
-                      {active && <span style={{ fontSize: 9, color: C.red, fontWeight: 900, letterSpacing: "0.04em" }}>ACTIVE</span>}
+                      <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>{cd.name}</span>
+                      {active && <span style={{ fontSize: "var(--fs-tiny)", color: C.red, fontWeight: 900, letterSpacing: "0.04em" }}>ACTIVE</span>}
                     </button>
                   );
                 })}

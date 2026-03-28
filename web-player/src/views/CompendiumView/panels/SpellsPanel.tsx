@@ -35,7 +35,7 @@ export function SpellsPanel(props: {
   return (
     <Panel
       title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--fs-large)" }}><IconSpells size={36} /><span>Spells</span></span>}
-      actions={<div style={{ color: C.muted, fontSize: 12 }}>{busy ? "Loading…" : rows.length}</div>}
+      actions={<div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{busy ? "Loading…" : rows.length}</div>}
       style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}
       bodyStyle={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}
     >
@@ -109,7 +109,7 @@ export function SpellsPanel(props: {
               }}
             >
               <div style={{ fontWeight: 700, lineHeight: 1.1 }}>{s.name}</div>
-              <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
+              <div style={{ color: C.muted, fontSize: "var(--fs-small)", marginTop: 2 }}>
                 L{lvl} • {s.school ? expandSchool(s.school) : ""}
                 {s.time ? ` • ${s.time}` : ""}
               </div>

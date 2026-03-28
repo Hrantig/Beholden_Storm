@@ -71,7 +71,7 @@ function Tag({ label, color }: { label: string; color: string }) {
     <span style={{
       padding: "2px 8px", borderRadius: 999,
       border: `1px solid ${color}33`, background: `${color}1a`,
-      color, fontSize: 11, fontWeight: 700,
+      color, fontSize: "var(--fs-small)", fontWeight: 700,
     }}>{label}</span>
   );
 }
@@ -81,7 +81,7 @@ function StatChip({ label, color }: { label: string; color: string }) {
     <span style={{
       padding: "3px 10px", borderRadius: 6,
       border: `1px solid ${color}44`, background: `${color}18`,
-      color, fontSize: 12, fontWeight: 700,
+      color, fontSize: "var(--fs-small)", fontWeight: 700,
     }}>{label}</span>
   );
 }
@@ -122,7 +122,7 @@ export function ItemDetailPanel(props: { itemId: string }) {
   return (
     <Panel
       title={item ? item.name : "Item"}
-      actions={<div style={{ color: C.muted, fontSize: 12 }}>{busy ? "Loading…" : meta}</div>}
+      actions={<div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>{busy ? "Loading…" : meta}</div>}
       style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
       bodyStyle={{ minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}
     >
@@ -135,18 +135,18 @@ export function ItemDetailPanel(props: { itemId: string }) {
             {item.magic && <Tag label="Magic" color="#a335ee" />}
             {item.attunement && <Tag label="Attunement" color={C.accentHl} />}
             {item.rarity && <Tag label={titleCase(item.rarity)} color={rarityColor(item.rarity)} />}
-            {hasStealthDisadvantage(item) && <Tag label="D" color="#f87171" />}
+            {hasStealthDisadvantage(item) && <Tag label="D" color={C.colorPinkRed} />}
           </div>
 
           {/* Weapon stats row */}
           {hasWeaponStats && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              {dmgLabel && <StatChip label={dmgLabel} color="#f87171" />}
+              {dmgLabel && <StatChip label={dmgLabel} color={C.colorPinkRed} />}
               {propertyLabels.map((p) => (
                 <StatChip key={p} label={p} color="#94a3b8" />
               ))}
-              {item.ac != null && <StatChip label={`AC ${item.ac}`} color="#a78bfa" />}
-              {hasStealthDisadvantage(item) && <StatChip label="Stealth D" color="#f87171" />}
+              {item.ac != null && <StatChip label={`AC ${item.ac}`} color={C.colorMagic} />}
+              {hasStealthDisadvantage(item) && <StatChip label="Stealth D" color={C.colorPinkRed} />}
               {item.weight != null && (
                 <StatChip label={`${item.weight} lb`} color="#64748b" />
               )}
@@ -158,7 +158,7 @@ export function ItemDetailPanel(props: { itemId: string }) {
           {hasModifiers && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
               {item.modifiers.map((m, i) => (
-                <StatChip key={i} label={m.text} color="#a78bfa" />
+                <StatChip key={i} label={m.text} color={C.colorMagic} />
               ))}
             </div>
           )}
@@ -167,7 +167,7 @@ export function ItemDetailPanel(props: { itemId: string }) {
           <div style={{
             flex: 1, minHeight: 0, overflowY: "auto",
             border: `1px solid ${C.panelBorder}`, borderRadius: 12,
-            padding: 10, whiteSpace: "pre-wrap", lineHeight: 1.5, fontSize: 13,
+            padding: 10, whiteSpace: "pre-wrap", lineHeight: 1.5, fontSize: "var(--fs-subtitle)",
           }}>
             {textParagraphs.join("\n\n") || <span style={{ color: C.muted }}>No description.</span>}
           </div>

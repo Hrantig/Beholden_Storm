@@ -26,7 +26,7 @@ function Panel({ children, style }: { children: React.ReactNode; style?: React.C
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(160,180,220,0.45)", marginBottom: 8 }}>
+    <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(160,180,220,0.45)", marginBottom: 8 }}>
       {children}
     </div>
   );
@@ -38,9 +38,9 @@ function MiniStat({ label, value, icon, accent }: { label: string; value: string
       display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
       background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "6px 4px",
     }}>
-      {icon && <span style={{ opacity: 0.55, fontSize: 10 }}>{icon}</span>}
-      <span style={{ fontSize: 17, fontWeight: 900, color: accent ?? C.text }}>{value}</span>
-      <span style={{ fontSize: 9, color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{label}</span>
+      {icon && <span style={{ opacity: 0.55, fontSize: "var(--fs-tiny)" }}>{icon}</span>}
+      <span style={{ fontSize: "var(--fs-large)", fontWeight: 900, color: accent ?? C.text }}>{value}</span>
+      <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{label}</span>
     </div>
   );
 }
@@ -48,7 +48,7 @@ function MiniStat({ label, value, icon, accent }: { label: string; value: string
 function Chip({ children, color }: { children: React.ReactNode; color?: string }) {
   return (
     <span style={{
-      fontSize: 12, padding: "3px 9px", borderRadius: 20, fontWeight: 600,
+      fontSize: "var(--fs-small)", padding: "3px 9px", borderRadius: 20, fontWeight: 600,
       background: `${color ?? C.accentHl}18`, border: `1px solid ${color ?? C.accentHl}44`,
       color: color ?? C.accentHl,
     }}>
@@ -95,7 +95,7 @@ export function PartyMemberView() {
     </div>
   );
   if (error || !member) return (
-    <div style={{ height: "100%", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#f87171" }}>
+    <div style={{ height: "100%", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", color: C.colorPinkRed }}>
       {error ?? "Not found."}
     </div>
   );
@@ -129,7 +129,7 @@ export function PartyMemberView() {
 
         {/* Back */}
         <button type="button" onClick={() => navigate(`/campaigns/${campaignId}`)}
-          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13, padding: 0, marginBottom: 18 }}>
+          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "var(--fs-subtitle)", padding: 0, marginBottom: 18 }}>
           ← Party
         </button>
 
@@ -150,22 +150,22 @@ export function PartyMemberView() {
                     : <IconPlayer size={32} style={{ opacity: 0.35 }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <h2 style={{ margin: "0 0 2px", fontSize: 18, fontWeight: 900, letterSpacing: -0.5 }}>{m.characterName || "Unnamed"}</h2>
-                  <div style={{ fontSize: 12, color: C.muted }}>
+                  <h2 style={{ margin: "0 0 2px", fontSize: "var(--fs-title)", fontWeight: 900, letterSpacing: -0.5 }}>{m.characterName || "Unnamed"}</h2>
+                  <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
                     {[m.className, cd?.subclass, m.species].filter(Boolean).join(" · ")}
-                    <span style={{ marginLeft: 8, color, fontWeight: 700, fontSize: 11 }}>Lv {m.level}</span>
+                    <span style={{ marginLeft: 8, color, fontWeight: 700, fontSize: "var(--fs-small)" }}>Lv {m.level}</span>
                   </div>
-                  {m.playerName && <div style={{ fontSize: 11, color: "rgba(160,180,220,0.4)", marginTop: 2 }}>Player: {m.playerName}</div>}
+                  {m.playerName && <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.4)", marginTop: 2 }}>Player: {m.playerName}</div>}
                 </div>
               </div>
 
               {/* HP bar (obfuscated) */}
               <div style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4, color: hpC, fontWeight: 700 }}>
+                  <span style={{ fontSize: "var(--fs-small)", display: "flex", alignItems: "center", gap: 4, color: hpC, fontWeight: 700 }}>
                     <IconHeart size={10} /> HP
                   </span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{m.hpPercent}%</span>
+                  <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>{m.hpPercent}%</span>
                 </div>
                 <div style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: 5, width: `${m.hpPercent}%`, background: hpC, transition: "width 0.4s" }} />
@@ -187,7 +187,7 @@ export function PartyMemberView() {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {m.conditions.map((c, i) => (
                     <span key={i} style={{
-                      display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11,
+                      display: "inline-flex", alignItems: "center", gap: 3, fontSize: "var(--fs-small)",
                       padding: "2px 7px", borderRadius: 20, fontWeight: 600,
                       background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.3)", color: "#fca5a5",
                     }}>
@@ -212,11 +212,11 @@ export function PartyMemberView() {
                       display: "flex", flexDirection: "column", alignItems: "center",
                       background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "6px 4px",
                     }}>
-                      <span style={{ fontSize: 9, fontWeight: 800, color: "rgba(160,180,220,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{ABILITY_LABELS[k]}</span>
-                      <span style={{ fontSize: 20, fontWeight: 900, color: C.text, lineHeight: 1.1 }}>{score ?? "—"}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color }}>
+                      <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: "rgba(160,180,220,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{ABILITY_LABELS[k]}</span>
+                      <span style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: C.text, lineHeight: 1.1 }}>{score ?? "—"}</span>
+                      <span style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color }}>
                         {formatModifier(saveProf ? m_ + pb : m_)}
-                        {saveProf && <span style={{ fontSize: 8, color, marginLeft: 2 }}>★</span>}
+                        {saveProf && <span style={{ fontSize: "var(--fs-tiny)", color, marginLeft: 2 }}>★</span>}
                       </span>
                     </div>
                   );
@@ -234,11 +234,11 @@ export function PartyMemberView() {
                     const score_ = scores[abil];
                     const bonus = abilityMod(score_) + (proficient ? pb : 0);
                     return (
-                      <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, opacity: proficient ? 1 : 0.45 }}>
+                      <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-small)", opacity: proficient ? 1 : 0.45 }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: proficient ? color : "rgba(255,255,255,0.12)", border: `1px solid ${proficient ? color : "rgba(255,255,255,0.2)"}` }} />
                         <span style={{ flex: 1, color: C.text }}>{name}</span>
                         <span style={{ fontWeight: 700, color: proficient ? color : C.muted, minWidth: 24, textAlign: "right" }}>{formatModifier(bonus)}</span>
-                        <span style={{ fontSize: 10, color: "rgba(160,180,220,0.35)", width: 22 }}>{ABILITY_LABELS[abil]}</span>
+                        <span style={{ fontSize: "var(--fs-tiny)", color: "rgba(160,180,220,0.35)", width: 22 }}>{ABILITY_LABELS[abil]}</span>
                       </div>
                     );
                   })}
@@ -262,7 +262,7 @@ export function PartyMemberView() {
                 ].map(({ label, items }) =>
                   items && items.length > 0 ? (
                     <div key={label} style={{ marginBottom: 10 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{label}</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {items.map((item) => <Chip key={item.name} color={color}>{item.name}</Chip>)}
                       </div>
@@ -278,12 +278,12 @@ export function PartyMemberView() {
                 <SectionLabel>Class Features</SectionLabel>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {classFeatures.map((f, i) => (
-                    <details key={i} style={{ fontSize: 12 }}>
+                    <details key={i} style={{ fontSize: "var(--fs-small)" }}>
                       <summary style={{ cursor: "pointer", fontWeight: 700, color: C.text, userSelect: "none", listStyle: "none" }}>
                         ▸ {f.name}
                       </summary>
                       {f.text && (
-                        <div style={{ marginTop: 5, color: C.muted, lineHeight: 1.5, fontSize: 11, whiteSpace: "pre-wrap", paddingLeft: 10 }}>
+                        <div style={{ marginTop: 5, color: C.muted, lineHeight: 1.5, fontSize: "var(--fs-small)", whiteSpace: "pre-wrap", paddingLeft: 10 }}>
                           {f.text}
                         </div>
                       )}
@@ -298,12 +298,12 @@ export function PartyMemberView() {
               <Panel>
                 <SectionLabel>Notes</SectionLabel>
                 {[...sharedNotes, ...playerNotes].map((note) => (
-                  <details key={note.id} style={{ fontSize: 12, marginBottom: 5 }}>
+                  <details key={note.id} style={{ fontSize: "var(--fs-small)", marginBottom: 5 }}>
                     <summary style={{ cursor: "pointer", fontWeight: 700, color: C.text, userSelect: "none", listStyle: "none" }}>
                       ▸ {note.title || "Untitled"}
                     </summary>
                     {note.text && (
-                      <div style={{ marginTop: 4, color: C.muted, lineHeight: 1.5, fontSize: 11, whiteSpace: "pre-wrap", paddingLeft: 10 }}>
+                      <div style={{ marginTop: 4, color: C.muted, lineHeight: 1.5, fontSize: "var(--fs-small)", whiteSpace: "pre-wrap", paddingLeft: 10 }}>
                         {note.text}
                       </div>
                     )}
@@ -320,7 +320,7 @@ export function PartyMemberView() {
                 <SectionLabel>Spells & Invocations</SectionLabel>
                 {cantrips.length > 0 && (
                   <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Cantrips</div>
+                    <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Cantrips</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                       {cantrips.map((s, i) => <SpellRow key={i} name={s} color={color} />)}
                     </div>
@@ -328,7 +328,7 @@ export function PartyMemberView() {
                 )}
                 {spells.length > 0 && (
                   <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Spells</div>
+                    <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Spells</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                       {spells.map((s, i) => <SpellRow key={i} name={s} color={color} />)}
                     </div>
@@ -336,7 +336,7 @@ export function PartyMemberView() {
                 )}
                 {invocations.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Invocations</div>
+                    <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 700, color: "rgba(160,180,220,0.45)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Invocations</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                       {invocations.map((s, i) => <SpellRow key={i} name={s} color={color} />)}
                     </div>
@@ -354,19 +354,19 @@ export function PartyMemberView() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {inventory.map((item: any, i: number) => (
                     <div key={i} style={{
-                      display: "flex", alignItems: "center", gap: 8, fontSize: 12,
+                      display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-small)",
                       padding: "5px 8px", borderRadius: 6,
                       background: item.equipped ? `${color}10` : "transparent",
                       border: `1px solid ${item.equipped ? color + "30" : "rgba(255,255,255,0.05)"}`,
                     }}>
                       {item.quantity > 1 && (
-                        <span style={{ fontSize: 11, color: C.muted, fontWeight: 700, minWidth: 20 }}>×{item.quantity}</span>
+                        <span style={{ fontSize: "var(--fs-small)", color: C.muted, fontWeight: 700, minWidth: 20 }}>×{item.quantity}</span>
                       )}
                       <span style={{ flex: 1, color: item.equipped ? C.text : C.muted, fontWeight: item.equipped ? 600 : 400 }}>
                         {item.name}
                       </span>
-                      {item.equipped && <span style={{ fontSize: 10, color, fontWeight: 700 }}>Equip</span>}
-                      {item.dmg1 && <span style={{ fontSize: 10, color: "#fb923c" }}>{item.dmg1}</span>}
+                      {item.equipped && <span style={{ fontSize: "var(--fs-tiny)", color, fontWeight: 700 }}>Equip</span>}
+                      {item.dmg1 && <span style={{ fontSize: "var(--fs-tiny)", color: C.colorOrange }}>{item.dmg1}</span>}
                     </div>
                   ))}
                 </div>
@@ -382,7 +382,7 @@ export function PartyMemberView() {
 
 function SpellRow({ name, color }: { name: string; color: string }) {
   return (
-    <div style={{ fontSize: 12, color: C.muted, padding: "2px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ fontSize: "var(--fs-small)", color: C.muted, padding: "2px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 6 }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: 0.7 }} />
       {name}
     </div>

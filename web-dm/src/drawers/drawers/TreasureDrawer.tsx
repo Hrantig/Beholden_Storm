@@ -48,7 +48,7 @@ interface CompendiumItem {
 function Chip({ label, color }: { label: string; color: string }) {
   return (
     <span style={{
-      fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+      fontSize: "var(--fs-small)", fontWeight: 700, padding: "2px 8px", borderRadius: 5,
       background: `${color}1a`, border: `1px solid ${color}44`, color,
     }}>
       {label}
@@ -112,13 +112,13 @@ export function TreasureDrawer(props: { drawer: TreasureDrawerState; close: () =
               </span>
             ) : null}
           </div>
-          {meta ? <div style={{ color: theme.colors.muted, marginTop: 4, fontSize: 13 }}>{meta}</div> : null}
+          {meta ? <div style={{ color: theme.colors.muted, marginTop: 4, fontSize: "var(--fs-subtitle)" }}>{meta}</div> : null}
         </div>
 
         {/* Weapon stat chips */}
         {(dmgLabel || propertyLabels.length > 0 || (itemData?.weight ?? null) !== null) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-            {dmgLabel && <Chip label={dmgLabel} color="#f87171" />}
+            {dmgLabel && <Chip label={dmgLabel} color={theme.colors.colorPinkRed} />}
             {propertyLabels.map((p) => (
               <Chip key={p} label={p} color="#94a3b8" />
             ))}
@@ -132,7 +132,7 @@ export function TreasureDrawer(props: { drawer: TreasureDrawerState; close: () =
         {(itemData?.modifiers ?? []).length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {(itemData!.modifiers!).map((m, i) => (
-              <Chip key={i} label={m.text} color="#a78bfa" />
+              <Chip key={i} label={m.text} color={theme.colors.colorMagic} />
             ))}
           </div>
         )}
@@ -148,7 +148,7 @@ export function TreasureDrawer(props: { drawer: TreasureDrawerState; close: () =
               border: `1px solid ${theme.colors.panelBorder}`,
               borderRadius: 12,
               padding: 12,
-              fontSize: 13,
+              fontSize: "var(--fs-subtitle)",
             }}
           >
             {entry.text}

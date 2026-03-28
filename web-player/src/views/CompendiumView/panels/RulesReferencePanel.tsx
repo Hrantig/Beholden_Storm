@@ -15,7 +15,7 @@ export function RulesReferencePanel() {
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <MiniTable cols={["Condition", "Definition"]} rows={CONDITIONS.map((c) => [c.name, c.bullets.join(" • ")])} />
-          <div style={{ color: C.muted, fontSize: 12 }}>Quick reference for play speed, not full rules text.</div>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Quick reference for play speed, not full rules text.</div>
         </div>
       ),
     },
@@ -28,7 +28,7 @@ export function RulesReferencePanel() {
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <MiniTable cols={["School", "Definition"]} rows={SCHOOLS_OF_MAGIC.map((s) => [s.name, s.bullets.join(" ")])} />
-          <div style={{ color: C.muted, fontSize: 12 }}>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>
             Examples: {SCHOOLS_OF_MAGIC.map((s) => `${s.name}: ${s.examples.slice(0, 2).join(", ")}`).join(" • ")}
           </div>
         </div>
@@ -39,7 +39,7 @@ export function RulesReferencePanel() {
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <MiniTable cols={["Level", "Effect"]} rows={EXHAUSTION_2024.map((e) => [e.level, e.effect])} />
-          <div style={{ color: C.muted, fontSize: 12 }}>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>
             Flat penalty to all d20 rolls; replaces the old per-level mechanical effects.
           </div>
         </div>
@@ -50,7 +50,7 @@ export function RulesReferencePanel() {
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <MiniTable cols={["Pace", "Mi/hr", "Mi/day", "Notes"]} rows={TRAVEL_PACE.map((r) => [r.pace, r.mph, r.perDay, r.notes || "—"])} />
-          <div style={{ color: C.muted, fontSize: 12 }}>Overland travel. Difficult terrain and mounts change outcomes.</div>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Overland travel. Difficult terrain and mounts change outcomes.</div>
         </div>
       ),
     },
@@ -58,7 +58,7 @@ export function RulesReferencePanel() {
       id: "expenses", title: "Expenses",
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ color: C.muted, fontSize: 12 }}>Quick ref tables for common costs.</div>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)" }}>Quick ref tables for common costs.</div>
           <div style={{ fontWeight: 900 }}>Lifestyle (per day)</div>
           <MiniTable cols={["Lifestyle", "Cost"]} rows={LIFESTYLE.map((r) => [r.name, r.cost])} />
           <div style={{ fontWeight: 900 }}>Food, drink, and lodging</div>

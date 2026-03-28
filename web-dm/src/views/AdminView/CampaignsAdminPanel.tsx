@@ -20,8 +20,8 @@ export function CampaignsAdminPanel() {
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700 }}>Campaign Memberships</h2>
-        <p style={{ margin: 0, fontSize: 13, color: theme.colors.muted }}>
+        <h2 style={{ margin: "0 0 4px", fontSize: "var(--fs-title)", fontWeight: 700 }}>Campaign Memberships</h2>
+        <p style={{ margin: 0, fontSize: "var(--fs-subtitle)", color: theme.colors.muted }}>
           Assign users to campaigns as Dungeon Master or Player.
         </p>
       </div>
@@ -31,7 +31,7 @@ export function CampaignsAdminPanel() {
       ) : campaigns.length === 0 ? (
         <div style={{
           padding: "32px 20px", textAlign: "center",
-          color: theme.colors.muted, fontSize: 14,
+          color: theme.colors.muted, fontSize: "var(--fs-medium)",
           background: theme.colors.panelBg,
           border: `1px solid ${theme.colors.panelBorder}`,
           borderRadius: theme.radius.panel,

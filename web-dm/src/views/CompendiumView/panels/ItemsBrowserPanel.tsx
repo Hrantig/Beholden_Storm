@@ -86,7 +86,7 @@ export function ItemsBrowserPanel(props: Props) {
         }
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ color: theme.colors.muted, fontSize: 12 }}>
+            <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
               {busy ? "Loading…" : `${rows.length}`}
             </div>
             {props.editable && (
@@ -261,7 +261,7 @@ function ItemRow(p: RowProps) {
           {item.magic && <MagicBadge />}
         </div>
         {subtitle && (
-          <div style={{ color: theme.colors.muted, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {subtitle}
           </div>
         )}
@@ -276,14 +276,14 @@ function ItemRow(p: RowProps) {
         }}>
           {p.confirmingDelete ? (
             <>
-              <span style={{ fontSize: 11, color: theme.colors.muted, marginRight: 4 }}>Delete?</span>
+              <span style={{ fontSize: "var(--fs-small)", color: theme.colors.muted, marginRight: 4 }}>Delete?</span>
               <button type="button" onClick={p.onDeleteConfirm} disabled={p.deleteBusy} style={actionBtnStyle(theme.colors.red)} title="Yes, delete">Yes</button>
               <button type="button" onClick={p.onDeleteCancel} style={actionBtnStyle(theme.colors.muted)} title="Cancel">No</button>
             </>
           ) : (
             <>
               <button type="button" onClick={p.onEdit} disabled={p.editLoading} style={actionBtnStyle(theme.colors.muted)} title="Edit item">
-                {p.editLoading ? <span style={{ fontSize: 10 }}>…</span> : <IconPencil size={13} />}
+                {p.editLoading ? <span style={{ fontSize: "var(--fs-tiny)" }}>…</span> : <IconPencil size={13} />}
               </button>
               <button type="button" onClick={p.onDeleteRequest} style={actionBtnStyle(theme.colors.muted)} title="Delete item">
                 <IconTrash size={13} />
