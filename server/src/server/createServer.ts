@@ -29,8 +29,6 @@ import type { BroadcastFn } from "./events.js";
 import { multerErrorMiddleware, zodErrorMiddleware } from "../shared/validate.js";
 
 import {
-  basicAuthCheck,
-  getBasicAuthConfig,
   createInMemoryRateLimiter,
   getRateLimitConfig,
   corsMiddleware,
@@ -162,9 +160,7 @@ export function createServer() {
 
   // --- start ----------------------------------------------------------------
   const httpServer = app.listen(runtime.port, runtime.host, () => {
-    if (process.env.BEHOLDEN_DEBUG === "true") {
-      console.log(`API listening on http://${runtime.host}:${runtime.port}`);
-    }
+    console.log(`[beholden] API listening on http://${runtime.host}:${runtime.port}`);
   });
 
   const wss = createWsServer({
