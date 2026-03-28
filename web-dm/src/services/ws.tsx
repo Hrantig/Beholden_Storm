@@ -175,6 +175,12 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
         window.setTimeout(() => {
           if (dead) return;
 
+          // If a configured WS origin is set, always reconnect to it.
+          if (WS_ORIGIN) {
+            connect(wsUrlConfigured());
+            return;
+          }
+
           // In local split-port dev, keep reconnecting to whichever mode succeeded.
           if (usingDirectFallback) {
             connect(wsUrlDirect());

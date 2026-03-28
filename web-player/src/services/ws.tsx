@@ -146,6 +146,11 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
         window.setTimeout(() => {
           if (dead) return;
 
+          if (WS_ORIGIN) {
+            connect(wsUrlConfigured());
+            return;
+          }
+
           if (usingDirectFallback) {
             connect(wsUrlDirect());
             return;
