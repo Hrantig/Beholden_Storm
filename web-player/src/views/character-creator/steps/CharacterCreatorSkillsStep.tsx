@@ -4,7 +4,7 @@ import { normalizeChoiceKey } from "../utils/CharacterCreatorUtils";
 import { ALL_LANGUAGES, ALL_SKILLS } from "../constants/CharacterCreatorConstants";
 import { NavButtons } from "../shared/CharacterCreatorParts";
 import { detailBoxStyle, headingStyle, labelStyle, profChipStyle, sourceTagStyle } from "../shared/CharacterCreatorStyles";
-import { renderChoiceChipGroup, renderClassFeatSingleChoicePanel } from "./CharacterCreatorStepPanels";
+import { renderChoiceChipGroup, renderClassFeatSingleChoicePanel } from "./CharacterCreatorPanelHelpers";
 import {
   duplicateLockedForStep5,
   getFeatChoiceOptionsForStep5,

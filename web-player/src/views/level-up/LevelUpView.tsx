@@ -1136,7 +1136,7 @@ export function LevelUpView() {
                   border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
                   textAlign: "center",
                 }}>
-                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{SLOT_LABELS[i] ?? `L${i}`}</div>
+                  <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{LEVEL_LABELS[i] ?? `L${i}`}</div>
                   <div style={{ fontWeight: 800, fontSize: "var(--fs-body)", color: accentColor }}>{count}</div>
                 </div>
               );

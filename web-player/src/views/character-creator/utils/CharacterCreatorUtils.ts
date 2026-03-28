@@ -37,6 +37,27 @@ export interface CreatorClassDetailLike {
   autolevels: CreatorAutolevelLike[];
 }
 
+function getMergedAutolevels(cls: CreatorClassDetailLike): CreatorAutolevelLike[] {
+  const byLevel = new Map<number, CreatorAutolevelLike>();
+  for (const autolevel of cls.autolevels ?? []) {
+    if (autolevel.level == null) continue;
+    const existing = byLevel.get(autolevel.level);
+    if (!existing) {
+      byLevel.set(autolevel.level, {
+        ...autolevel,
+        features: [...(autolevel.features ?? [])],
+      });
+      continue;
+    }
+    byLevel.set(autolevel.level, {
+      level: autolevel.level,
+      slots: autolevel.slots ?? existing.slots ?? null,
+      features: [...(existing.features ?? []), ...(autolevel.features ?? [])],
+    });
+  }
+  return Array.from(byLevel.values()).sort((a, b) => a.level - b.level);
+}
+
 export interface ClassExpertiseChoice {
   key: string;
   source: string;
@@ -118,7 +139,7 @@ export function featureMatchesSubclass(feature: CreatorFeatureLike, selectedSubc
 }
 
 function getRelevantClassFeatures(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null): CreatorFeatureLike[] {
-  return cls.autolevels
+  return getMergedAutolevels(cls)
     .filter((al) => al.level != null && al.level <= level)
     .flatMap((al) =>
       (al.features ?? []).filter((feature) => featureMatchesSubclass(feature, selectedSubclass) && !isSubclassChoiceFeature(feature))
@@ -143,7 +164,7 @@ export function getSpellcastingClassName(cls: CreatorClassDetailLike | null, lev
 
 export function getSubclassLevel(cls: CreatorClassDetailLike | null): number | null {
   if (!cls) return null;
-  for (const al of cls.autolevels) {
+  for (const al of getMergedAutolevels(cls)) {
     for (const feature of al.features ?? []) {
       if (/subclass/i.test(feature.name) && !feature.optional) return al.level;
     }
@@ -152,13 +173,13 @@ export function getSubclassLevel(cls: CreatorClassDetailLike | null): number | n
 }
 
 export function featuresUpToLevel(cls: CreatorClassDetailLike, level: number) {
-  return cls.autolevels
+  return getMergedAutolevels(cls)
     .filter((al) => al.level != null && al.level <= level)
     .flatMap((al) => (al.features ?? []).filter((feature) => !feature.optional).map((feature) => ({ ...feature, level: al.level })));
 }
 
 export function featuresUpToLevelForSubclass(cls: CreatorClassDetailLike, level: number, selectedSubclass?: string | null) {
-  return cls.autolevels
+  return getMergedAutolevels(cls)
     .filter((al) => al.level != null && al.level <= level)
     .flatMap((al) =>
       (al.features ?? [])
@@ -169,7 +190,7 @@ export function featuresUpToLevelForSubclass(cls: CreatorClassDetailLike, level:
 
 export function getSubclassList(cls: CreatorClassDetailLike): string[] {
   const names: string[] = [];
-  for (const al of cls.autolevels) {
+  for (const al of getMergedAutolevels(cls)) {
     for (const feature of al.features ?? []) {
       if (feature.optional && /subclass:/i.test(feature.name)) {
         const label = feature.name.replace(/^[^:]+:\s*/i, "").trim();
@@ -209,7 +230,7 @@ export function tableValueAtLevel(table: [number, number][], level: number): num
 
 export function getSlotsAtLevel(cls: CreatorClassDetailLike, level: number): number[] | null {
   let best: number[] | null = null;
-  for (const al of cls.autolevels) {
+  for (const al of getMergedAutolevels(cls)) {
     if (al.level != null && al.level <= level && al.slots != null) best = al.slots;
   }
   return best;
@@ -251,7 +272,7 @@ export function isSpellcaster(cls: CreatorClassDetailLike, level: number, select
 }
 
 export function getClassFeatureTable(cls: CreatorClassDetailLike, keyword: string, level: number, selectedSubclass?: string | null): [number, number][] {
-  for (const al of cls.autolevels) {
+  for (const al of getMergedAutolevels(cls)) {
     if (al.level == null || al.level > level) continue;
     for (const feature of al.features ?? []) {
       if (!featureMatchesSubclass(feature, selectedSubclass) || isSubclassChoiceFeature(feature)) continue;
@@ -349,7 +370,7 @@ export function getClassExpertiseChoices(cls: CreatorClassDetailLike | null, lev
   if (!cls) return [];
   const choices: ClassExpertiseChoice[] = [];
   const seen = new Set<string>();
-  for (const al of cls.autolevels) {
+  for (const al of getMergedAutolevels(cls)) {
     if (al.level == null || al.level > level) continue;
     for (const feature of al.features ?? []) {
       if (feature.optional) continue;

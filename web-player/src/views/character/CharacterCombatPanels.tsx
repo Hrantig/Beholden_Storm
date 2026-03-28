@@ -93,7 +93,6 @@ export function CharacterCombatPanels({
           <MiniStat label="Initiative" value={formatModifier(initiativeBonus)} accent={accentColor} icon={<IconInitiative size={11} />} />
           <MiniStat label="Prof. Bonus" value={`+${pb}`} accent={accentColor} />
           <MiniStat label="Passive Perc." value={String(passivePerc)} />
-          <MiniStat label="Passive Inv." value={String(passiveInv)} />
         </div>
         {movementModes.length > 0 && (
           <div style={{ marginTop: 10 }}>

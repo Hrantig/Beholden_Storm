@@ -86,51 +86,46 @@ export function CharacterAbilitiesPanels({
   return (
     <>
       <CollapsiblePanel title="Abilities &amp; Saves" color={accentColor} storageKey="abilities-saves">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 18, rowGap: 8, width: "100%" }}>
-          {(["str", "dex", "con"] as AbilKey[]).flatMap((leftKey, i) => {
-            const rightKey = (["int", "wis", "cha"] as AbilKey[])[i];
-            return ([leftKey, rightKey] as AbilKey[]).map((k) => {
-              const score = scores[k];
-              const m = mod(score);
-              const isProfSave = prof ? hasNamedProficiency(prof.saves, ABILITY_FULL[k]) : false;
-              const save = getSaveBonus(ABILITY_FULL[k], k, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined, saveBonuses?.[k] ?? 0);
-              const abilityCheckState = getModifierState(Boolean(abilityCheckAdvantages?.[k]), Boolean(abilityCheckDisadvantages?.[k]));
-              const armorSaveDisadvantage = nonProficientArmorPenalty && (k === "str" || k === "dex");
-              const saveState = getModifierState(Boolean(saveAdvantages?.[k]), Boolean(saveDisadvantages?.[k]) || armorSaveDisadvantage);
-              return (
-                <div key={k} style={{ minWidth: 0 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "44px minmax(56px, 1fr) 56px 56px", columnGap: 10, alignItems: "center" }}>
-                    <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
-                      {ABILITY_LABELS[k]}
-                    </div>
-                    <div style={{ padding: "8px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: "var(--fs-medium)", fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
-                      {score ?? "-"}
-                    </div>
-                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: abilityCheckState === "disadvantage" ? C.colorPinkRed : abilityCheckState === "advantage" ? accentColor : C.text, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                      <span>{fmtMod(m)}</span>
-                      <StateBadge
-                        state={abilityCheckState}
-                        accentColor={accentColor}
-                        title={`${abilityCheckState === "advantage" ? "Advantage" : "Disadvantage"} on ${ABILITY_FULL[k]} checks`}
-                      />
-                    </div>
-                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: saveState === "disadvantage" ? C.colorPinkRed : saveState === "advantage" ? accentColor : isProfSave ? accentColor : C.text, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                      <span title={armorSaveDisadvantage ? "Armor or shield without proficiency imposes disadvantage on Strength and Dexterity saves" : undefined}>
-                        {fmtMod(save)}
-                      </span>
-                      <StateBadge
-                        state={saveState}
-                        accentColor={accentColor}
-                        title={`${saveState === "advantage" ? "Advantage" : "Disadvantage"} on ${ABILITY_FULL[k]} saving throws`}
-                      />
-                      {isProfSave && <span style={{ position: "absolute", top: -2, right: 0, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
-                    </div>
-                  </div>
+        <div className="char-abilities-container"><div className="char-abilities-grid">
+          {(["str", "dex", "con", "int", "wis", "cha"] as AbilKey[]).map((k) => {
+            const score = scores[k];
+            const m = mod(score);
+            const isProfSave = prof ? hasNamedProficiency(prof.saves, ABILITY_FULL[k]) : false;
+            const save = getSaveBonus(ABILITY_FULL[k], k, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined, saveBonuses?.[k] ?? 0);
+            const abilityCheckState = getModifierState(Boolean(abilityCheckAdvantages?.[k]), Boolean(abilityCheckDisadvantages?.[k]));
+            const armorSaveDisadvantage = nonProficientArmorPenalty && (k === "str" || k === "dex");
+            const saveState = getModifierState(Boolean(saveAdvantages?.[k]), Boolean(saveDisadvantages?.[k]) || armorSaveDisadvantage);
+            return (
+              <div key={k} className="char-ability-row">
+                <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
+                  {ABILITY_LABELS[k]}
                 </div>
-              );
-            });
+                <div style={{ padding: "6px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: "var(--fs-subtitle)", fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
+                  {score ?? "-"}
+                </div>
+                <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: abilityCheckState === "disadvantage" ? C.colorPinkRed : abilityCheckState === "advantage" ? accentColor : C.text, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                  <span>{fmtMod(m)}</span>
+                  <StateBadge
+                    state={abilityCheckState}
+                    accentColor={accentColor}
+                    title={`${abilityCheckState === "advantage" ? "Advantage" : "Disadvantage"} on ${ABILITY_FULL[k]} checks`}
+                  />
+                </div>
+                <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: saveState === "disadvantage" ? C.colorPinkRed : saveState === "advantage" ? accentColor : isProfSave ? accentColor : C.text, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                  <span title={armorSaveDisadvantage ? "Armor or shield without proficiency imposes disadvantage on Strength and Dexterity saves" : undefined}>
+                    {fmtMod(save)}
+                  </span>
+                  <StateBadge
+                    state={saveState}
+                    accentColor={accentColor}
+                    title={`${saveState === "advantage" ? "Advantage" : "Disadvantage"} on ${ABILITY_FULL[k]} saving throws`}
+                  />
+                  {isProfSave && <span style={{ position: "absolute", top: -2, right: 0, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
+                </div>
+              </div>
+            );
           })}
-        </div>
+        </div></div>
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Skills" color={accentColor} storageKey="skills">

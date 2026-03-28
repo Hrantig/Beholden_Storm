@@ -33,7 +33,8 @@ import {
   buildDisplayPlayerFeatures,
 } from "@/domain/character/characterFeatures";
 import { CharacterDefensesPanel } from "@/views/character/CharacterDefensesPanel";
-import { RichSpellsPanel, ItemSpellsPanel } from "@/views/character/CharacterSpellsPanel";
+import { RichSpellsPanel } from "@/views/character/CharacterSpellsPanel";
+import { ItemSpellsPanel } from "@/views/character/CharacterItemSpellsPanel";
 import { SpellSlotsPanel } from "@/views/character/SpellSlotsPanel";
 import { CharacterSupportPanels } from "@/views/character/CharacterSupportPanels";
 import {
@@ -520,10 +521,18 @@ export function CharacterView() {
     vulnerabilities: [] as string[],
   };
   const preparedSpellLimit = classDetail ? getPreparedSpellCount(classDetail, char.level, char.characterData?.subclass ?? "") : 0;
+  const forcedPreparedSpellKeys = new Set(
+    grantedSpellData.spells
+      .filter((entry) => entry.mode === "always_prepared")
+      .map((entry) => entry.spellName.toLowerCase().replace(/[^a-z0-9]/g, ""))
+  );
   const preparedSpells = (() => {
     const saved = Array.isArray(char.characterData?.preparedSpells) ? char.characterData.preparedSpells : [];
     const unique = Array.from(new Set(saved));
-    return preparedSpellLimit > 0 ? unique.slice(0, preparedSpellLimit) : unique;
+    const forced = unique.filter((entry) => forcedPreparedSpellKeys.has(entry));
+    const userChosen = unique.filter((entry) => !forcedPreparedSpellKeys.has(entry));
+    const limitedUserChosen = preparedSpellLimit > 0 ? userChosen.slice(0, preparedSpellLimit) : userChosen;
+    return [...forced, ...limitedUserChosen];
   })();
 
   const accentColor = char.color ?? C.accentHl;
@@ -736,7 +745,10 @@ export function CharacterView() {
 
   async function savePreparedSpells(next: string[]) {
     const unique = Array.from(new Set(next));
-    const limited = preparedSpellLimit > 0 ? unique.slice(0, preparedSpellLimit) : unique;
+    const forced = unique.filter((entry) => forcedPreparedSpellKeys.has(entry));
+    const userChosen = unique.filter((entry) => !forcedPreparedSpellKeys.has(entry));
+    const limitedUserChosen = preparedSpellLimit > 0 ? userChosen.slice(0, preparedSpellLimit) : userChosen;
+    const limited = [...forced, ...limitedUserChosen];
     await saveCharacterData({ ...currentCharacterData, preparedSpells: limited });
   }
 

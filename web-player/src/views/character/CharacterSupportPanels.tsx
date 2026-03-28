@@ -82,12 +82,7 @@ export function CharacterSupportPanels(props: {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <CollapsiblePanel title="Recovery" color={accentColor} storageKey="recovery">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0,1fr) auto",
-            gap: 10,
-            alignItems: "stretch",
-          }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{
               padding: "10px 12px",
               borderRadius: 10,
@@ -129,11 +124,11 @@ export function CharacterSupportPanels(props: {
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 180 }}>
-              <button type="button" onClick={() => void onShortRest()} style={restBtnStyle(C.colorRitual)}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="button" onClick={() => void onShortRest()} style={{ ...restBtnStyle(C.colorRitual), flex: 1 }}>
                 Short Rest
               </button>
-              <button type="button" onClick={() => void onLongRest()} style={restBtnStyle("#34d399")}>
+              <button type="button" onClick={() => void onLongRest()} style={{ ...restBtnStyle("#34d399"), flex: 1 }}>
                 Long Rest
               </button>
             </div>
