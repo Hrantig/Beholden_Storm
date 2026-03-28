@@ -39,7 +39,20 @@ const SAME_ORIGIN_IS_DIRECT_PORT = (() => {
 })();
 
 async function apiError(res: Response): Promise<Error> {
+  const contentType = res.headers.get("content-type") ?? "";
+
   try {
+    if (!contentType.includes("application/json")) {
+      const text = (await res.text()).trim();
+      if (text) {
+        if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+          return new Error("Server returned HTML instead of JSON. Check the API/reverse-proxy route for /api.");
+        }
+        return new Error(text.slice(0, 200));
+      }
+      return new Error(`${res.status} ${res.statusText}`);
+    }
+
     const body = await res.json() as unknown;
     const b = body as Record<string, unknown>;
     const issues = b?.issues as Array<{ path: string; message: string }> | undefined;
@@ -71,6 +84,14 @@ function mergeInit(init?: RequestInit): RequestInit {
 export async function apiRaw<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(resolveApiPath(path), init);
   if (!res.ok) throw await apiError(res);
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const text = (await res.text()).trim();
+    if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+      throw new Error("Server returned HTML instead of JSON. Check the API/reverse-proxy route for /api.");
+    }
+    throw new Error(text || "Server returned a non-JSON response.");
+  }
   return (await res.json()) as T;
 }
 

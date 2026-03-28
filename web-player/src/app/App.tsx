@@ -38,35 +38,35 @@ function AuthGate() {
   if (!user) return <LoginView />;
 
   return (
-    <AppShell>
-      <React.Suspense fallback={null}>
-        <Routes>
-          <Route path="/" element={<PlayerHomeView />} />
-          <Route path="/compendium" element={<CompendiumView />} />
-          <Route path="/characters/new" element={<CharacterCreatorView />} />
-          <Route path="/characters/:id" element={<CharacterView />} />
-          <Route path="/characters/:id/edit" element={<CharacterCreatorView />} />
-          <Route path="/characters/:id/levelup" element={<LevelUpView />} />
-          <Route path="/profile" element={<ProfileView />} />
-          <Route path="/campaigns/:id" element={<CampaignPartyView />} />
-          <Route path="/campaigns/:id/members/:playerId" element={<PartyMemberView />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </React.Suspense>
-    </AppShell>
+    <WsProvider>
+      <AppShell>
+        <React.Suspense fallback={null}>
+          <Routes>
+            <Route path="/" element={<PlayerHomeView />} />
+            <Route path="/compendium" element={<CompendiumView />} />
+            <Route path="/characters/new" element={<CharacterCreatorView />} />
+            <Route path="/characters/:id" element={<CharacterView />} />
+            <Route path="/characters/:id/edit" element={<CharacterCreatorView />} />
+            <Route path="/characters/:id/levelup" element={<LevelUpView />} />
+            <Route path="/profile" element={<ProfileView />} />
+            <Route path="/campaigns/:id" element={<CampaignPartyView />} />
+            <Route path="/campaigns/:id/members/:playerId" element={<PartyMemberView />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </React.Suspense>
+      </AppShell>
+    </WsProvider>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <WsProvider>
-        <BrowserRouter
-          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-        >
-          <AuthGate />
-        </BrowserRouter>
-      </WsProvider>
+      <BrowserRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AuthGate />
+      </BrowserRouter>
     </AuthProvider>
   );
 }
