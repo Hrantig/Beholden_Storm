@@ -61,9 +61,10 @@ export interface BuildLevelUpPayloadArgs {
   classDetailName?: string | null;
   selectedCantripEntries: LevelUpTaggedEntry[];
   selectedSpellEntries: LevelUpTaggedEntry[];
+  selectedClassFeatureSpellEntries?: LevelUpTaggedEntry[];
   selectedInvocationEntries: LevelUpTaggedEntry[];
   baseScores: Record<string, number>;
-  asiMode: "+2" | "+1+1" | "feat" | null;
+  asiMode: "asi" | "feat" | null;
   asiStats: Record<string, number>;
   featAbilityBonuses: Record<string, number>;
 }
@@ -107,13 +108,13 @@ export interface DeriveFeatAbilityBonusesArgs {
 export interface DerivePreviewScoresArgs {
   baseScores: Record<string, number>;
   asiStats: Record<string, number>;
-  asiMode: "+2" | "+1+1" | "feat" | null;
+  asiMode: "asi" | "feat" | null;
   featAbilityBonuses: Record<string, number>;
 }
 
 export interface DeriveLevelUpValidationArgs {
   isAsiLevel: boolean;
-  asiMode: "+2" | "+1+1" | "feat" | null;
+  asiMode: "asi" | "feat" | null;
   asiStats: Record<string, number>;
   needsSubclassChoice: boolean;
   subclass: string;
@@ -252,11 +253,10 @@ export function deriveLevelUpValidation(args: DeriveLevelUpValidationArgs) {
   const asiValid =
     !isAsiLevel ||
     asiMode === "feat" ||
-    (asiMode === "+2" && asiTotal === 2) ||
-    (asiMode === "+1+1" && asiTotal === 2 && Object.values(asiStats).every((value) => value <= 1));
+    (asiMode === "asi" && asiTotal === 2 && Object.values(asiStats).every((value) => value <= 2));
   const subclassValid = !needsSubclassChoice || Boolean(subclass.trim());
   const cantripsValid = cantripCount === 0 || chosenCantrips.length === cantripCount;
-  const spellsValid = !spellcaster || prepCount === 0 || chosenSpells.length === prepCount;
+  const spellsValid = !spellcaster || prepCount === 0 || chosenSpells.length <= prepCount;
   const invocationsValid = invocCount === 0 || chosenInvocations.length === invocCount;
   const expertiseValid = expertiseChoices.every((choice) => (chosenExpertise[choice.key] ?? []).length === choice.count);
   const featValid =
@@ -304,6 +304,7 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
     char, nextLevel, hpGain, featHpBonus, subclass, chosenCantrips, chosenSpells, chosenInvocations,
     chosenExpertise, chosenFeatOptions, expertiseChoices, featChoiceEntries, chosenFeatDetail, featSourceLabel,
     newFeatures, classDetailName, selectedCantripEntries, selectedSpellEntries, selectedInvocationEntries,
+    selectedClassFeatureSpellEntries = [],
     baseScores, asiMode, asiStats, featAbilityBonuses,
   } = args;
 
@@ -394,6 +395,7 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
         ...existingSpells.filter((entry) => entry.source !== classSource && entry.source !== featSourceLabel),
         ...selectedCantripEntries,
         ...selectedSpellEntries,
+        ...selectedClassFeatureSpellEntries,
         ...(selectedFeatEntries?.spells ?? []),
       ],
       invocations: [
@@ -415,7 +417,7 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
     characterData: nextCharacterData,
   };
 
-  if (asiMode === "+2" || asiMode === "+1+1") {
+  if (asiMode === "asi") {
     for (const [k, v] of Object.entries(asiStats)) {
       const scoreKey = `${k}Score`;
       payload[scoreKey] = Math.min(20, (baseScores[k] ?? 10) + v);

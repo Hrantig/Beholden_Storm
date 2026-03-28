@@ -17,6 +17,7 @@ import {
   parseFeatureGrants as parseFeatureGrantsFromRules,
 } from "@/views/character/CharacterRuleParsers";
 import { collectSpellChoicesFromEffects } from "@/domain/character/parseFeatureEffects";
+import { buildAppliedCharacterFeatures } from "@/domain/character/characterFeatures";
 import {
   ABILITY_NAME_TO_KEY,
   ABILITY_KEYS,
@@ -39,18 +40,16 @@ import {
   calcHpMax,
   classifyFeatSelection,
   extractClassStartingEquipment,
-  featureMatchesSubclass,
   featuresUpToLevelForSubclass,
-  getFeatureSubclassName,
   getCantripCount,
   getClassExpertiseChoices,
   getClassFeatureTable,
+  getFeatureSubclassName,
   getMaxSlotLevel,
   getPreparedSpellCount,
   getSpellcastingClassName,
   getSubclassLevel,
   getSubclassList,
-  isSubclassChoiceFeature,
   normalizeChoiceKey,
   getWeaponMasteryOptions,
   isSpellcaster,
@@ -77,7 +76,6 @@ import type {
   Campaign,
   ClassDetail,
   ClassFeatChoice,
-  ClassFeatureEntry,
   ClassSummary,
   CreatorResolvedSpellChoiceEntry,
   CreatorSpellListChoiceEntry,
@@ -118,7 +116,7 @@ import { renderSkillsStep } from "@/views/character-creator/steps/CharacterCreat
 import { renderBackgroundStep } from "@/views/character-creator/steps/CharacterCreatorBackgroundStep";
 import {
   buildProficiencyMap as buildProficiencyMapFromUtils,
-  parseSelectedClassOptionalFeatureEffects,
+  parseAppliedClassFeatureEffects,
   buildStartingInventory as buildStartingInventoryFromUtils,
   getWeaponMasteryChoice as getWeaponMasteryChoiceFromUtils,
 } from "@/views/character-creator/utils/CharacterCreatorProficiencyUtils";
@@ -203,11 +201,20 @@ function getSelectedAbilityIncrease(
 
 /** Group optional non-subclass features by level, up to `level`.
  *  Multiple autolevel entries at the same level are merged into one group. */
-function getOptionalGroups(cls: ClassDetail, level: number): { level: number; features: { name: string; text: string }[] }[] {
+function getOptionalGroups(
+  cls: ClassDetail,
+  level: number,
+): { level: number; features: { name: string; text: string }[] }[] {
   const map = new Map<number, { name: string; text: string }[]>();
   for (const al of cls.autolevels) {
     if (al.level == null || al.level > level) continue;
-    const opts = al.features.filter((f) => f.optional && !/subclass/i.test(f.name) && !/^Becoming\b/i.test(f.name));
+    const opts = al.features.filter((f) => {
+      if (!f.optional) return false;
+      if (/subclass/i.test(f.name) || /^Becoming\b/i.test(f.name)) return false;
+      const featureSubclass = getFeatureSubclassName(f);
+      if (featureSubclass) return false;
+      return true;
+    });
     if (opts.length > 0) {
       const existing = map.get(al.level) ?? [];
       map.set(al.level, [...existing, ...opts]);
@@ -408,13 +415,13 @@ export function CharacterCreatorView() {
       .filter(Boolean),
     [form.chosenClassFeatIds, classFeatDetails]
   );
-  const selectedClassOptionalFeatureEffects = React.useMemo(
-    () => parseSelectedClassOptionalFeatureEffects(classDetail, form.level, form.chosenOptionals),
-    [classDetail, form.level, form.chosenOptionals]
+  const selectedClassFeatureEffects = React.useMemo(
+    () => parseAppliedClassFeatureEffects(classDetail, form.level, form.subclass, form.chosenOptionals),
+    [classDetail, form.level, form.subclass, form.chosenOptionals]
   );
-  const selectedClassOptionalSpellChoices = React.useMemo(
-    () => collectSpellChoicesFromEffects(selectedClassOptionalFeatureEffects),
-    [selectedClassOptionalFeatureEffects]
+  const selectedClassFeatureSpellChoices = React.useMemo(
+    () => collectSpellChoicesFromEffects(selectedClassFeatureEffects),
+    [selectedClassFeatureEffects]
   );
   const selectedFeatAbilityBonuses = React.useMemo(() => {
     const bonusMap: Record<string, number> = {};
@@ -511,11 +518,11 @@ export function CharacterCreatorView() {
       }),
     [form.chosenFeatOptions, form.level, step5ChoiceState]
   );
-  const step6OptionalSpellChoices = React.useMemo<CreatorResolvedSpellChoiceEntry[]>(
-    () => selectedClassOptionalSpellChoices.flatMap((effect) => {
+  const step6ClassFeatureSpellChoices = React.useMemo<CreatorResolvedSpellChoiceEntry[]>(
+    () => selectedClassFeatureSpellChoices.flatMap((effect) => {
       if (effect.count.kind !== "fixed") return [];
       return [{
-        key: `classoptional:${effect.id}`,
+        key: `classfeature:${effect.id}`,
         title: effect.level === 0 ? "Bonus Cantrip" : `Bonus Level ${effect.level} Spell`,
         sourceLabel: effect.source.name,
         count: effect.count.value,
@@ -524,12 +531,12 @@ export function CharacterCreatorView() {
         listNames: effect.spellLists,
       }];
     }),
-    [selectedClassOptionalSpellChoices]
+    [selectedClassFeatureSpellChoices]
   );
   const step6SpellListChoices = step6FeatSpellListChoices;
   const step6ResolvedSpellChoices = React.useMemo(
-    () => [...step6FeatResolvedSpellChoices, ...step6OptionalSpellChoices],
-    [step6FeatResolvedSpellChoices, step6OptionalSpellChoices]
+    () => [...step6FeatResolvedSpellChoices, ...step6ClassFeatureSpellChoices],
+    [step6FeatResolvedSpellChoices, step6ClassFeatureSpellChoices]
   );
   const levelUpFeatLevels = React.useMemo(
     () => Array.from(new Set((classDetail?.autolevels ?? [])
@@ -562,7 +569,7 @@ export function CharacterCreatorView() {
     api<RaceSummary[]>("/api/compendium/races").then(setRaces).catch(() => {});
     api<BgSummary[]>("/api/compendium/backgrounds").then(setBgs).catch(() => {});
     api<{ id: string; name: string; ruleset?: Ruleset | null }[]>("/api/compendium/feats").then(setFeatSummaries).catch(() => {});
-    api<Campaign[]>("/api/campaigns").then(setCampaigns).catch(() => {});
+    api<Campaign[]>("/api/me/campaigns").then(setCampaigns).catch(() => {});
     api<ItemSummary[]>("/api/compendium/items").then(setItems).catch(() => {});
   }, []);
 
@@ -891,50 +898,23 @@ export function CharacterCreatorView() {
     setBusy(true); setError(null);
     try {
       const scores = resolvedScores(form, selectedFeatAbilityBonuses);
-      const classFeatures: ClassFeatureEntry[] = (() => {
-        if (!classDetail) return [];
-        const featureByName = new Map<string, ClassFeatureEntry>();
-        for (const al of classDetail.autolevels) {
-          if (al.level == null || al.level > form.level) continue;
-          for (const f of al.features) {
-            if (!featureMatchesSubclass(f, form.subclass)) continue;
-            if (isSubclassChoiceFeature(f)) continue;
-            const isChosenSubclassFeature = Boolean(getFeatureSubclassName(f));
-            if (!f.optional || isChosenSubclassFeature) {
-              featureByName.set(f.name, {
-                id: f.name,
-                name: f.name,
-                text: f.text?.trim() ?? "",
-                preparedSpellProgression: f.preparedSpellProgression,
-              });
-              continue;
-            }
-            if (!form.chosenOptionals.includes(f.name)) continue;
-            if (featureByName.has(f.name)) continue;
-            featureByName.set(f.name, {
-              id: f.name,
-              name: f.name,
-              text: f.text?.trim() ?? "",
-              preparedSpellProgression: f.preparedSpellProgression,
-            });
-          }
-        }
-        const orderedFeatures = Array.from(featureByName.values());
-        const selectedBgOriginFeat = bgOriginFeatDetail
-          ? [{ id: bgOriginFeatDetail.name, name: bgOriginFeatDetail.name, text: bgOriginFeatDetail.text?.trim() ?? "" }]
-          : [];
-        const selectedClassFeats = Object.entries(form.chosenClassFeatIds)
+      const selectedFeatureNames = buildAppliedCharacterFeatures({
+        charData: {
+          subclass: form.subclass || null,
+          chosenOptionals: form.chosenOptionals,
+        },
+        characterLevel: form.level,
+        classDetail,
+        raceDetail,
+        backgroundDetail: bgDetail,
+        bgOriginFeatDetail,
+        raceFeatDetail,
+        classFeatDetails: Object.entries(form.chosenClassFeatIds)
           .map(([featureName]) => classFeatDetails[featureName])
-          .filter(Boolean)
-          .map((feat) => ({ id: feat.name, name: feat.name, text: feat.text?.trim() ?? "" }));
-        const selectedLevelUpFeats = levelUpFeatDetails.map(({ level, featId, feat }) => ({
-          id: `levelupfeat:${level}:${featId}`,
-          name: feat.name,
-          text: feat.text?.trim() ?? "",
-        }));
-        return [...orderedFeatures, ...selectedBgOriginFeat, ...selectedClassFeats, ...selectedLevelUpFeats];
-      })();
-      const selectedFeatureNames = classFeatures.map((feature) => feature.name);
+          .filter(Boolean),
+        levelUpFeatDetails,
+        invocationDetails: [],
+      }).map((feature) => feature.name);
       const startingInventory = isEditing
         ? undefined
         : buildStartingInventoryFromUtils(form, bgDetail, classDetail, items);

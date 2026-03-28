@@ -28,7 +28,7 @@ function IconCharacterInfo(props: { size?: number; style?: React.CSSProperties }
   );
 }
 
-const CONDITIONS = [
+const BASE_CONDITIONS = [
   { key: "blinded", name: "Blinded" },
   { key: "charmed", name: "Charmed" },
   { key: "deafened", name: "Deafened" },
@@ -49,8 +49,14 @@ const CONDITIONS = [
   { key: "marked", name: "Marked", needsCaster: true },
 ];
 
+function getAvailableConditions(char: Pick<CharacterHudLike, "className">) {
+  return /barbarian/i.test(String(char.className ?? ""))
+    ? [{ key: "rage", name: "Rage" }, ...BASE_CONDITIONS]
+    : BASE_CONDITIONS;
+}
+
 function conditionDisplayLabel(cond: ConditionInstance): string {
-  const def = CONDITIONS.find((c) => c.key === cond.key);
+  const def = [...BASE_CONDITIONS, { key: "rage", name: "Rage" }].find((c) => c.key === cond.key);
   const base = def?.name ?? cond.key;
   const extra = cond.casterName || cond.sourceName;
   return extra ? `${base} (${extra})` : base;
@@ -132,7 +138,12 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
     saveDeathSaves,
     hpMaxBonus,
   } = props;
+  const availableConditions = React.useMemo(() => getAvailableConditions(char), [char]);
   const xpPopupRef = React.useRef<HTMLDivElement | null>(null);
+
+  function stripEditionTag(s: string): string {
+    return s.replace(/\s*\[(?:5\.5e|2024|5e|5\.0)\]\s*$/i, "").trim();
+  }
   const identityFields = [
     { label: "Alignment", value: char.characterData?.alignment },
     { label: "Gender", value: char.characterData?.gender },
@@ -178,9 +189,14 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ margin: "0 0 2px", fontSize: "var(--fs-hero)", fontWeight: 900, letterSpacing: -0.5, color: C.text }}>{char.name}</h1>
-            <div style={{ fontSize: "var(--fs-subtitle)", color: C.muted, marginBottom: 3 }}>
-              {[char.className, char.characterData?.subclass, char.species].filter(Boolean).join(" · ")}
-              <span style={{ marginLeft: 10, color: accentColor, fontWeight: 700, fontSize: "var(--fs-small)" }}>Level {char.level}</span>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "2px 6px", marginBottom: 3, fontSize: "var(--fs-subtitle)", color: C.muted }}>
+              {[char.className, char.characterData?.subclass, char.species].filter(Boolean).map((item, i, arr) => (
+                <React.Fragment key={i}>
+                  <span style={{ whiteSpace: "nowrap" }}>{stripEditionTag(item!)}</span>
+                  {i < arr.length - 1 && <span style={{ opacity: 0.35, userSelect: "none" }}>·</span>}
+                </React.Fragment>
+              ))}
+              <span style={{ color: accentColor, fontWeight: 700, fontSize: "var(--fs-small)", whiteSpace: "nowrap" }}>Lv {char.level}</span>
             </div>
             {char.playerName && <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.45)", marginBottom: 3 }}>Player: {char.playerName}</div>}
             {identityFields.length > 0 && (
@@ -204,25 +220,28 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
                 ))}
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               {char.campaigns.map((c) => (
                 <span
                   key={c.id}
                   style={{
-                    fontSize: "var(--fs-small)",
-                    padding: "2px 8px",
+                    fontSize: "var(--fs-tiny)",
+                    padding: "1px 7px",
                     borderRadius: 20,
-                    fontWeight: 600,
-                    background: `${accentColor}18`,
-                    border: `1px solid ${accentColor}44`,
+                    fontWeight: 700,
+                    background: `${accentColor}14`,
+                    border: `1px solid ${accentColor}33`,
                     color: accentColor,
+                    whiteSpace: "nowrap",
+                    maxWidth: 160,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
+                  title={c.campaignName}
                 >
                   {c.campaignName}
                 </span>
               ))}
-              </div>
               {xpNeeded > 0 && (
                 <div ref={xpPopupRef} style={{ position: "relative" }}>
                   <button
@@ -561,8 +580,8 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {[...(char.conditions ?? [])].sort((a, b) => {
-                const ai = CONDITIONS.findIndex((c) => c.key === a.key);
-                const bi = CONDITIONS.findIndex((c) => c.key === b.key);
+                const ai = availableConditions.findIndex((c) => c.key === a.key);
+                const bi = availableConditions.findIndex((c) => c.key === b.key);
                 return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
               }).map((cond, i) => (
                 <span key={i} style={{ fontSize: "var(--fs-small)", fontWeight: 700, padding: "4px 6px 4px 8px", borderRadius: 6, background: `${C.red}18`, border: `1px solid ${C.red}44`, color: C.red, textTransform: "capitalize", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -604,7 +623,7 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                {CONDITIONS.map((cd) => {
+                {availableConditions.map((cd) => {
                   const active = (char.conditions ?? []).some((c) => c.key === cd.key);
                   return (
                     <button
@@ -640,4 +659,3 @@ export function CharacterHudPanel(props: CharacterHudPanelProps) {
     </>
   );
 }
-

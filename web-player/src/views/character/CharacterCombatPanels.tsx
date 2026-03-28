@@ -1,10 +1,10 @@
 import React from "react";
 import { C } from "@/lib/theme";
+import type { ParsedFeatureEffects } from "@/domain/character/featureEffects";
 import { IconInitiative, IconShield, IconSpeed } from "@/icons";
 import { CollapsiblePanel, MiniStat, Tooltip } from "@/views/character/CharacterViewParts";
 import { abilityMod, formatModifier } from "@/views/character/CharacterSheetUtils";
 import {
-  type CharacterDataLike,
   type InventoryItem,
   type ProficiencyMapLike,
   addsAbilityModToOffhandDamage,
@@ -26,6 +26,7 @@ import {
 export interface CharacterCombatPanelsProps {
   effectiveAc: number;
   speed: number;
+  movementModes?: Array<{ mode: "fly" | "swim" | "climb" | "burrow"; speed: number | null }>;
   level: number;
   className?: string | null;
   initiativeBonus: number;
@@ -37,14 +38,18 @@ export interface CharacterCombatPanelsProps {
   accentColor: string;
   inventory: InventoryItem[];
   prof?: ProficiencyMapLike | null;
-  characterData?: CharacterDataLike | null;
+  parsedFeatureEffects?: ParsedFeatureEffects[] | null;
   nonProficientArmorPenalty: boolean;
   hasDisadvantage?: boolean;
+  rageDamageBonus?: number;
+  unarmedRageDamageBonus?: number;
+  rageActive?: boolean;
 }
 
 export function CharacterCombatPanels({
   effectiveAc,
   speed,
+  movementModes = [],
   level,
   className,
   initiativeBonus,
@@ -56,23 +61,33 @@ export function CharacterCombatPanels({
   accentColor,
   inventory,
   prof,
-  characterData,
+  parsedFeatureEffects,
   nonProficientArmorPenalty,
   hasDisadvantage = false,
+  rageDamageBonus = 0,
+  unarmedRageDamageBonus = 0,
+  rageActive = false,
 }: CharacterCombatPanelsProps) {
   const attackDisadvantage = nonProficientArmorPenalty || hasDisadvantage;
   const actionItems = inventory.filter((it) => getEquipState(it) !== "backpack" && isWeaponItem(it) && (!it.attunement || it.attuned));
   const nonProficientArmorItems = inventory.filter((it) => getEquipState(it) !== "backpack" && (isShieldItem(it) || /\barmor\b/i.test(it.type ?? "")) && !hasArmorProficiency(it, prof ?? undefined));
   const strMod = abilityMod(strScore);
+  const dexMod = abilityMod(dexScore);
   const unarmedToHit = strMod + pb;
-  const unarmedDmg = 1 + strMod;
+  const unarmedDmg = 1 + strMod + (rageActive ? unarmedRageDamageBonus : 0);
   const isRogue = /rogue/i.test(String(className ?? ""));
   const sneakAttackDice = Math.max(1, Math.ceil(level / 2));
+
+  function weaponUsesStrength(item: InventoryItem): boolean {
+    if (isRangedWeapon(item)) return false;
+    if (hasItemProperty(item, "F")) return strMod >= dexMod;
+    return true;
+  }
 
   return (
     <>
       <CollapsiblePanel title="Combat Stats" color={accentColor} storageKey="combat-stats">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6 }}>
           <MiniStat label="Armor Class" value={String(effectiveAc)} accent={accentColor} icon={<IconShield size={11} />} />
           <MiniStat label="Speed" value={`${speed} ft`} icon={<IconSpeed size={11} />} />
           <MiniStat label="Initiative" value={formatModifier(initiativeBonus)} accent={accentColor} icon={<IconInitiative size={11} />} />
@@ -80,6 +95,77 @@ export function CharacterCombatPanels({
           <MiniStat label="Passive Perc." value={String(passivePerc)} />
           <MiniStat label="Passive Inv." value={String(passiveInv)} />
         </div>
+        {movementModes.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+              Special Movement
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {movementModes.map((entry) => (
+                <span
+                  key={entry.mode}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: "var(--fs-small)",
+                    fontWeight: 700,
+                    color: accentColor,
+                    background: `${accentColor}18`,
+                    border: `1px solid ${accentColor}44`,
+                    borderRadius: 999,
+                    padding: "3px 10px",
+                  }}
+                >
+                  {entry.mode[0].toUpperCase() + entry.mode.slice(1)} {entry.speed != null ? `${entry.speed} ft` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {rageActive && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+              Rage
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: "var(--fs-small)",
+                  fontWeight: 700,
+                  color: C.red,
+                  background: `${C.red}18`,
+                  border: `1px solid ${C.red}44`,
+                  borderRadius: 999,
+                  padding: "3px 10px",
+                }}
+              >
+                Active
+              </span>
+              {rageDamageBonus > 0 && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: "var(--fs-small)",
+                    fontWeight: 700,
+                    color: accentColor,
+                    background: `${accentColor}18`,
+                    border: `1px solid ${accentColor}44`,
+                    borderRadius: 999,
+                    padding: "3px 10px",
+                  }}
+                >
+                  Rage Damage +{rageDamageBonus}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Actions" color={accentColor} storageKey="actions">
@@ -114,12 +200,14 @@ export function CharacterCombatPanels({
             const mastery = parseWeaponMastery(it);
             const masteryKnown = hasWeaponMastery(it, prof ?? undefined);
             const toHit = ability + (proficient ? pb : 0);
-            const damageAbility = attackState === "offhand" && !addsAbilityModToOffhandDamage(it, characterData) ? 0 : ability;
+            const damageAbility = attackState === "offhand" && !addsAbilityModToOffhandDamage(it, parsedFeatureEffects) ? 0 : ability;
+            const rageBonus = rageActive && weaponUsesStrength(it) ? rageDamageBonus : 0;
             const damageType = formatItemDamageType(it.dmgType);
             const props = formatItemProperties(it.properties);
             const isReach = hasItemProperty(it, "R");
             const rangeLabel = isRangedWeapon(it) ? (it.properties?.find((p) => /^\d/.test(p)) ?? "Range") : `${isReach ? "10" : "5"} ft.`;
-            const dmgText = dmg ? `${dmg}${damageAbility === 0 ? "" : `${damageAbility >= 0 ? "+" : ""}${damageAbility}`}${damageType ? ` ${damageType}` : ""}` : "-";
+            const totalFlatBonus = damageAbility + rageBonus;
+            const dmgText = dmg ? `${dmg}${totalFlatBonus === 0 ? "" : `${totalFlatBonus >= 0 ? "+" : ""}${totalFlatBonus}`}${damageType ? ` ${damageType}` : ""}` : "-";
             const modeLabel = attackState === "mainhand-2h" ? "2H" : attackState === "offhand" ? "Offhand" : null;
 
             return (
@@ -194,4 +282,3 @@ export function CharacterCombatPanels({
     </>
   );
 }
-

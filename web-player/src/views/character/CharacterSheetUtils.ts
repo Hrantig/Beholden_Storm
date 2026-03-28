@@ -53,8 +53,9 @@ export function getSaveBonus(
   scores: Record<AbilKey, number | null>,
   level: number,
   prof: ProficiencyMap | null | undefined,
+  extraBonus = 0,
 ): number {
-  return abilityMod(scores[abilityKey]) + (hasNamedProficiency(prof?.saves, abilityName) ? proficiencyBonus(level) : 0);
+  return abilityMod(scores[abilityKey]) + (hasNamedProficiency(prof?.saves, abilityName) ? proficiencyBonus(level) : 0) + extraBonus;
 }
 
 export function getInitiativeBonus(

@@ -41,7 +41,8 @@ export function registerAdminRoutes(app: Express, ctx: ServerContext) {
 
   app.post("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
     const body = parseBody(CreateUserBody, req);
-    const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(body.username);
+    body.username = body.username.toLowerCase();
+    const existing = db.prepare("SELECT id FROM users WHERE LOWER(username) = LOWER(?)").get(body.username);
     if (existing) {
       return res.status(409).json({ ok: false, message: "Username already taken" });
     }
@@ -64,7 +65,7 @@ export function registerAdminRoutes(app: Express, ctx: ServerContext) {
     const body = parseBody(UpdateUserBody, req);
 
     if (body.username && body.username !== row.username) {
-      const conflict = db.prepare("SELECT id FROM users WHERE username = ? AND id != ?").get(body.username, userId);
+      const conflict = db.prepare("SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?").get(body.username, userId);
       if (conflict) return res.status(409).json({ ok: false, message: "Username already taken" });
     }
 
@@ -73,7 +74,7 @@ export function registerAdminRoutes(app: Express, ctx: ServerContext) {
     const values: unknown[] = [t];
 
     if (body.name !== undefined)     { setClauses.push("name = ?");     values.push(body.name); }
-    if (body.username !== undefined) { setClauses.push("username = ?"); values.push(body.username); }
+    if (body.username !== undefined) { setClauses.push("username = ?"); values.push(body.username.toLowerCase()); }
     if (body.isAdmin !== undefined)  { setClauses.push("is_admin = ?"); values.push(body.isAdmin ? 1 : 0); }
     if (body.password !== undefined) { setClauses.push("passhash = ?"); values.push(hashPassword(body.password)); }
 

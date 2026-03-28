@@ -1,27 +1,10 @@
 import React from "react";
 import { api } from "@/services/api";
 import { C } from "@/lib/theme";
-import { CollapsiblePanel } from "@/views/character/CharacterViewParts";
+import { CollapsiblePanel, panelHeaderAddBtn } from "@/views/character/CharacterViewParts";
 import { type InventoryItem, type ParsedItemSpell, getEquipState, parseItemSpells } from "@/views/character/CharacterInventory";
 import type { GrantedSpellCast, ResourceCounter } from "@/views/character/CharacterSheetTypes";
-
-interface ClassCounterDef {
-  name: string;
-  value: number;
-  reset: string;
-}
-
-interface ClassRestDetail {
-  id: string;
-  name: string;
-  hd: number | null;
-  slotsReset?: string | null;
-  autolevels: Array<{
-    level: number;
-    slots: number[] | null;
-    counters: ClassCounterDef[];
-  }>;
-}
+import type { ClassRestDetail } from "@/views/character/SpellSlotsPanel";
 
 interface FetchedSpellDetail {
   id: string;
@@ -40,84 +23,11 @@ interface FetchedSpellDetail {
   save?: string | null;
 }
 
-export function SpellSlotsPanel({ classDetail, level, usedSpellSlots, onSave, accentColor }: {
-  classDetail: ClassRestDetail | null;
-  level: number;
-  usedSpellSlots: Record<string, number>;
-  onSave: (next: Record<string, number>) => Promise<void>;
-  accentColor: string;
-}) {
-  const slots = classDetail?.autolevels.find((al) => al.level === level)?.slots ?? null;
-  if (!slots) return null;
-
-  // slots[0] = cantrips, slots[1] = L1, ... slots[9] = L9
-  const spellLevels = slots
-    .map((count, i) => ({ level: i, count }))
-    .filter(({ level: l, count }) => l > 0 && count > 0);
-
-  if (!spellLevels.length) return null;
-
-  async function toggleSlot(spellLevel: number, slotIndex: number) {
-    const key = String(spellLevel);
-    const used = usedSpellSlots[key] ?? 0;
-    const max = slots![spellLevel] ?? 0;
-    // If clicking a "used" slot (i < used) → restore it; clicking "available" slot → expend it
-    const next = slotIndex < used ? slotIndex : Math.min(max, slotIndex + 1);
-    await onSave({ ...usedSpellSlots, [key]: next });
-  }
-
-  async function longRest() {
-    await onSave({});
-  }
-
-  return (
-    <CollapsiblePanel title="Spell Slots" color={C.colorMagic} storageKey="spell-slots" actions={
-      <button onClick={longRest} style={{
-        fontSize: "var(--fs-tiny)", fontWeight: 700, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
-        background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: C.colorMagic,
-      }}>Long Rest</button>
-    }>
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {spellLevels.map(({ level: sl, count }) => {
-          const used = usedSpellSlots[String(sl)] ?? 0;
-          const remaining = count - used;
-          const ordinals = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
-          return (
-            <div key={sl} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.muted, minWidth: 30 }}>{ordinals[sl]}</div>
-              <div style={{ display: "flex", gap: 5, flex: 1 }}>
-                {Array.from({ length: count }).map((_, i) => {
-                  const filled = i >= used; // filled = available, empty = expended
-                  return (
-                    <button
-                      key={i}
-                      title={filled ? "Expend slot" : "Restore slot"}
-                      onClick={() => toggleSlot(sl, i)}
-                      style={{
-                        width: 22, height: 22, borderRadius: 4, padding: 0, cursor: "pointer",
-                        border: `2px solid ${filled ? accentColor : "rgba(255,255,255,0.15)"}`,
-                        background: filled ? `${accentColor}33` : "transparent",
-                      }}
-                    />
-                  );
-                })}
-              </div>
-              <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, minWidth: 36, textAlign: "right" }}>
-                {remaining}/{count}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </CollapsiblePanel>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // RichSpellsPanel
 // ---------------------------------------------------------------------------
 
-export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, preparedLimit = 0, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, onResourceChange, spellcastingBlocked = false }: {
+export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb, intScore, wisScore, chaScore, accentColor, classDetail, charLevel, preparedLimit = 0, usedSpellSlots, preparedSpells, onSlotsChange, onPreparedChange, onAddSpell, onRemoveSpell, addSpellSourceLabel, onResourceChange, spellcastingBlocked = false }: {
   spells: { name: string; source: string }[];
   grantedSpells?: GrantedSpellCast[];
   resources?: ResourceCounter[];
@@ -133,28 +43,78 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
   preparedSpells: string[];
   onSlotsChange: (next: Record<string, number>) => Promise<void>;
   onPreparedChange: (next: string[]) => Promise<void>;
+  onAddSpell?: (spellName: string) => Promise<void> | void;
+  onRemoveSpell?: (spellName: string) => Promise<void> | void;
+  addSpellSourceLabel?: string;
   onResourceChange?: (key: string, delta: number) => Promise<void> | void;
   spellcastingBlocked?: boolean;
 }) {
   const [details, setDetails] = React.useState<Record<string, FetchedSpellDetail>>({});
   const [selectedSpell, setSelectedSpell] = React.useState<FetchedSpellDetail | null>(null);
   const [collapsedSections, setCollapsedSections] = React.useState<Record<string, boolean>>({});
+  const [addSpellOpen, setAddSpellOpen] = React.useState(false);
+  const [spellSearch, setSpellSearch] = React.useState("");
+  const [spellSearchResults, setSpellSearchResults] = React.useState<FetchedSpellDetail[]>([]);
+  const [spellSearchLoading, setSpellSearchLoading] = React.useState(false);
 
-  const entries = React.useMemo(() => spells.map((sp) => ({
+  const trackedEntries = React.useMemo(() => spells.map((sp) => ({
     rawName: sp.name,
     source: sp.source,
     searchName: sp.name.replace(/\s*\[.+\]$/, "").trim(),
     key: sp.name.toLowerCase().replace(/[^a-z0-9]/g, ""),
+    removable: true,
+    forcedPrepared: false,
   })), [spells]);
   const grantedEntries = React.useMemo(() => grantedSpells.map((sp) => ({
     ...sp,
     searchName: sp.spellName.replace(/\s*\[.+\]$/, "").trim(),
-    key: sp.key.toLowerCase().replace(/[^a-z0-9]/g, ""),
+    key: sp.spellName.toLowerCase().replace(/[^a-z0-9]/g, ""),
+    grantKey: sp.key,
   })), [grantedSpells]);
+  const specialGrantedEntries = React.useMemo(
+    () => grantedEntries.filter((entry) => entry.mode === "at_will" || entry.mode === "expanded_list" || entry.mode === "limited"),
+    [grantedEntries]
+  );
+  const entries = React.useMemo(() => {
+    const merged = new Map<string, {
+      rawName: string;
+      source: string;
+      searchName: string;
+      key: string;
+      removable: boolean;
+      forcedPrepared: boolean;
+    }>();
+    trackedEntries.forEach((entry) => merged.set(entry.key, entry));
+    grantedEntries
+      .filter((entry) => entry.mode === "known" || entry.mode === "always_prepared")
+      .forEach((entry) => {
+        const existing = merged.get(entry.key);
+        if (existing) {
+          existing.removable = false;
+          if (entry.mode === "always_prepared") existing.forcedPrepared = true;
+          return;
+        }
+        merged.set(entry.key, {
+          rawName: entry.spellName,
+          source: entry.sourceName,
+          searchName: entry.searchName,
+          key: entry.key,
+          removable: false,
+          forcedPrepared: entry.mode === "always_prepared",
+        });
+      });
+    return Array.from(merged.values()).sort((a, b) => a.searchName.localeCompare(b.searchName));
+  }, [grantedEntries, trackedEntries]);
+  const forcedPreparedKeys = React.useMemo(
+    () => new Set(entries.filter((entry) => entry.forcedPrepared).map((entry) => entry.key)),
+    [entries]
+  );
+  const knownSpellKeys = React.useMemo(() => new Set(entries.map((entry) => entry.key)), [entries]);
+  const grantedSpellKeys = React.useMemo(() => new Set(specialGrantedEntries.map((entry) => entry.key)), [specialGrantedEntries]);
 
-  const entryKeysStr = [...entries.map((e) => e.key), ...grantedEntries.map((e) => e.key)].join(",");
+  const entryKeysStr = [...entries.map((e) => e.key), ...specialGrantedEntries.map((e) => e.key)].join(",");
   React.useEffect(() => {
-    for (const e of [...entries, ...grantedEntries]) {
+    for (const e of [...entries, ...specialGrantedEntries]) {
       if (details[e.key]) continue;
       api<{ id: string; name: string; level: number | null }[]>(
         `/api/spells/search?q=${encodeURIComponent(e.searchName)}&limit=5`
@@ -199,8 +159,10 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
   }
 
   function togglePrepared(key: string) {
+    if (forcedPreparedKeys.has(key)) return;
     const isPrepared = preparedSpells.includes(key);
-    if (!isPrepared && preparedLimit > 0 && preparedSpells.length >= preparedLimit) return;
+    const userPreparedCount = preparedSpells.filter((entry) => !forcedPreparedKeys.has(entry)).length;
+    if (!isPrepared && preparedLimit > 0 && userPreparedCount >= preparedLimit) return;
     const next = isPrepared
       ? preparedSpells.filter((k) => k !== key)
       : [...preparedSpells, key];
@@ -232,9 +194,43 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
     setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  return (
-    <CollapsiblePanel title="Spells" color={C.colorMagic} storageKey="spells" actions={
-      <div style={{ display: "flex", gap: 6 }}>
+  React.useEffect(() => {
+    const query = spellSearch.trim();
+    if (!addSpellOpen || query.length < 2) {
+      setSpellSearchResults([]);
+      setSpellSearchLoading(false);
+      return;
+    }
+    let alive = true;
+    setSpellSearchLoading(true);
+    api<Array<{ id: string; name: string; level: number | null }>>(`/api/spells/search?q=${encodeURIComponent(query)}&limit=20`)
+      .then(async (results) => {
+        if (!alive) return;
+        const detailed = await Promise.all(
+          results.map(async (result) => {
+            try {
+              return await api<FetchedSpellDetail>(`/api/spells/${result.id}`);
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (alive) setSpellSearchResults(detailed.filter((entry): entry is FetchedSpellDetail => Boolean(entry)));
+      })
+      .catch(() => {
+        if (alive) setSpellSearchResults([]);
+      })
+      .finally(() => {
+        if (alive) setSpellSearchLoading(false);
+      });
+    return () => { alive = false; };
+  }, [addSpellOpen, spellSearch]);
+
+  return (<>
+    <CollapsiblePanel title="Spells" color={accentColor} storageKey="spells" actions={
+      onAddSpell ? <button type="button" onClick={() => setAddSpellOpen(true)} title="Add spell" style={panelHeaderAddBtn(accentColor)}>+</button> : undefined
+    }>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         {([
           { label: "ABILITY", value: spellAbilLabel, highlight: true },
           { label: "SAVE DC",  value: String(saveDc),     highlight: false },
@@ -242,9 +238,8 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
         ] as const).map(({ label, value, highlight }) => (
           <div key={label} style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            padding: "4px 10px", borderRadius: 8,
-            background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.18)",
-            minWidth: 52,
+            padding: "4px 10px", borderRadius: 8, flex: 1,
+            background: "rgba(255,255,255,0.04)", border: `1px solid rgba(255,255,255,0.08)`,
           }}>
             <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</span>
             <span style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: spellcastingBlocked && !highlight ? C.colorPinkRed : highlight ? accentColor : C.text }}>
@@ -253,7 +248,6 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
           </div>
         ))}
       </div>
-    }>
       {spellcastingBlocked && (
         <div style={{
           marginBottom: 10,
@@ -274,7 +268,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
         </div>
       )}
 
-      {grantedEntries.length > 0 && (
+      {specialGrantedEntries.length > 0 && (
         <div style={{ marginBottom: 18, opacity: spellcastingBlocked ? 0.65 : 1 }}>
           <button
             type="button"
@@ -288,12 +282,12 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
               </div>
             </div>
           </button>
-          {!collapsedSections.granted && grantedEntries.map((entry) => {
+          {!collapsedSections.granted && specialGrantedEntries.map((entry) => {
             const detail = details[entry.key];
             const resource = entry.resourceKey ? resources.find((item) => item.key === entry.resourceKey) : null;
             return (
               <div
-                key={entry.key}
+                key={entry.grantKey}
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr auto",
@@ -384,7 +378,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                       </button>
                       <div style={{ textAlign: "center", minWidth: 58 }}>
                         <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text }}>{resource.current}/{resource.max}</div>
-                        <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{resource.reset === "S" ? "Short Rest" : "Long Rest"}</div>
+                        <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>{formatResourceResetLabel(resource.reset)}</div>
                       </div>
                       <button
                         type="button"
@@ -404,6 +398,16 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
       )}
 
       <div style={{ opacity: spellcastingBlocked ? 0.65 : 1 }}>
+      {entries.length === 0 && specialGrantedEntries.length === 0 && (
+        <div style={{
+          padding: "10px 0 4px",
+          fontSize: "var(--fs-small)",
+          color: C.muted,
+          lineHeight: 1.6,
+        }}>
+          No spells on this character yet. Use <strong style={{ color: C.text }}>Add Spell</strong> to track spells found, learned, or granted at the table.
+        </div>
+      )}
       {[...groups.entries()].sort(([a], [b]) => a - b).map(([level, groupEntries]) => {
         const sectionKey = `level:${level}`;
         const isCollapsed = Boolean(collapsedSections[sectionKey]);
@@ -414,9 +418,11 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
         return (
           <div key={level} style={{ marginBottom: 18 }}>
             {/* Level header with inline slots */}
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => toggleSection(sectionKey)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleSection(sectionKey); }}
               style={spellSectionHeaderBtn("rgba(239,68,68,0.25)", 8)}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -448,7 +454,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                 </div>
               )}
               </div>
-            </button>
+            </div>
 
             {!isCollapsed && (
               <>
@@ -469,8 +475,10 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
               const usesSave = spellUsesSave(d);
               const usesAtk = spellUsesAttack(d);
               const isCantrip = level === 0;
-              const isPrepared = isCantrip || preparedSpells.includes(e.key);
-              const preparedLocked = !isCantrip && !isPrepared && preparedLimit > 0 && preparedSpells.length >= preparedLimit;
+              const isAlwaysPrepared = e.forcedPrepared;
+              const isPrepared = isCantrip || isAlwaysPrepared || preparedSpells.includes(e.key);
+              const userPreparedCount = preparedSpells.filter((entry) => !forcedPreparedKeys.has(entry)).length;
+              const preparedLocked = !isCantrip && !isAlwaysPrepared && !isPrepared && preparedLimit > 0 && userPreparedCount >= preparedLimit;
               return (
                 <div key={i} style={{
                   display: "grid",
@@ -486,10 +494,12 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                 >
                   {/* Prepared radio */}
                   <button
-                    onClick={() => !isCantrip && !preparedLocked && togglePrepared(e.key)}
+                    onClick={() => !isCantrip && !isAlwaysPrepared && !preparedLocked && togglePrepared(e.key)}
                     title={
                       isCantrip
                         ? "Cantrip (always prepared)"
+                        : isAlwaysPrepared
+                          ? "Always prepared"
                         : isPrepared
                           ? "Mark unprepared"
                           : preparedLocked
@@ -498,7 +508,7 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
                     }
                     style={{
                       width: 20, height: 20, borderRadius: "50%", padding: 0,
-                      cursor: isCantrip || preparedLocked ? "default" : "pointer", marginTop: 3,
+                      cursor: isCantrip || isAlwaysPrepared || preparedLocked ? "default" : "pointer", marginTop: 3,
                       border: `2px solid ${isPrepared ? accentColor : "rgba(255,255,255,0.25)"}`,
                       background: isPrepared ? accentColor : preparedLocked ? "rgba(255,255,255,0.05)" : "transparent",
                       opacity: preparedLocked ? 0.65 : 1,
@@ -557,6 +567,176 @@ export function RichSpellsPanel({ spells, grantedSpells = [], resources = [], pb
         <SpellDrawer spell={selectedSpell} accentColor={accentColor} onClose={() => setSelectedSpell(null)} charLevel={charLevel} maxSlotLevel={maxSpellSlotLevel} />
       )}
     </CollapsiblePanel>
+    {addSpellOpen && (
+      <AddSpellDrawer
+        accentColor={accentColor}
+        entries={entries}
+        knownSpellKeys={knownSpellKeys}
+        grantedSpellKeys={grantedSpellKeys}
+        addSpellSourceLabel={addSpellSourceLabel}
+        spellSearch={spellSearch}
+        onSpellSearchChange={setSpellSearch}
+        spellSearchLoading={spellSearchLoading}
+        spellSearchResults={spellSearchResults}
+        onAddSpell={onAddSpell}
+        onRemoveSpell={onRemoveSpell}
+        onClose={() => { setAddSpellOpen(false); setSpellSearch(""); }}
+      />
+    )}
+  </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AddSpellDrawer
+// ---------------------------------------------------------------------------
+
+function AddSpellDrawer({ accentColor, entries, knownSpellKeys, grantedSpellKeys, addSpellSourceLabel, spellSearch, onSpellSearchChange, spellSearchLoading, spellSearchResults, onAddSpell, onRemoveSpell, onClose }: {
+  accentColor: string;
+  entries: Array<{ key: string; rawName: string; searchName: string; removable?: boolean }>;
+  knownSpellKeys: Set<string>;
+  grantedSpellKeys: Set<string>;
+  addSpellSourceLabel?: string;
+  spellSearch: string;
+  onSpellSearchChange: (v: string) => void;
+  spellSearchLoading: boolean;
+  spellSearchResults: FetchedSpellDetail[];
+  onAddSpell?: (name: string) => Promise<void> | void;
+  onRemoveSpell?: (name: string) => Promise<void> | void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 900, background: "rgba(0,0,0,0.45)" }} />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 901,
+        width: "min(480px, 92vw)",
+        background: "#0e1220",
+        borderLeft: "1px solid rgba(255,255,255,0.12)",
+        display: "flex", flexDirection: "column",
+        boxShadow: "-8px 0 30px rgba(0,0,0,0.5)",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "18px 20px 14px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        }}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: "var(--fs-title)", color: C.text }}>Add Spell</div>
+            {addSpellSourceLabel && (
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 3 }}>as {addSpellSourceLabel}</div>
+            )}
+          </div>
+          <button type="button" onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 14px", fontSize: "var(--fs-subtitle)", fontWeight: 700 }}>
+            Close
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Current spell list */}
+          {entries.some((entry) => entry.removable) && onRemoveSpell && (
+            <div>
+              <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+                Current Spells
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {entries.filter((entry) => entry.removable).map((entry) => (
+                  <button
+                    key={entry.key}
+                    type="button"
+                    onClick={() => void onRemoveSpell(entry.rawName)}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "5px 10px", borderRadius: 999,
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      background: "rgba(255,255,255,0.04)",
+                      color: C.text, cursor: "pointer",
+                      fontSize: "var(--fs-small)", fontWeight: 700,
+                    }}
+                  >
+                    <span>{entry.searchName}</span>
+                    <span style={{ color: C.muted, fontWeight: 900 }}>×</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search */}
+          <div>
+            <input
+              autoFocus
+              type="search"
+              value={spellSearch}
+              onChange={(e) => onSpellSearchChange(e.target.value)}
+              placeholder="Search spells…"
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: "10px 12px", borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.05)",
+                color: C.text, fontSize: "var(--fs-medium)", outline: "none",
+              }}
+            />
+          </div>
+
+          {/* Results */}
+          {spellSearch.trim().length < 2 ? (
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>Type at least 2 characters to search.</div>
+          ) : spellSearchLoading ? (
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>Searching…</div>
+          ) : spellSearchResults.length === 0 ? (
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>No matching spells found.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {spellSearchResults.map((spell) => {
+                const spellKey = spell.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const alreadyKnown = knownSpellKeys.has(spellKey);
+                const alreadyGranted = grantedSpellKeys.has(spellKey);
+                const disabled = alreadyKnown || alreadyGranted;
+                const preview = (Array.isArray(spell.text) ? spell.text.join(" ") : String(spell.text ?? "")).replace(/\s+/g, " ").trim();
+                return (
+                  <div key={spell.id} style={{
+                    padding: "10px 12px", borderRadius: 10,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(255,255,255,0.025)",
+                    display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "start",
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text }}>{spell.name}</div>
+                      <div style={{ fontSize: "var(--fs-tiny)", color: C.muted, marginTop: 2 }}>
+                        {spell.level === 0 ? "Cantrip" : `Level ${spell.level ?? "—"}`}{spell.school ? ` · ${spell.school}` : ""}
+                      </div>
+                      {preview && (
+                        <div style={{ marginTop: 5, fontSize: "var(--fs-tiny)", color: C.muted, lineHeight: 1.45 }}>
+                          {preview.slice(0, 160)}{preview.length > 160 ? "…" : ""}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => { if (!disabled) void onAddSpell?.(spell.name); }}
+                      style={{
+                        padding: "7px 10px", borderRadius: 8,
+                        border: `1px solid ${disabled ? "rgba(255,255,255,0.10)" : `${accentColor}55`}`,
+                        background: disabled ? "rgba(255,255,255,0.04)" : `${accentColor}18`,
+                        color: disabled ? C.muted : accentColor,
+                        cursor: disabled ? "default" : "pointer",
+                        fontSize: "var(--fs-small)", fontWeight: 800, whiteSpace: "nowrap",
+                      }}
+                    >
+                      {alreadyKnown ? "Added" : alreadyGranted ? "Granted" : "Add"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 

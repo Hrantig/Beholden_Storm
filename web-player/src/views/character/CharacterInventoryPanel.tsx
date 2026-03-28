@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
-import { api } from "@/services/api";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { api, jsonInit } from "@/services/api";
+import { useWs } from "@/services/ws";
 import { C, withAlpha } from "@/lib/theme";
 import { titleCase } from "@/lib/format/titleCase";
+import type { ParsedFeatureEffects } from "@/domain/character/featureEffects";
 import { Select } from "@/ui/Select";
 import { useVirtualList } from "@/lib/monsterPicker/useVirtualList";
 import { useItemSearch } from "@/views/CompendiumView/hooks/useItemSearch";
@@ -44,6 +46,7 @@ import {
   parseChargesMax,
   parseItemSpells,
   parseWeaponMastery,
+  requiresTwoHands,
   totalInventoryWeight,
 } from "@/views/character/CharacterInventory";
 
@@ -63,6 +66,17 @@ type PersistPayload = {
 
 const INVENTORY_PICKER_ROW_HEIGHT = 52;
 const DEFAULT_CONTAINER_ID = "backpack-default";
+const PARTY_STASH_CONTAINER_ID = "party-stash";
+
+interface PartyStashItem {
+  id: string;
+  name: string;
+  quantity: number;
+  weight: number | null;
+  notes: string;
+  rarity: string | null;
+  type: string | null;
+}
 
 function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -102,10 +116,12 @@ function normalizeContainers(containers: InventoryContainer[] | null | undefined
   }));
 }
 
-export function InventoryPanel({ char, charData, accentColor, onSave }: {
+export function InventoryPanel({ char, charData, parsedFeatureEffects, accentColor, campaignId, onSave }: {
   char: InventoryPanelCharacter;
   charData: InventoryPanelCharacterData | null;
+  parsedFeatureEffects?: ParsedFeatureEffects[] | null;
   accentColor: string;
+  campaignId?: string | null;
   onSave: (data: PersistPayload) => Promise<unknown>;
 }) {
   const [items, setItems] = useState<InventoryItem[]>(() =>
@@ -132,6 +148,23 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
   const [currencyInput, setCurrencyInput] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
   const currencyPopupRef = useRef<HTMLDivElement | null>(null);
+  const [partyStashItems, setPartyStashItems] = useState<PartyStashItem[]>([]);
+
+  const fetchPartyStash = useCallback(() => {
+    if (!campaignId) return;
+    api<PartyStashItem[]>(`/api/campaigns/${campaignId}/party-inventory`)
+      .then(setPartyStashItems)
+      .catch(() => {});
+  }, [campaignId]);
+
+  useEffect(() => { fetchPartyStash(); }, [fetchPartyStash]);
+
+  useWs(useCallback((msg) => {
+    if (msg.type === "partyInventory:changed") {
+      const cId = (msg.payload as { campaignId?: string })?.campaignId;
+      if (cId === campaignId) fetchPartyStash();
+    }
+  }, [campaignId, fetchPartyStash]));
 
   useEffect(() => {
     setContainers(normalizeContainers(charData?.inventoryContainers));
@@ -381,11 +414,57 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
   }
 
   async function moveItemToContainer(id: string, containerId: string | null) {
+    if (containerId === PARTY_STASH_CONTAINER_ID && campaignId) {
+      const item = items.find((it) => it.id === id);
+      if (!item) return;
+      await api(`/api/campaigns/${campaignId}/party-inventory`, jsonInit("POST", {
+        name: item.name,
+        quantity: item.quantity,
+        weight: item.weight ?? null,
+        notes: item.notes ?? "",
+        rarity: item.rarity ?? null,
+        type: item.type ?? null,
+        description: item.description ?? "",
+        source: item.source,
+        itemId: item.itemId,
+      }));
+      await persist(items.filter((it) => it.id !== id));
+      setExpandedItemId(null);
+      return;
+    }
     const nextContainerId = containerId && containers.some((container) => container.id === containerId)
       ? containerId
       : DEFAULT_CONTAINER_ID;
     const nextItems = items.map((item) => item.id === id ? { ...item, containerId: nextContainerId } : item);
     await persist(nextItems);
+  }
+
+  async function takeFromPartyStash(stashItem: PartyStashItem) {
+    if (!campaignId) return;
+    await api(`/api/campaigns/${campaignId}/party-inventory/${stashItem.id}`, { method: "DELETE" });
+    const newItem: InventoryItem = {
+      id: uid(),
+      name: stashItem.name,
+      quantity: stashItem.quantity,
+      equipped: false,
+      equipState: "backpack",
+      source: "custom",
+      rarity: stashItem.rarity ?? null,
+      type: stashItem.type ?? null,
+      weight: stashItem.weight ?? null,
+      containerId: DEFAULT_CONTAINER_ID,
+    };
+    await persist([...items, newItem]);
+  }
+
+  async function changePartyStashQty(id: string, quantity: number) {
+    if (!campaignId) return;
+    await api(`/api/campaigns/${campaignId}/party-inventory/${id}/quantity`, jsonInit("PATCH", { quantity }));
+  }
+
+  async function deleteFromPartyStash(id: string) {
+    if (!campaignId) return;
+    await api(`/api/campaigns/${campaignId}/party-inventory/${id}`, { method: "DELETE" });
   }
 
   function toggleContainerCollapsed(containerId: string) {
@@ -401,7 +480,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
       if (it.id === id) return { ...it, equipped: state !== "backpack", equipState: state };
       const currentState = getEquipState(it);
       if (state === "offhand" && currentState === "mainhand-2h") {
-        return canUseTwoHands(it)
+        return canUseTwoHands(it) && !requiresTwoHands(it)
           ? { ...it, equipped: true, equipState: "mainhand-1h" as const }
           : { ...it, equipped: false, equipState: "backpack" as const };
       }
@@ -427,10 +506,10 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
     if (!item || !isWeaponItem(item)) return;
     const state = getEquipState(item);
     if (state === "backpack" || state === "offhand") {
-      await setEquipStateFor(id, !item.dmg1 && item.dmg2 ? "mainhand-2h" : "mainhand-1h");
+      await setEquipStateFor(id, requiresTwoHands(item) || (!item.dmg1 && item.dmg2) ? "mainhand-2h" : "mainhand-1h");
       return;
     }
-    if (state === "mainhand-1h" && canUseTwoHands(item)) {
+    if (state === "mainhand-1h" && canUseTwoHands(item) && !requiresTwoHands(item)) {
       await setEquipStateFor(id, "mainhand-2h");
       return;
     }
@@ -439,7 +518,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
 
   async function toggleOffhand(id: string) {
     const item = items.find((it) => it.id === id);
-    if (!item || !canEquipOffhand(item, charData)) return;
+    if (!item || !canEquipOffhand(item, parsedFeatureEffects)) return;
     const state = getEquipState(item);
     await setEquipStateFor(id, state === "offhand" ? "backpack" : "offhand");
   }
@@ -654,6 +733,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
           {equipped.map((it) => (
             <ItemRow key={it.id} item={it} accentColor={accentColor}
               charData={charData}
+              parsedFeatureEffects={parsedFeatureEffects}
               expanded={expandedItemId === it.id}
               onToggleExpanded={toggleExpandedItem}
               onCycleMain={cycleMainHand}
@@ -756,6 +836,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
             {!isCollapsed && (containerItems.length > 0 ? containerItems.map((it) => (
               <ItemRow key={it.id} item={it} accentColor={accentColor}
                 charData={charData}
+                parsedFeatureEffects={parsedFeatureEffects}
                 expanded={expandedItemId === it.id}
                 onToggleExpanded={toggleExpandedItem}
                 onCycleMain={cycleMainHand}
@@ -777,6 +858,59 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
           </div>
         );
       })}
+
+      {/* Party Stash */}
+      {campaignId && (() => {
+        const stashCollapsed = collapsedContainerIds.includes(PARTY_STASH_CONTAINER_ID);
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <div
+              onClick={() => toggleContainerCollapsed(PARTY_STASH_CONTAINER_ID)}
+              style={{ ...subLabelStyle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  color: C.muted,
+                  fontSize: "var(--fs-tiny)",
+                  lineHeight: 1,
+                  transform: stashCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                  transition: "transform 120ms ease",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 10,
+                  flexShrink: 0,
+                }}
+              >▼</span>
+              Party Stash
+              <span style={{ fontWeight: 400, color: C.muted, textTransform: "none", letterSpacing: 0, fontSize: "var(--fs-tiny)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>— shared</span>
+            </div>
+            {!stashCollapsed && (partyStashItems.length === 0 ? (
+              <div style={{
+                padding: "8px 10px",
+                border: "1px dashed rgba(255,255,255,0.08)",
+                borderRadius: 10,
+                color: C.muted,
+                fontSize: "var(--fs-small)",
+                background: "rgba(255,255,255,0.02)",
+              }}>
+                Empty. Move an item here to share it with the party.
+              </div>
+            ) : (
+              partyStashItems.map((it) => (
+                <PartyStashItemRow
+                  key={it.id}
+                  item={it}
+                  onTake={() => void takeFromPartyStash(it)}
+                  onDelete={() => void deleteFromPartyStash(it.id).then(fetchPartyStash)}
+                  onQuantity={(q) => void changePartyStashQty(it.id, q).then(fetchPartyStash)}
+                />
+              ))
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Inventory add controls */}
       {false ? (
@@ -825,7 +959,7 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
       {selectedItem ? (
         <InventoryItemDrawer
           item={selectedItem}
-          containers={containers}
+          containers={campaignId ? [...containers, { id: PARTY_STASH_CONTAINER_ID, name: "Party Stash", ignoreWeight: true }] : containers}
           detail={expandedDetail}
           busy={expandedBusy}
           accentColor={accentColor}
@@ -850,10 +984,77 @@ export function InventoryPanel({ char, charData, accentColor, onSave }: {
   );
 }
 
-function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCycleMain, onToggleOffhand, onToggleWorn, onRemove, onQty }: {
+function PartyStashItemRow({ item, onTake, onDelete, onQuantity }: {
+  item: PartyStashItem;
+  onTake: () => void;
+  onDelete: () => void;
+  onQuantity: (q: number) => void;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "6px 8px",
+      borderBottom: `1px solid rgba(255,255,255,0.05)`,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "var(--fs-medium)", fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {item.name}
+        </div>
+        {item.notes && (
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {item.notes}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        <button
+          onClick={() => item.quantity > 1 && onQuantity(item.quantity - 1)}
+          disabled={item.quantity <= 1}
+          style={{ ...stashQtyBtn, opacity: item.quantity <= 1 ? 0.3 : 1 }}
+        >−</button>
+        <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: C.text, minWidth: 20, textAlign: "center" }}>{item.quantity}</span>
+        <button onClick={() => onQuantity(item.quantity + 1)} style={stashQtyBtn}>+</button>
+      </div>
+      <button
+        onClick={onTake}
+        title="Take — moves item to your backpack"
+        style={{
+          background: "rgba(255,255,255,0.07)", border: `1px solid ${C.panelBorder}`,
+          borderRadius: 6, color: C.text, cursor: "pointer",
+          fontSize: "var(--fs-tiny)", fontWeight: 700, padding: "3px 8px", flexShrink: 0,
+        }}
+      >Take</button>
+      <button
+        onClick={onDelete}
+        title="Remove from stash"
+        style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(248,113,113,0.5)", fontSize: 16, padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+      >×</button>
+    </div>
+  );
+}
+
+const stashQtyBtn: React.CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  border: `1px solid ${C.panelBorder}`,
+  borderRadius: 5,
+  color: C.text,
+  cursor: "pointer",
+  width: 20,
+  height: 20,
+  fontSize: 13,
+  lineHeight: "1",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  flexShrink: 0,
+};
+
+function ItemRow({ item, accentColor, charData, parsedFeatureEffects, expanded, onToggleExpanded, onCycleMain, onToggleOffhand, onToggleWorn, onRemove, onQty }: {
   item: InventoryItem;
   accentColor: string;
   charData: InventoryPanelCharacterData | null;
+  parsedFeatureEffects?: ParsedFeatureEffects[] | null;
   expanded: boolean;
   onToggleExpanded: (id: string) => void;
   onCycleMain: (id: string) => void;
@@ -865,9 +1066,9 @@ function ItemRow({ item, accentColor, charData, expanded, onToggleExpanded, onCy
   const state = getEquipState(item);
   const isWeapon = isWeaponItem(item);
   const isArmor = isArmorItem(item);
-  const offhandAllowed = canEquipOffhand(item, charData);
+  const offhandAllowed = canEquipOffhand(item, parsedFeatureEffects);
   const mainActive = state === "mainhand-1h" || state === "mainhand-2h";
-  const mainLabel = state === "mainhand-2h" ? "2H" : "1H";
+  const mainLabel = requiresTwoHands(item) ? "2H" : state === "mainhand-2h" ? "2H" : "1H";
   const equipped = state !== "backpack";
   const lacksArmorProficiency = equipped && (isArmor || isShieldItem(item)) && !hasArmorProficiency(item, charData?.proficiencies as any);
   const mastery = isWeapon ? parseWeaponMastery(item) : null;

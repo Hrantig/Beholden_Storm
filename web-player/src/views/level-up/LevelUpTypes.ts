@@ -63,7 +63,7 @@ export interface LevelUpCharacter {
   } | null;
 }
 
-export type AsiMode = "+2" | "+1+1" | "feat" | null;
+export type AsiMode = "asi" | "feat" | null;
 export type HpChoice = "roll" | "average" | "manual" | null;
 
 export interface LevelUpSpellListChoiceEntry {
@@ -84,4 +84,6 @@ export interface LevelUpResolvedSpellChoiceEntry {
   note?: string | null;
   linkedTo?: string | null;
   listNames: string[];
+  schools?: string[];
+  ritualOnly?: boolean;
 }

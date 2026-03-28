@@ -1188,7 +1188,7 @@ export function renderLevelStep({
         <div key={i} style={{ marginBottom: 10 }}>
           <div style={{ fontWeight: 700, fontSize: "var(--fs-small)", color: C.accentHl }}>Lv{f.level} · {f.name}</div>
           <div style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.4 }}>
-            {f.text.slice(0, 300)}{f.text.length > 300 ? "…" : ""}
+            {f.text.replace(/Source:.*$/m, "").trim()}
           </div>
           {f.preparedSpellProgression?.length ? (
             <PreparedSpellProgressionBlock tables={f.preparedSpellProgression} compact accentColor={C.accentHl} />

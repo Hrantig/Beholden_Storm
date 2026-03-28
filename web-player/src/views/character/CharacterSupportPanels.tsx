@@ -18,6 +18,7 @@ export function CharacterSupportPanels(props: {
   hitDiceMax: number;
   hitDieSize: number | null;
   hitDieConMod: number;
+  featureHpMaxBonus: number;
   classResources: ResourceCounter[];
   playerNotesList: PlayerNote[];
   allSharedNotes: PlayerNote[];
@@ -46,6 +47,7 @@ export function CharacterSupportPanels(props: {
     hitDiceMax,
     hitDieSize,
     hitDieConMod,
+    featureHpMaxBonus,
     classResources,
     playerNotesList,
     allSharedNotes,
@@ -67,6 +69,14 @@ export function CharacterSupportPanels(props: {
     onSavePlayerNotesOrder,
     onSaveSharedNotesOrder,
   } = props;
+
+  const formatResetLabel = (reset: string): string => {
+    const code = String(reset ?? "").trim().toUpperCase();
+    if (code === "S") return "Resets on Short Rest";
+    if (code === "L") return "Resets on Long Rest";
+    if (code === "SL") return "Resets on Short or Long Rest";
+    return `Reset ${reset}`;
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -129,6 +139,27 @@ export function CharacterSupportPanels(props: {
             </div>
           </div>
 
+          {featureHpMaxBonus !== 0 && (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
+                Max HP Bonus
+              </div>
+              <div style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: featureHpMaxBonus > 0 ? accentColor : C.colorPinkRed }}>
+                {featureHpMaxBonus > 0 ? "+" : ""}{featureHpMaxBonus}
+              </div>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
+                Passive feature bonus applied to maximum hit points.
+              </div>
+            </div>
+          )}
+
           {classResources.length > 0 && (
             <div>
               <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
@@ -152,7 +183,7 @@ export function CharacterSupportPanels(props: {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, color: C.text }}>{resource.name}</div>
                       <div style={{ fontSize: "var(--fs-tiny)", color: C.muted }}>
-                        {resource.reset === "S" ? "Resets on Short Rest" : resource.reset === "L" ? "Resets on Long Rest" : `Reset ${resource.reset}`}
+                        {formatResetLabel(resource.reset)}
                       </div>
                     </div>
                     <button

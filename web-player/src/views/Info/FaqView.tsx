@@ -1,13 +1,13 @@
 import React from "react";
 import { Panel } from "@/ui/Panel";
-import { theme } from "@/theme/theme";
+import { C } from "@/lib/theme";
 import { InfoPageLayout } from "./InfoPageLayout";
 
 function Q(props: { q: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontWeight: 900, marginBottom: 4 }}>{props.q}</div>
-      <div style={{ color: theme.colors.text, lineHeight: 1.55 }}>{props.children}</div>
+      <div style={{ color: C.text, lineHeight: 1.55 }}>{props.children}</div>
     </div>
   );
 }

@@ -55,6 +55,7 @@ import { registerTreasureRoutes } from "../routes/treasure.js";
 import { registerExportImportRoutes } from "../routes/exportImport.js";
 import { registerUpdateCheckRoutes } from "../routes/updateCheck.js";
 import { registerWebUiRoutes } from "../routes/webUi.js";
+import { registerPartyInventoryRoutes } from "../routes/partyInventory.js";
 
 export function createServer() {
   const runtime = getRuntimeConfig();
@@ -149,6 +150,7 @@ export function createServer() {
   registerExportImportRoutes(app, ctx);
   registerUpdateCheckRoutes(app, ctx);
   registerWebUiRoutes(app, ctx);
+  registerPartyInventoryRoutes(app, ctx);
 
   // --- error handling -------------------------------------------------------
   app.use(multerErrorMiddleware);

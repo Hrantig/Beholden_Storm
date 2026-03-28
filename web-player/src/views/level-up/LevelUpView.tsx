@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, jsonInit } from "@/services/api";
 import { C } from "@/lib/theme";
 import { rollDiceExpr } from "@/lib/dice";
+import { collectSpellChoicesFromEffects, parseFeatureEffects } from "@/domain/character/parseFeatureEffects";
 import { abilityMod, formatModifier } from "@/views/character/CharacterSheetUtils";
 import type { ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 import {
@@ -17,6 +18,7 @@ import {
   getSubclassList,
   isSpellcaster,
   tableValueAtLevel,
+  normalizeChoiceKey,
 } from "@/views/character-creator/utils/CharacterCreatorUtils";
 import {
   buildResolvedSpellChoiceEntry,
@@ -37,6 +39,7 @@ import type {
 } from "@/views/level-up/LevelUpTypes";
 import { BackBtn, ChoiceBtn, ExpertiseSelectionSection, FeatSelectionSection, Section, SpellChoiceList, Wrap } from "@/views/level-up/LevelUpParts";
 import { buildLevelUpPayload, deriveAllowedInvocationIds, deriveFeatAbilityBonuses, deriveHpGain, deriveLevelUpValidation, derivePreviewScores } from "@/views/level-up/LevelUpUtils";
+import { cleanFeatureText, hasKeys, mergeAutoLevels, reconcileSelectedSpellIds, sameSelectionMap, sameSpellChoiceOptionMap, stripRulesetSuffix } from "@/views/level-up/LevelUpHelpers";
 
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
 const ABILITY_LABELS: Record<string, string> = {
@@ -44,7 +47,6 @@ const ABILITY_LABELS: Record<string, string> = {
   int: "Intelligence", wis: "Wisdom", cha: "Charisma",
 };
 
-const SLOT_LABELS = ["Cantrips", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
 export function LevelUpView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -77,10 +79,12 @@ export function LevelUpView() {
   const [chosenFeatDetail, setChosenFeatDetail] = useState<FeatDetail | null>(null);
   const [chosenFeatOptions, setChosenFeatOptions] = useState<Record<string, string[]>>({});
   const [featSpellChoiceOptions, setFeatSpellChoiceOptions] = useState<Record<string, SpellSummary[]>>({});
+  const [classFeatureSpellChoiceOptions, setClassFeatureSpellChoiceOptions] = useState<Record<string, SpellSummary[]>>({});
   const [classCantrips, setClassCantrips] = useState<SpellSummary[]>([]);
   const [classSpells, setClassSpells] = useState<SpellSummary[]>([]);
   const [classInvocations, setClassInvocations] = useState<SpellSummary[]>([]);
   const nextLevel = (char?.level ?? 0) + 1;
+  const mergedAutolevels = React.useMemo(() => mergeAutoLevels(classDetail), [classDetail]);
 
   // -------------------------------------------------------------------------
   // Load character + class
@@ -149,20 +153,60 @@ export function LevelUpView() {
   const hpAverage = Math.floor(hd / 2) + 1 + conMod;
   const hpRollMax = hd + conMod;
 
-  const autoLevel = classDetail?.autolevels.find((al) => al.level === nextLevel);
-  const newFeatures = autoLevel?.features.filter((f) => !f.optional || (Boolean(subclass) && /\(([^()]+)\)\s*$/.test(f.name) && new RegExp(`\\(${subclass.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)\\s*$`, "i").test(f.name))) ?? [];
-  const isAsiLevel = autoLevel?.scoreImprovement ?? false;
+  const autoLevel = React.useMemo(
+    () => mergedAutolevels.find((al) => al.level === nextLevel) ?? null,
+    [mergedAutolevels, nextLevel]
+  );
+  const hasAsiFeature = Boolean(
+    autoLevel?.features?.some((feature) => /ability score improvement/i.test(feature.name))
+  );
+  const spellcastingFeatureText = classDetail?.autolevels
+    .flatMap((al) => al.features ?? [])
+    .find((feature) => /spellcasting|pact magic/i.test(feature.name))
+    ?.text ?? "";
+  const usesFlexiblePreparedSpells = /changing your prepared spells\.\s*whenever you finish a (?:short|long) rest/i.test(spellcastingFeatureText);
+  const newFeatures = React.useMemo(
+    () => autoLevel?.features.filter((f) =>
+      !f.optional
+      || (
+        Boolean(subclass)
+        && /\(([^()]+)\)\s*$/.test(f.name)
+        && new RegExp(`\\(${subclass.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)\\s*$`, "i").test(f.name)
+      )
+    ) ?? [],
+    [autoLevel, subclass]
+  );
+  const isAsiLevel = Boolean(autoLevel?.scoreImprovement ?? hasAsiFeature);
   const newSlots = autoLevel?.slots ?? null;
   const subclassLevel = classDetail ? getSubclassLevel(classDetail) : null;
   const subclassOptions = classDetail ? getSubclassList(classDetail) : [];
-  const needsSubclassChoice = Boolean(subclassLevel && nextLevel >= subclassLevel && subclassOptions.length > 0);
+  const showSubclassChoice = Boolean(subclassLevel && nextLevel === subclassLevel && subclassOptions.length > 0);
+  const needsSubclassChoice = Boolean(subclassLevel && nextLevel >= subclassLevel && subclassOptions.length > 0 && !subclass.trim());
+  const subclassOverview = React.useMemo(() => {
+    if (!classDetail || !subclass.trim()) return null;
+    const className = stripRulesetSuffix(classDetail.name);
+    const subclassPattern = new RegExp(`^${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+Subclass:\\s+${subclass.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+    for (const autolevel of mergedAutolevels) {
+      const feature = autolevel.features.find((entry) => subclassPattern.test(entry.name));
+      if (feature) return feature;
+    }
+    return null;
+  }, [classDetail, mergedAutolevels, subclass]);
+  const selectedSubclassFeatures = React.useMemo(() => {
+    if (!autoLevel || !subclass.trim()) return [];
+    const subclassSuffix = new RegExp(`\\(${subclass.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)\\s*$`, "i");
+    return autoLevel.features.filter((feature) => subclassSuffix.test(feature.name));
+  }, [autoLevel, subclass]);
   const cantripCount = classDetail ? getCantripCount(classDetail, nextLevel, subclass) : 0;
   const invocTable = classDetail ? getClassFeatureTable(classDetail, "Invocation", nextLevel, subclass) : [];
   const invocCount = invocTable.length > 0 ? tableValueAtLevel(invocTable, nextLevel) : 0;
   const prepCount = classDetail ? getPreparedSpellCount(classDetail, nextLevel, subclass) : 0;
   const maxSpellLevel = classDetail ? getMaxSlotLevel(classDetail, nextLevel, subclass) : 0;
   const spellcaster = classDetail ? isSpellcaster(classDetail, nextLevel, subclass) : false;
-  const expertiseChoices = classDetail ? getClassExpertiseChoices(classDetail, nextLevel) : [];
+  const expertiseChoices = React.useMemo(
+    () => (classDetail ? getClassExpertiseChoices(classDetail, nextLevel).filter((choice) => choice.key.startsWith(`classexpertise:${nextLevel}:`)) : []),
+    [classDetail, nextLevel]
+  );
   const charProficiencies: ProficiencyMap = {
     skills: Array.isArray(char?.characterData?.proficiencies?.skills) ? char.characterData.proficiencies.skills : [],
     expertise: Array.isArray(char?.characterData?.proficiencies?.expertise) ? char.characterData.proficiencies.expertise : [],
@@ -176,11 +220,23 @@ export function LevelUpView() {
     masteries: Array.isArray(char?.characterData?.proficiencies?.masteries) ? char.characterData.proficiencies.masteries : [],
   };
   const proficientSkills = Array.isArray(charProficiencies?.skills)
-    ? charProficiencies.skills.map((entry) => entry.name)
+    ? charProficiencies.skills
+      .map((entry) => typeof entry === "string" ? entry : entry?.name)
+      .filter((entry): entry is string => Boolean(entry))
     : [];
   const existingExpertise = Array.isArray(charProficiencies?.expertise)
-    ? charProficiencies.expertise.map((entry) => entry.name)
+    ? charProficiencies.expertise
+      .map((entry) => typeof entry === "string" ? entry : entry?.name)
+      .filter((entry): entry is string => Boolean(entry))
     : [];
+  const existingClassSpellNames = React.useMemo(
+    () => Array.isArray(char?.characterData?.proficiencies?.spells)
+      ? char.characterData.proficiencies.spells
+        .filter((entry) => entry.source === (classDetail?.name ?? char.className))
+        .map((entry) => entry.name)
+      : [],
+    [char?.characterData?.proficiencies?.spells, char?.className, classDetail?.name]
+  );
   const featChoiceEntries = React.useMemo(
     () => (chosenFeatDetail?.parsed.choices ?? []).filter((choice) => choice.type !== "damage_type"),
     [chosenFeatDetail]
@@ -231,6 +287,36 @@ export function LevelUpView() {
     },
     [chosenFeatDetail, chosenFeatOptions, featChoiceEntries, nextLevel]
   );
+  const parsedNewFeatureEffects = React.useMemo(
+    () => newFeatures.map((feature, index) =>
+      parseFeatureEffects({
+        source: {
+          id: `levelup:${nextLevel}:${index}:${feature.name}`,
+          kind: /\(/.test(feature.name) ? "subclass" : "class",
+          name: feature.name,
+          text: feature.text,
+          level: nextLevel,
+        },
+        text: feature.text,
+      })
+    ),
+    [newFeatures, nextLevel]
+  );
+  const classFeatureResolvedSpellChoices = React.useMemo<LevelUpResolvedSpellChoiceEntry[]>(
+    () => collectSpellChoicesFromEffects(parsedNewFeatureEffects).map((choice) => ({
+      key: `levelupclassfeature:${nextLevel}:${choice.id}`,
+      title: choice.source.name,
+      sourceLabel: choice.source.name,
+      count: choice.count.kind === "fixed" ? choice.count.value : 0,
+      level: choice.level,
+      note: choice.note ?? null,
+      linkedTo: null,
+      listNames: choice.spellLists,
+      schools: choice.schools,
+      ritualOnly: false,
+    })),
+    [nextLevel, parsedNewFeatureEffects]
+  );
   const allowedInvocationIds = React.useMemo(
     () => deriveAllowedInvocationIds({ classCantrips, classInvocations, chosenCantrips, chosenInvocations, nextLevel }),
     [chosenCantrips, chosenInvocations, classCantrips, classInvocations, nextLevel]
@@ -238,15 +324,15 @@ export function LevelUpView() {
 
   useEffect(() => {
     setChosenCantrips((prev) => {
-      const next = prev.filter((id) => classCantrips.some((spell) => spell.id === id)).slice(0, cantripCount);
+      const next = reconcileSelectedSpellIds(prev, classCantrips, existingClassSpellNames).slice(0, cantripCount);
       return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
     });
-  }, [classCantrips, cantripCount]);
+  }, [classCantrips, cantripCount, existingClassSpellNames]);
 
   useEffect(() => {
     if (maxSpellLevel === 0) return;
     setChosenSpells((prev) => {
-      const next = prev
+      const next = reconcileSelectedSpellIds(prev, classSpells, existingClassSpellNames)
         .filter((id) => {
           const spell = classSpells.find((entry) => entry.id === id);
           const spellLevel = Number(spell?.level ?? 0);
@@ -255,7 +341,7 @@ export function LevelUpView() {
         .slice(0, prepCount);
       return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
     });
-  }, [classSpells, maxSpellLevel, prepCount]);
+  }, [classSpells, existingClassSpellNames, maxSpellLevel, prepCount]);
 
   useEffect(() => {
     setChosenInvocations((prev) => {
@@ -269,48 +355,78 @@ export function LevelUpView() {
     setChosenExpertise((prev) => {
       let changed = false;
       const next: Record<string, string[]> = { ...prev };
-      const taken = new Set(existingExpertise.map((name) => name.toLowerCase()));
+      const taken = new Set(existingExpertise.map((name) => normalizeChoiceKey(name)));
+      const proficientSkillKeys = new Set(proficientSkills.map((skill) => normalizeChoiceKey(skill)));
+      const existingExpertiseEntries = Array.isArray(char?.characterData?.proficiencies?.expertise)
+        ? char.characterData.proficiencies.expertise
+        : [];
       for (const choice of expertiseChoices) {
-        const options = (choice.options ?? proficientSkills).filter((skill) => proficientSkills.includes(skill));
+        const options = (choice.options ?? proficientSkills).filter((skill) => proficientSkillKeys.has(normalizeChoiceKey(skill)));
         const current = prev[choice.key] ?? [];
+        const seededCurrent = current.length > 0
+          ? current
+          : existingExpertiseEntries
+            .filter((entry) => typeof entry !== "string" && entry?.source === choice.source)
+            .map((entry) => entry.name)
+            .filter((skill) => options.some((option) => normalizeChoiceKey(option) === normalizeChoiceKey(skill)))
+            .slice(0, choice.count);
         const filtered = current
-          .filter((skill) => options.includes(skill))
-          .filter((skill) => !taken.has(skill.toLowerCase()))
+          .filter((skill) => options.some((option) => normalizeChoiceKey(option) === normalizeChoiceKey(skill)))
+          .filter((skill) => !taken.has(normalizeChoiceKey(skill)))
           .slice(0, choice.count);
-        filtered.forEach((skill) => taken.add(skill.toLowerCase()));
-        if (filtered.length === 0) delete next[choice.key];
-        else next[choice.key] = filtered;
-        if (filtered.length !== current.length || filtered.some((skill, index) => skill !== current[index])) changed = true;
+        const finalSelection = filtered.length > 0 ? filtered : seededCurrent;
+        finalSelection.forEach((skill) => taken.add(normalizeChoiceKey(skill)));
+        if (finalSelection.length === 0) delete next[choice.key];
+        else next[choice.key] = finalSelection;
+        if (finalSelection.length !== current.length || finalSelection.some((skill, index) => skill !== current[index])) changed = true;
       }
       return changed ? next : prev;
     });
-  }, [expertiseChoices, proficientSkills, existingExpertise]);
+  }, [char?.characterData?.proficiencies?.expertise, expertiseChoices, proficientSkills, existingExpertise]);
 
   useEffect(() => {
     if (!chosenFeatDetail) {
-      setChosenFeatOptions({});
-      setFeatSpellChoiceOptions({});
+      setChosenFeatOptions((prev) => hasKeys(prev) ? {} : prev);
+      setFeatSpellChoiceOptions((prev) => hasKeys(prev) ? {} : prev);
       return;
     }
   }, [chosenFeatDetail]);
 
   useEffect(() => {
     if (!chosenFeatDetail) {
-      setFeatSpellChoiceOptions({});
+      setFeatSpellChoiceOptions((prev) => hasKeys(prev) ? {} : prev);
       return;
     }
     let alive = true;
     if (featResolvedSpellChoices.length === 0) {
-      setFeatSpellChoiceOptions({});
+      setFeatSpellChoiceOptions((prev) => hasKeys(prev) ? {} : prev);
       return;
     }
     loadSpellChoiceOptions(featResolvedSpellChoices, (query) => api<SpellSummary[]>(query)).then((optionsByKey) => {
-      if (alive) setFeatSpellChoiceOptions(optionsByKey);
+      if (alive) {
+        setFeatSpellChoiceOptions((prev) => sameSpellChoiceOptionMap(prev, optionsByKey) ? prev : optionsByKey);
+      }
     }).catch(() => {
-      if (alive) setFeatSpellChoiceOptions({});
+      if (alive) setFeatSpellChoiceOptions((prev) => hasKeys(prev) ? {} : prev);
     });
     return () => { alive = false; };
   }, [chosenFeatDetail, featResolvedSpellChoices]);
+
+  useEffect(() => {
+    let alive = true;
+    if (classFeatureResolvedSpellChoices.length === 0) {
+      setClassFeatureSpellChoiceOptions((prev) => hasKeys(prev) ? {} : prev);
+      return;
+    }
+    loadSpellChoiceOptions(classFeatureResolvedSpellChoices, (query) => api<SpellSummary[]>(query)).then((optionsByKey) => {
+      if (alive) {
+        setClassFeatureSpellChoiceOptions((prev) => sameSpellChoiceOptionMap(prev, optionsByKey) ? prev : optionsByKey);
+      }
+    }).catch(() => {
+      if (alive) setClassFeatureSpellChoiceOptions((prev) => hasKeys(prev) ? {} : prev);
+    });
+    return () => { alive = false; };
+  }, [classFeatureResolvedSpellChoices]);
 
   const featChoiceOptionsByKey = React.useMemo(() => {
     const entries: Array<[string, string[]]> = [];
@@ -343,12 +459,13 @@ export function LevelUpView() {
         if (filtered.length === 0) delete next[key];
         else next[key] = filtered;
       }
-      return sanitizeSpellChoiceSelections({
+      const sanitized = sanitizeSpellChoiceSelections({
         currentSelections: next,
         spellListChoices: featSpellListChoices,
         resolvedSpellChoices: featResolvedSpellChoices,
         spellOptionsByKey: featSpellChoiceOptions,
       });
+      return sameSelectionMap(prev, sanitized) ? prev : sanitized;
     });
   }, [chosenFeatDetail, featChoiceEntries, featChoiceOptionsByKey, featResolvedSpellChoices, featSpellChoiceOptions, featSpellListChoices, nextLevel]);
 
@@ -425,11 +542,26 @@ export function LevelUpView() {
       hpGain,
     ]
   );
+  const lockedCantripIds = React.useMemo(
+    () => new Set(reconcileSelectedSpellIds(char?.characterData?.chosenCantrips ?? [], classCantrips, existingClassSpellNames).slice(0, cantripCount)),
+    [char?.characterData?.chosenCantrips, classCantrips, existingClassSpellNames, cantripCount]
+  );
+  const lockedSpellIds = React.useMemo(
+    () => new Set(reconcileSelectedSpellIds(char?.characterData?.chosenSpells ?? [], classSpells, existingClassSpellNames)
+      .filter((id) => {
+        const spell = classSpells.find((entry) => entry.id === id);
+        const spellLevel = Number(spell?.level ?? 0);
+        return Boolean(spell) && spellLevel > 0 && spellLevel <= maxSpellLevel;
+      })
+      .slice(0, prepCount)),
+    [char?.characterData?.chosenSpells, classSpells, existingClassSpellNames, maxSpellLevel, prepCount]
+  );
   const extraFeatSpellSelectionsValid = React.useMemo(
     () =>
       featSpellListChoices.every((choice) => (chosenFeatOptions[choice.key] ?? []).length === choice.count)
-      && featResolvedSpellChoices.every((choice) => (chosenFeatOptions[choice.key] ?? []).length === choice.count),
-    [chosenFeatOptions, featResolvedSpellChoices, featSpellListChoices]
+      && featResolvedSpellChoices.every((choice) => (chosenFeatOptions[choice.key] ?? []).length === choice.count)
+      && classFeatureResolvedSpellChoices.every((choice) => (chosenFeatOptions[choice.key] ?? []).length === choice.count),
+    [chosenFeatOptions, classFeatureResolvedSpellChoices, featResolvedSpellChoices, featSpellListChoices]
   );
 
   if (loading) return <Wrap><p style={{ color: C.muted }}>Loading…</p></Wrap>;
@@ -442,6 +574,16 @@ export function LevelUpView() {
       </Wrap>
     );
   }
+  const cantripChoiceCount = Math.max(0, cantripCount - lockedCantripIds.size);
+  const spellChoiceCount = Math.max(0, prepCount - lockedSpellIds.size);
+  const displayedChosenCantrips = chosenCantrips.filter((id) => !lockedCantripIds.has(id));
+  const displayedChosenSpells = chosenSpells.filter((id) => !lockedSpellIds.has(id));
+  const availableCantripChoices = classCantrips.filter((spell) => !lockedCantripIds.has(spell.id));
+  const availableSpellChoices = classSpells.filter((spell) =>
+    !lockedSpellIds.has(spell.id)
+    && Number(spell.level ?? 0) > 0
+    && Number(spell.level ?? 0) <= maxSpellLevel
+  );
 
   function rollHp() {
     const rolled = rollDiceExpr(`1d${hd}`);
@@ -452,13 +594,13 @@ export function LevelUpView() {
 
   function toggleAsiPoint(key: string) {
     if (!asiMode || asiMode === "feat") return;
-    const cap = asiMode === "+2" ? 2 : 1;
-    const current = asiStats[key] ?? 0;
     setAsiStats((prev) => {
+      const current = prev[key] ?? 0;
+      const totalAssigned = Object.values(prev).reduce((sum, value) => sum + value, 0);
       const next = { ...prev };
-      if (current >= cap) {
+      if (current >= 2) {
         delete next[key];
-      } else if (asiTotal < 2) {
+      } else if (totalAssigned < 2) {
         next[key] = current + 1;
       }
       return next;
@@ -489,6 +631,10 @@ export function LevelUpView() {
       const selectedSpellEntries = classSpells
         .filter((spell) => chosenSpells.includes(spell.id))
         .map((spell) => ({ name: spell.name, source: classDetail?.name ?? char.className }));
+      const selectedClassFeatureSpellEntries = classFeatureResolvedSpellChoices.flatMap((choice) => {
+        const selected = chosenFeatOptions[choice.key] ?? [];
+        return selected.map((name) => ({ name, source: choice.sourceLabel ?? choice.title }));
+      });
       const selectedInvocationEntries = classInvocations
         .filter((spell) => chosenInvocations.includes(spell.id))
         .map((spell) => ({ name: spell.name, source: classDetail?.name ?? char.className }));
@@ -511,6 +657,7 @@ export function LevelUpView() {
         classDetailName: classDetail?.name,
         selectedCantripEntries,
         selectedSpellEntries,
+        selectedClassFeatureSpellEntries,
         selectedInvocationEntries,
         baseScores,
         asiMode,
@@ -616,13 +763,13 @@ export function LevelUpView() {
 
           {/* Mode selection */}
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-            {(["+2", "+1+1", "feat"] as const).map((m) => (
+            {(["asi", "feat"] as const).map((m) => (
               <ChoiceBtn
                 key={m}
                 active={asiMode === m}
                 onClick={() => { clearAsi(); setAsiMode(m); }}
               >
-                {m === "+2" ? "+2 to one" : m === "+1+1" ? "+1 / +1" : "Take a Feat"}
+                {m === "asi" ? "Improve Abilities" : "Take a Feat"}
               </ChoiceBtn>
             ))}
           </div>
@@ -717,43 +864,116 @@ export function LevelUpView() {
         </Section>
       )}
 
-      {needsSubclassChoice && (
+      {showSubclassChoice && (
         <Section title={`Subclass at Level ${nextLevel}`} accent={accentColor}>
           <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 12 }}>
-            Choose your subclass.
+            {subclass.trim() ? "Subclass selected. You can change it before confirming level-up." : "Choose your subclass."}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
-            {subclassOptions.map((option) => (
-              <ChoiceBtn key={option} active={subclass === option} onClick={() => setSubclass(option)}>
-                {option}
-              </ChoiceBtn>
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
+              {subclassOptions.map((option) => (
+                <ChoiceBtn key={option} active={subclass === option} onClick={() => setSubclass(option)}>
+                  {option}
+                </ChoiceBtn>
+              ))}
+            </div>
+            <div style={{
+              padding: "12px 14px",
+              borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.03)",
+              minHeight: 120,
+            }}>
+              {subclassOverview ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: "var(--fs-large)", fontWeight: 900, color: "#fff", marginBottom: 6 }}>
+                      {subclass}
+                    </div>
+                    <div style={{ fontSize: "var(--fs-small)", color: C.muted, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                      {cleanFeatureText(subclassOverview.text)}
+                    </div>
+                  </div>
+                  {selectedSubclassFeatures.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: "var(--fs-tiny)", color: accentColor, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
+                        Features Gained Now
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {selectedSubclassFeatures.map((feature) => (
+                          <div key={feature.name}>
+                            <div style={{ fontSize: "var(--fs-body)", color: "#fff", fontWeight: 800, marginBottom: 4 }}>
+                              {feature.name}
+                            </div>
+                            <div style={{ fontSize: "var(--fs-small)", color: C.muted, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                              {cleanFeatureText(feature.text)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: "var(--fs-small)", color: C.muted, lineHeight: 1.6 }}>
+                  Pick a subclass to see its description and the features you gain at this level.
+                </div>
+              )}
+            </div>
           </div>
         </Section>
       )}
 
-      {(cantripCount > 0 || prepCount > 0 || invocCount > 0 || featSpellListChoices.length > 0 || featResolvedSpellChoices.length > 0) && (
+      {(cantripCount > 0 || prepCount > 0 || invocCount > 0 || featSpellListChoices.length > 0 || featResolvedSpellChoices.length > 0 || classFeatureResolvedSpellChoices.length > 0) && (
         <Section title={`Spell Choices at Level ${nextLevel}`} accent={accentColor}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {cantripCount > 0 && (
+            {cantripChoiceCount > 0 && (
               <SpellChoiceList
                 title="Cantrips"
-                caption={`Choose ${cantripCount}`}
-                spells={classCantrips}
-                chosen={chosenCantrips}
-                max={cantripCount}
-                onToggle={(id) => toggleSelection(id, chosenCantrips, setChosenCantrips, cantripCount)}
+                caption={`Choose ${cantripChoiceCount}`}
+                spells={availableCantripChoices}
+                chosen={displayedChosenCantrips}
+                max={cantripChoiceCount}
+                onToggle={(id) => toggleSelection(id, displayedChosenCantrips, (updater) => {
+                  setChosenCantrips((prev) => {
+                    const unlocked = prev.filter((entry) => !lockedCantripIds.has(entry));
+                    const nextUnlocked = typeof updater === "function" ? updater(unlocked) : updater;
+                    return [...Array.from(lockedCantripIds), ...nextUnlocked];
+                  });
+                }, cantripChoiceCount)}
               />
             )}
-            {spellcaster && prepCount > 0 && (
+            {spellcaster && spellChoiceCount > 0 && (
               <SpellChoiceList
-                title="Prepared Spells"
-                caption={`Choose ${prepCount} (up to level ${maxSpellLevel})`}
-                spells={classSpells.filter((spell) => Number(spell.level ?? 0) > 0 && Number(spell.level ?? 0) <= maxSpellLevel)}
-                chosen={chosenSpells}
-                max={prepCount}
-                onToggle={(id) => toggleSelection(id, chosenSpells, setChosenSpells, prepCount)}
+                title={usesFlexiblePreparedSpells ? "Additional Spells" : "Prepared Spells"}
+                caption={`Choose ${spellChoiceCount} (up to level ${maxSpellLevel})`}
+                spells={availableSpellChoices}
+                chosen={displayedChosenSpells}
+                max={spellChoiceCount}
+                onToggle={(id) => toggleSelection(id, displayedChosenSpells, (updater) => {
+                  setChosenSpells((prev) => {
+                    const unlocked = prev.filter((entry) => !lockedSpellIds.has(entry));
+                    const nextUnlocked = typeof updater === "function" ? updater(unlocked) : updater;
+                    return [...Array.from(lockedSpellIds), ...nextUnlocked];
+                  });
+                }, spellChoiceCount)}
               />
+            )}
+            {spellcaster && prepCount > 0 && usesFlexiblePreparedSpells && spellChoiceCount === 0 && (
+              <div style={{
+                padding: "12px 14px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.03)",
+              }}>
+                <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 800, color: C.text, marginBottom: 6 }}>
+                  Prepared Spells
+                </div>
+                <div style={{ fontSize: "var(--fs-small)", color: C.muted, lineHeight: 1.6 }}>
+                  Your preparation capacity at level {nextLevel} is {prepCount} spell{prepCount === 1 ? "" : "s"} of up to level {maxSpellLevel}.
+                  Manage the actual prepared circles from the character sheet; level-up does not force you to rebuild that list.
+                </div>
+              </div>
             )}
             {invocCount > 0 && classInvocations.length > 0 && (
               <SpellChoiceList
@@ -828,7 +1048,29 @@ export function LevelUpView() {
                 }}
               />
             ))}
-            {featResolvedSpellChoices.some((choice) => (featSpellChoiceOptions[choice.key] ?? []).length === 0) && (
+            {classFeatureResolvedSpellChoices.map((choice) => (
+              <SpellChoiceList
+                key={choice.key}
+                title={choice.title}
+                caption={`Choose ${choice.count}`}
+                spells={(classFeatureSpellChoiceOptions[choice.key] ?? []).map((spell) => ({ ...spell, id: spell.name }))}
+                chosen={chosenFeatOptions[choice.key] ?? []}
+                max={choice.count}
+                onToggle={(id) => {
+                  setChosenFeatOptions((prev) => {
+                    const current = prev[choice.key] ?? [];
+                    const next = current.includes(id)
+                      ? current.filter((entry) => entry !== id)
+                      : current.length < choice.count
+                        ? [...current, id]
+                        : current;
+                    return { ...prev, [choice.key]: next };
+                  });
+                }}
+              />
+            ))}
+            {(featResolvedSpellChoices.some((choice) => (featSpellChoiceOptions[choice.key] ?? []).length === 0)
+              || classFeatureResolvedSpellChoices.some((choice) => (classFeatureSpellChoiceOptions[choice.key] ?? []).length === 0)) && (
               <div style={{ fontSize: "var(--fs-small)", color: C.muted }}>
                 {featResolvedSpellChoices.some((choice) => choice.linkedTo && (chosenFeatOptions[choice.linkedTo] ?? []).length === 0)
                   ? "Choose the spell list first."

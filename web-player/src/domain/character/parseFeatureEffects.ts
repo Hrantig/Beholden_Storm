@@ -1,5 +1,6 @@
 import type { AbilKey, GrantedSpellCast, ResourceCounter, TaggedItem } from "@/views/character/CharacterSheetTypes";
 import { normalizeLanguageName, normalizeResourceKey, proficiencyBonus } from "@/views/character/CharacterSheetUtils";
+import { ALL_SKILLS } from "@/views/character/CharacterSheetConstants";
 import {
   createFeatureEffectId,
   type AbilityScoreEffect,
@@ -16,7 +17,9 @@ import {
   type SpellChoiceEffect,
   type ScalingValue,
   type SpellGrantEffect,
+  type AttackEffect,
   type WeaponMasteryEffect,
+  type WeaponFilter,
 } from "@/domain/character/featureEffects";
 
 export interface ParseFeatureEffectsInput {
@@ -27,6 +30,11 @@ export interface ParseFeatureEffectsInput {
 interface ScalingResolutionContext {
   scores?: Partial<Record<AbilKey, number | null>>;
   level?: number | null;
+}
+
+interface EffectStateContext {
+  raging?: boolean;
+  armorState?: "any" | "no_armor" | "not_heavy";
 }
 
 function toTitleCase(s: string): string {
@@ -57,7 +65,68 @@ function cleanupText(text: string): string {
     .trim();
 }
 
+function normalizeSkillName(raw: string): string | null {
+  const normalized = raw.trim().replace(/\s+/g, " ").toLowerCase();
+  return SKILL_NAME_MAP.get(normalized) ?? null;
+}
+
+function splitSkillNames(raw: string): string[] {
+  return raw
+    .split(/\s*,\s*|\s+and\s+|\s+or\s+/i)
+    .map((part) => normalizeSkillName(part))
+    .filter((name): name is string => Boolean(name));
+}
+
+function hasContextualQualifier(text: string, matchEndIndex: number): boolean {
+  const tail = text.slice(matchEndIndex).trimStart().toLowerCase();
+  return [
+    "against ",
+    "made ",
+    "to ",
+    "where ",
+    "when ",
+    "during ",
+    "as part of ",
+    "that rely on ",
+    "using ",
+    "within ",
+  ].some((prefix) => tail.startsWith(prefix));
+}
+
+function textUsesRageGate(text: string): boolean {
+  return /while your rage is active|while raging/i.test(text);
+}
+
+function isBaseRageRulesText(source: FeatureEffectSource, text: string): boolean {
+  return /\brage\b/i.test(source.name)
+    && /your rage follows the rules below|damage resistance|rage damage|strength advantage/i.test(text);
+}
+
+function createRageGate(source: FeatureEffectSource, text: string) {
+  return textUsesRageGate(text) || isBaseRageRulesText(source, text)
+    ? { duration: "while_raging" as const }
+    : undefined;
+}
+
+function isEffectActive(effect: FeatureEffect, opts?: EffectStateContext): boolean {
+  const duration = effect.gate?.duration;
+  if (duration === "while_raging" && !opts?.raging) return false;
+  const armorState = effect.gate?.armorState ?? "any";
+  if (armorState === "no_armor" && opts?.armorState !== "no_armor") return false;
+  if (armorState === "not_heavy" && opts?.armorState !== "not_heavy" && opts?.armorState !== "no_armor") return false;
+  return true;
+}
+
 const SPELL_LIST_NAMES = ["Artificer", "Bard", "Cleric", "Druid", "Paladin", "Ranger", "Sorcerer", "Warlock", "Wizard"];
+const SKILL_NAME_MAP = new Map(ALL_SKILLS.map((skill) => [skill.name.toLowerCase(), skill.name]));
+
+interface WeaponLike {
+  name?: string | null;
+  type?: string | null;
+  properties?: string[] | null;
+  dmg1?: string | null;
+  dmg2?: string | null;
+}
 
 function parseSpellLists(text: string): string[] {
   const found = new Set<string>();
@@ -67,10 +136,59 @@ function parseSpellLists(text: string): string[] {
   return Array.from(found);
 }
 
+function hasWeaponProperty(item: WeaponLike | null | undefined, code: string): boolean {
+  return (item?.properties ?? []).some((property) => String(property ?? "").trim().toUpperCase() === code.toUpperCase());
+}
+
+function isWeaponLike(item: WeaponLike | null | undefined): boolean {
+  return Boolean(item?.dmg1 || item?.dmg2) || /weapon/i.test(String(item?.type ?? "")) || /\bstaff\b/i.test(String(item?.type ?? ""));
+}
+
+function isMeleeWeaponLike(item: WeaponLike | null | undefined): boolean {
+  if (!isWeaponLike(item)) return false;
+  return !/ranged/i.test(String(item?.type ?? ""));
+}
+
+function isRangedWeaponLike(item: WeaponLike | null | undefined): boolean {
+  return /ranged/i.test(String(item?.type ?? ""));
+}
+
+function isCrossbowWeaponLike(item: WeaponLike | null | undefined): boolean {
+  return /crossbow/i.test(String(item?.name ?? "")) || /crossbow/i.test(String(item?.type ?? ""));
+}
+
+function weaponMatchesFilters(item: WeaponLike | null | undefined, filters: WeaponFilter[] | undefined): boolean {
+  if (!filters?.length) return false;
+  return filters.every((filter) => {
+    switch (filter) {
+      case "simple_weapon":
+        return isWeaponLike(item) && !hasWeaponProperty(item, "M");
+      case "martial_weapon":
+        return hasWeaponProperty(item, "M");
+      case "melee_weapon":
+        return isMeleeWeaponLike(item);
+      case "ranged_weapon":
+        return isRangedWeaponLike(item);
+      case "finesse_weapon":
+        return hasWeaponProperty(item, "F");
+      case "light_weapon":
+        return hasWeaponProperty(item, "L");
+      case "crossbow_weapon":
+        return isCrossbowWeaponLike(item);
+      case "light_crossbow":
+        return hasWeaponProperty(item, "L") && isCrossbowWeaponLike(item);
+      case "no_two_handed":
+        return !hasWeaponProperty(item, "2H");
+      default:
+        return false;
+    }
+  });
+}
+
 function pushSpellChoiceEffect(
   source: FeatureEffectSource,
   effects: FeatureEffect[],
-  args: { count: number; level: number; spellLists: string[] }
+  args: { count: number; level: number; spellLists: string[]; schools?: string[]; note?: string }
 ) {
   if (args.count <= 0 || args.spellLists.length === 0) return;
   effects.push({
@@ -81,17 +199,59 @@ function pushSpellChoiceEffect(
     count: { kind: "fixed", value: args.count },
     level: args.level,
     spellLists: args.spellLists,
+    schools: args.schools,
+    note: args.note,
     summary: `Choose ${args.count} ${args.level === 0 ? "cantrip" : `level ${args.level} spell`}${args.count === 1 ? "" : "s"} from ${args.spellLists.join(", ")}`,
   } satisfies SpellChoiceEffect);
+}
+
+function isLikelySpellName(spellName: string): boolean {
+  const cleaned = spellName.trim().replace(/^the\s+/i, "");
+  if (!cleaned) return false;
+  if (/^(it|that|these|those)(?:\s+spell|\s+spells)?$/i.test(cleaned)) return false;
+  if (/^(a|an|another)\s+/i.test(cleaned)) return false;
+  if (/^different\b/i.test(cleaned)) return false;
+  if (/^(wizard|cleric|druid|bard|sorcerer|warlock|paladin|ranger|artificer)\b/i.test(cleaned)) return false;
+  if (/\bof your choice\b/i.test(cleaned)) return false;
+  if (/\bspell list\b/i.test(cleaned)) return false;
+  return true;
 }
 
 function parseKnownSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
   const inferredSpellLists = parseSpellLists(text);
   const spellList = inferredSpellLists.length === 1 ? inferredSpellLists[0] : undefined;
 
+  for (const match of text.matchAll(/when you reach character levels?\s+(\d+)\s+and\s+(\d+),\s+you\s+learn\s+([A-Z][A-Za-z' -]+?)\s+and\s+([A-Z][A-Za-z' -]+?)\s+respectively/gi)) {
+    const firstLevel = Number(match[1]);
+    const secondLevel = Number(match[2]);
+    const firstSpell = match[3]?.trim();
+    const secondSpell = match[4]?.trim();
+    if (!firstSpell || !secondSpell || !Number.isFinite(firstLevel) || !Number.isFinite(secondLevel)) continue;
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName: firstSpell,
+      spellList,
+      mode: "known",
+      requiredLevel: firstLevel,
+      summary: `${firstSpell} known spell`,
+    } satisfies SpellGrantEffect);
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName: secondSpell,
+      spellList,
+      mode: "known",
+      requiredLevel: secondLevel,
+      summary: `${secondSpell} known spell`,
+    } satisfies SpellGrantEffect);
+  }
+
   for (const match of text.matchAll(/you\s+(?:learn|know)\s+(?:the\s+)?([A-Z][A-Za-z' -]+?)\s+cantrip\b/gi)) {
     const spellName = match[1]?.trim();
-    if (!spellName) continue;
+    if (!spellName || !isLikelySpellName(spellName)) continue;
     effects.push({
       id: createFeatureEffectId(source, "spell_grant", effects.length),
       type: "spell_grant",
@@ -105,7 +265,7 @@ function parseKnownSpellGrantEffects(source: FeatureEffectSource, text: string, 
 
   for (const match of text.matchAll(/you\s+(?:learn|know)\s+(?:the\s+)?([A-Z][A-Za-z' -]+?)\s+spell\b/gi)) {
     const spellName = match[1]?.trim();
-    if (!spellName) continue;
+    if (!spellName || !isLikelySpellName(spellName)) continue;
     effects.push({
       id: createFeatureEffectId(source, "spell_grant", effects.length),
       type: "spell_grant",
@@ -124,7 +284,7 @@ function parseAlwaysPreparedSpellGrantEffects(source: FeatureEffectSource, text:
 
   const addAlwaysPrepared = (spellName: string, requiredLevel?: number) => {
     const cleaned = spellName.trim().replace(/^the\s+/i, "");
-    if (!cleaned || /^(that|those|these)\s+spells?$/i.test(cleaned)) return;
+    if (!cleaned || !isLikelySpellName(cleaned)) return;
     effects.push({
       id: createFeatureEffectId(source, "spell_grant", effects.length),
       type: "spell_grant",
@@ -156,6 +316,16 @@ function parseAlwaysPreparedSpellGrantEffects(source: FeatureEffectSource, text:
       .map((part) => part.trim())
       .filter(Boolean)
       .forEach((name) => addAlwaysPrepared(name, requiredLevel));
+  }
+
+  if (/always have that spell prepared/i.test(text) || /always have those spells prepared/i.test(text)) {
+    effects
+      .filter((effect): effect is SpellGrantEffect =>
+        effect.type === "spell_grant"
+        && effect.mode === "known"
+        && !/cantrip/i.test(effect.summary ?? "")
+      )
+      .forEach((effect) => addAlwaysPrepared(effect.spellName, effect.requiredLevel));
   }
 
   const tableMatch = text.match(/(?:[A-Za-z' ]+ Spells?)\s*:\s*(?:Spell Level|[A-Za-z]+ Level)\s*\|\s*(?:Prepared\s+)?Spells?\s+(.+)/i);
@@ -202,19 +372,158 @@ function parseExpandedListSpellGrantEffects(source: FeatureEffectSource, text: s
   }
 }
 
+function hasSpellGrantEffect(
+  effects: FeatureEffect[],
+  spellName: string,
+  mode: SpellGrantEffect["mode"]
+): boolean {
+  return effects.some((effect) =>
+    effect.type === "spell_grant"
+    && effect.mode === mode
+    && effect.spellName.trim().toLowerCase() === spellName.trim().toLowerCase()
+  );
+}
+
+function pushFreeCastSpellEffects(
+  source: FeatureEffectSource,
+  effects: FeatureEffect[],
+  spellNames: string[],
+  args: {
+    uses: ScalingValue;
+    reset: SpellGrantEffect["reset"];
+    noMaterialComponents?: boolean;
+  }
+) {
+  for (const spellName of spellNames) {
+    if (!spellName || hasSpellGrantEffect(effects, spellName, "free_cast")) continue;
+    const resourceKey = normalizeResourceKey(`${source.name}:${spellName}`);
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName,
+      mode: "free_cast",
+      uses: args.uses,
+      reset: args.reset,
+      castsWithoutSlot: true,
+      noMaterialComponents: args.noMaterialComponents,
+      resourceKey,
+      summary: `${spellName} free casts`,
+    } satisfies SpellGrantEffect);
+    effects.push({
+      id: createFeatureEffectId(source, "resource_grant", effects.length),
+      type: "resource_grant",
+      source,
+      resourceKey,
+      label: `${spellName} (${source.name})`,
+      max: args.uses,
+      reset: args.reset,
+      restoreAmount: "all",
+      linkedSpellName: spellName,
+      summary: `${spellName} resource pool`,
+    });
+  }
+}
+
+function parseRitualOnlySpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  for (const match of text.matchAll(/you can cast\s+(?:the\s+)?(.+?)\s+spells?\s+but only as rituals?\b/gi)) {
+    const raw = match[1]?.trim();
+    if (!raw) continue;
+    const spellNames = raw
+      .split(/\s*,\s*|\s+and\s+/i)
+      .map((part) => part.trim().replace(/^the\s+/i, ""))
+      .filter(Boolean);
+    for (const spellName of spellNames) {
+      if (hasSpellGrantEffect(effects, spellName, "at_will")) continue;
+      effects.push({
+        id: createFeatureEffectId(source, "spell_grant", effects.length),
+        type: "spell_grant",
+        source,
+        spellName,
+        mode: "at_will",
+        riderSummary: "Ritual only.",
+        summary: `${spellName} ritual casting`,
+      } satisfies SpellGrantEffect);
+    }
+  }
+}
+
 function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
   if (!/without expending a spell slot/i.test(text)) return;
+  const reset =
+    /finish a short or long rest/i.test(text) ? "short_or_long_rest"
+    : /finish a short rest/i.test(text) ? "short_rest"
+    : /finish a long rest/i.test(text) ? "long_rest"
+    : undefined;
+  const abilityCountMatch = text.match(/a number of times equal to your\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+modifier\s*\(minimum of once\)/i);
+  const proficiencyCountMatch = text.match(/a number of times equal to your\s+Proficiency Bonus/i);
+  const fixedCountMatch = text.match(/\b(once|twice|one|two|three|four|five|six)\b[^.]*without expending a spell slot/i);
+  const noMaterialComponents = /without (?:a |needing )?Material components/i.test(text);
+  const preparedSpellNames = effects
+    .filter((effect): effect is SpellGrantEffect => effect.type === "spell_grant" && effect.mode === "always_prepared")
+    .map((effect) => effect.spellName);
+  const uniquePreparedSpellNames = Array.from(new Set(preparedSpellNames));
+
+  const pronounTargetSpellNames =
+    /cast (?:it|that spell) without expending a spell slot/i.test(text) && uniquePreparedSpellNames.length > 0 ? uniquePreparedSpellNames.slice(-1)
+    : /cast (?:it|that spell) once without expending a spell slot/i.test(text) && uniquePreparedSpellNames.length > 0 ? uniquePreparedSpellNames.slice(-1)
+    : [];
+  const eachPreparedSpellNames =
+    /cast each spell once without (?:expending a spell slot|a spell slot)/i.test(text) ? uniquePreparedSpellNames
+    : /cast each of these spells without expending a spell slot/i.test(text) ? uniquePreparedSpellNames
+    : /cast either spell without expending a spell slot/i.test(text) ? uniquePreparedSpellNames
+    : [];
+  const inferredSingleUsePreparedSpellNames =
+    reset && eachPreparedSpellNames.length > 0 && (
+      /once you cast either spell in this way/i.test(text)
+      || /you must finish a (?:Short or Long|Long|Short) Rest before you can cast each spell in this way again/i.test(text)
+      || /you can't cast that spell in this way again until you finish a (?:Short or Long|Long|Short) Rest/i.test(text)
+    ) ? eachPreparedSpellNames : [];
+
+  if (reset && abilityCountMatch && (pronounTargetSpellNames.length > 0 || eachPreparedSpellNames.length > 0)) {
+    const ability = abilityCountMatch[1].trim().toLowerCase().slice(0, 3) as AbilKey;
+    const spellNames = eachPreparedSpellNames.length > 0 ? eachPreparedSpellNames : pronounTargetSpellNames;
+    pushFreeCastSpellEffects(source, effects, spellNames, {
+      uses: { kind: "ability_mod", ability, min: 1 },
+      reset,
+      noMaterialComponents,
+    });
+    return;
+  }
+
+  if (reset && proficiencyCountMatch && (pronounTargetSpellNames.length > 0 || eachPreparedSpellNames.length > 0)) {
+    const spellNames = eachPreparedSpellNames.length > 0 ? eachPreparedSpellNames : pronounTargetSpellNames;
+    pushFreeCastSpellEffects(source, effects, spellNames, {
+      uses: { kind: "proficiency_bonus" },
+      reset,
+      noMaterialComponents,
+    });
+    return;
+  }
+
+  if (reset && fixedCountMatch && (pronounTargetSpellNames.length > 0 || eachPreparedSpellNames.length > 0)) {
+    const spellNames = eachPreparedSpellNames.length > 0 ? eachPreparedSpellNames : pronounTargetSpellNames;
+    pushFreeCastSpellEffects(source, effects, spellNames, {
+      uses: { kind: "fixed", value: parseWordCount(fixedCountMatch[1]) ?? 1 },
+      reset,
+      noMaterialComponents,
+    });
+    return;
+  }
+
+  if (inferredSingleUsePreparedSpellNames.length > 0) {
+    pushFreeCastSpellEffects(source, effects, inferredSingleUsePreparedSpellNames, {
+      uses: { kind: "fixed", value: 1 },
+      reset,
+      noMaterialComponents,
+    });
+    return;
+  }
+
   const spellMatch = text.match(/you can cast\s+([A-Z][A-Za-z' -]+?)\s+without expending a spell slot/i);
   if (!spellMatch) return;
 
   const spellName = spellMatch[1].replace(/\s+on yourself$/i, "").trim();
-  const reset =
-    /finish a short rest/i.test(text) ? "short_rest"
-    : /finish a long rest/i.test(text) ? "long_rest"
-    : /finish a short or long rest/i.test(text) ? "short_or_long_rest"
-    : undefined;
-  const abilityCountMatch = text.match(/a number of times equal to your\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+modifier\s*\(minimum of once\)/i);
-  const fixedCountMatch = text.match(/\b(once|twice|one|two|three|four|five|six)\b[^.]*without expending a spell slot/i);
 
   if (abilityCountMatch && reset) {
     const ability = abilityCountMatch[1].trim().toLowerCase().slice(0, 3) as AbilKey;
@@ -228,6 +537,7 @@ function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effec
       uses: { kind: "ability_mod", ability, min: 1 },
       reset,
       castsWithoutSlot: true,
+      noMaterialComponents,
       resourceKey,
       summary: `${spellName} free cast keyed off ${ability.toUpperCase()} modifier`,
     } satisfies SpellGrantEffect);
@@ -258,6 +568,7 @@ function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effec
       uses: { kind: "fixed", value: max },
       reset,
       castsWithoutSlot: true,
+      noMaterialComponents,
       resourceKey,
       summary: `${spellName} fixed free casts`,
     } satisfies SpellGrantEffect);
@@ -268,6 +579,36 @@ function parseSpellGrantEffects(source: FeatureEffectSource, text: string, effec
       resourceKey,
       label: `${spellName} (${source.name})`,
       max: { kind: "fixed", value: max },
+      reset,
+      restoreAmount: "all",
+      linkedSpellName: spellName,
+      summary: `${spellName} resource pool`,
+    });
+    return;
+  }
+
+  if (proficiencyCountMatch && reset) {
+    const resourceKey = normalizeResourceKey(`${source.name}:${spellName}`);
+    effects.push({
+      id: createFeatureEffectId(source, "spell_grant", effects.length),
+      type: "spell_grant",
+      source,
+      spellName,
+      mode: "free_cast",
+      uses: { kind: "proficiency_bonus" },
+      reset,
+      castsWithoutSlot: true,
+      noMaterialComponents,
+      resourceKey,
+      summary: `${spellName} free casts keyed off Proficiency Bonus`,
+    } satisfies SpellGrantEffect);
+    effects.push({
+      id: createFeatureEffectId(source, "resource_grant", effects.length),
+      type: "resource_grant",
+      source,
+      resourceKey,
+      label: `${spellName} (${source.name})`,
+      max: { kind: "proficiency_bonus" },
       reset,
       restoreAmount: "all",
       linkedSpellName: spellName,
@@ -306,6 +647,22 @@ function parseSpellChoiceEffects(source: FeatureEffectSource, text: string, effe
     if (match[3]) lastSpellLists = spellLists;
     pushSpellChoiceEffect(source, effects, { count, level, spellLists });
   }
+
+  for (const match of text.matchAll(/choose\s+(\w+)\s+([A-Z][A-Za-z]+)\s+spells?\s+from\s+the\s+([A-Z][A-Za-z]+)\s+school,\s+each of which must be no higher than level\s+(\d+)/gi)) {
+    const count = parseWordCount(match[1]) ?? 0;
+    const spellLists = parseSpellLists(match[2]);
+    const school = toTitleCase(match[3]);
+    const level = Number(match[4]);
+    if (!Number.isFinite(level) || spellLists.length === 0 || count <= 0) continue;
+    pushSpellChoiceEffect(source, effects, {
+      count,
+      level,
+      spellLists,
+      schools: [school],
+      note: "At or below the listed level.",
+    });
+  }
+
 }
 
 function parseResourceGrantEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
@@ -346,6 +703,7 @@ function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string,
   const tools: string[] = [];
   const skills: string[] = [];
   const expertise: string[] = [];
+  const saves: string[] = [];
   const languages = new Set<string>();
 
   const armorRe = /(?:training with|proficiency with)\s+([\w\s,]+?)\s+armor\b/gi;
@@ -377,6 +735,26 @@ function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string,
     skills.push(toTitleCase(m[1].trim()));
   }
 
+  for (const match of text.matchAll(/proficiency (?:with|in)\s+([A-Za-z,\s]+?)\s+saving throws?/gi)) {
+    match[1]
+      .split(/\s+and\s+|,/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((name) => saves.push(toTitleCase(name)));
+  }
+
+  for (const match of text.matchAll(/saving throw proficiency(?: with)?\s+([A-Za-z,\s]+?)(?:\.|,|;|$)/gi)) {
+    match[1]
+      .split(/\s+and\s+|,/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((name) => saves.push(toTitleCase(name)));
+  }
+
+  if (/proficiency in all saving throws/i.test(text)) {
+    saves.push("Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma");
+  }
+
   if (/expertise in one skill of your choice/i.test(text) || /choose one skill in which you have proficiency/i.test(text)) {
     effects.push({
       id: createFeatureEffectId(source, "proficiency_grant", effects.length),
@@ -403,6 +781,13 @@ function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string,
       .forEach((name) => expertise.push(toTitleCase(name)));
   }
 
+  if (/you have Expertise in those two skills/i.test(text)) {
+    const listedSkills = Array.from(new Set(
+      ["Arcana", "History", "Nature", "Religion"].filter((skill) => new RegExp(`\\b${skill}\\b`, "i").test(text))
+    ));
+    listedSkills.forEach((name) => expertise.push(name));
+  }
+
   const langRe = /(?:learn|speak|know|understand)\s+(?:the\s+)?([\w]+)\s+language/gi;
   while ((m = langRe.exec(text)) !== null) {
     languages.add(normalizeLanguageName(toTitleCase(m[1])));
@@ -414,6 +799,7 @@ function parseProficiencyGrantEffects(source: FeatureEffectSource, text: string,
     { category: "weapon", values: weapons },
     { category: "tool", values: tools },
     { category: "skill", values: skills },
+    { category: "saving_throw", values: saves },
     { category: "language", values: Array.from(languages) },
   ] as const;
 
@@ -471,13 +857,33 @@ function parseWeaponMasteryEffects(source: FeatureEffectSource, text: string, ef
 }
 
 function parseDefenseEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  const DAMAGE_TYPES = [
+    "Acid", "Bludgeoning", "Cold", "Fire", "Force", "Lightning",
+    "Necrotic", "Piercing", "Poison", "Psychic", "Radiant", "Slashing", "Thunder",
+  ] as const;
+  const CONDITION_NAMES = [
+    "Blinded",
+    "Charmed",
+    "Deafened",
+    "Exhaustion",
+    "Frightened",
+    "Grappled",
+    "Incapacitated",
+    "Invisible",
+    "Paralyzed",
+    "Petrified",
+    "Poisoned",
+    "Prone",
+    "Restrained",
+    "Stunned",
+    "Unconscious",
+  ];
+
+  const rageGate = createRageGate(source, text);
+
   const addDamageDefense = (mode: DefenseEffect["mode"], rawTargets: string) => {
     const lower = rawTargets.toLowerCase();
-    const targets = [
-      "acid", "cold", "fire", "force", "lightning", "necrotic",
-      "piercing", "poison", "psychic", "radiant", "slashing", "thunder", "bludgeoning",
-    ].filter((damageType) => new RegExp(`\\b${damageType}\\b`, "i").test(lower))
-      .map(toTitleCase);
+    const targets = DAMAGE_TYPES.filter((damageType) => new RegExp(`\\b${damageType}\\b`, "i").test(lower));
     if (targets.length === 0 && /nonmagical/i.test(lower) && /bludgeoning|piercing|slashing/i.test(lower)) {
       targets.push("Nonmagical B/P/S");
     }
@@ -488,36 +894,80 @@ function parseDefenseEffects(source: FeatureEffectSource, text: string, effects:
       source,
       mode,
       targets,
+      gate: rageGate,
     } satisfies DefenseEffect);
   };
 
+  for (const match of text.matchAll(/resistance to every damage type except ([^.;]+?)(?:damage)?[.;]/gi)) {
+    const excluded = new Set(
+      DAMAGE_TYPES.filter((damageType) => new RegExp(`\\b${damageType}\\b`, "i").test(match[1] ?? ""))
+    );
+    const included = DAMAGE_TYPES.filter((damageType) => !excluded.has(damageType));
+    if (included.length === 0) continue;
+    effects.push({
+      id: createFeatureEffectId(source, "defense", effects.length),
+      type: "defense",
+      source,
+      mode: "damage_resistance",
+      targets: included,
+      gate: rageGate,
+      summary: `Resistance to ${included.join(", ")}`,
+    } satisfies DefenseEffect);
+  }
+
   for (const match of text.matchAll(/(?:have |gain )?resistance to ([^.;]+?) damage/gi)) {
+    addDamageDefense("damage_resistance", match[1]);
+  }
+  for (const match of text.matchAll(/(?:are|become)\s+resistant to ([^.;]+?) damage/gi)) {
     addDamageDefense("damage_resistance", match[1]);
   }
   for (const match of text.matchAll(/immune to ([^.;]+?) damage/gi)) {
     addDamageDefense("damage_immunity", match[1]);
   }
 
-  const conditionImmunityMatch = text.match(/immunity to the ([A-Za-z,\s]+?) conditions?/i);
-  if (conditionImmunityMatch) {
-    const targets = conditionImmunityMatch[1]
+  const addConditionImmunity = (rawTargets: string) => {
+    const targets = rawTargets
+      .replace(/\bcondition(s)?\b/gi, "")
       .split(/\s+and\s+|,/)
       .map((part) => part.trim())
       .filter(Boolean)
       .map(toTitleCase);
-    if (targets.length > 0) {
-      effects.push({
-        id: createFeatureEffectId(source, "defense", effects.length),
-        type: "defense",
-        source,
-        mode: "condition_immunity",
-        targets,
-      } satisfies DefenseEffect);
+    if (targets.length === 0) return;
+    effects.push({
+      id: createFeatureEffectId(source, "defense", effects.length),
+      type: "defense",
+      source,
+      mode: "condition_immunity",
+      targets,
+      gate: rageGate,
+    } satisfies DefenseEffect);
+  };
+
+  for (const match of text.matchAll(/immunity to (?:the\s+)?([A-Za-z,\s]+?) conditions?/gi)) {
+    addConditionImmunity(match[1]);
+  }
+
+  for (const match of text.matchAll(/immune to (?:the\s+)?([A-Za-z,\s]+?) conditions?/gi)) {
+    addConditionImmunity(match[1]);
+  }
+
+  for (const condition of CONDITION_NAMES) {
+    const escaped = condition.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`immune to being\\s+${escaped}`, "i").test(text)) {
+      addConditionImmunity(condition);
+    }
+    if (new RegExp(`(?:can(?:not|'t)|cannot)\\s+be\\s+${escaped}`, "i").test(text)) {
+      addConditionImmunity(condition);
     }
   }
 }
 
 function parseSpeedEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  const rageGate = createRageGate(source, text);
+  const armorState =
+    /if you aren't wearing any armor/i.test(text) ? "no_armor"
+    : /while you aren't wearing heavy armor/i.test(text) ? "not_heavy"
+    : undefined;
   const bonusMatch = text.match(/your speed increases by (\d+) feet/i);
   if (bonusMatch) {
     effects.push({
@@ -526,13 +976,31 @@ function parseSpeedEffects(source: FeatureEffectSource, text: string, effects: F
       source,
       mode: "bonus",
       amount: { kind: "fixed", value: Number(bonusMatch[1]) },
-      gate: /while you aren't wearing heavy armor/i.test(text)
-        ? { duration: "passive", armorState: "not_heavy" }
-        : undefined,
+      gate: {
+        duration: rageGate?.duration ?? "passive",
+        ...(armorState ? { armorState } : {}),
+      },
     } satisfies SpeedEffect);
   }
 
-  for (const match of text.matchAll(/you have a (Fly|Swim|Climb|Burrow) Speed equal to your Speed/gi)) {
+  for (const match of text.matchAll(/you (?:have|gain)\s+(?:a\s+)?(Fly|Swim|Climb|Burrow)\s+Speed\s+and\s+(?:a\s+)?(Fly|Swim|Climb|Burrow)\s+Speed equal to your Speed/gi)) {
+    [match[1], match[2]].forEach((modeName) => {
+      effects.push({
+        id: createFeatureEffectId(source, "speed", effects.length),
+        type: "speed",
+        source,
+        mode: "grant_mode",
+        movementMode: modeName.trim().toLowerCase() as SpeedEffect["movementMode"],
+        amount: { kind: "named_progression", key: "equal_to_speed" },
+        gate: {
+          ...(rageGate ? { duration: rageGate.duration } : {}),
+          ...(armorState ? { armorState } : {}),
+        },
+      } satisfies SpeedEffect);
+    });
+  }
+
+  for (const match of text.matchAll(/you (?:have|gain)\s+(?:a\s+)?(Fly|Swim|Climb|Burrow) Speed equal to your Speed/gi)) {
     effects.push({
       id: createFeatureEffectId(source, "speed", effects.length),
       type: "speed",
@@ -540,6 +1008,25 @@ function parseSpeedEffects(source: FeatureEffectSource, text: string, effects: F
       mode: "grant_mode",
       movementMode: match[1].trim().toLowerCase() as SpeedEffect["movementMode"],
       amount: { kind: "named_progression", key: "equal_to_speed" },
+      gate: {
+        ...(rageGate ? { duration: rageGate.duration } : {}),
+        ...(armorState ? { armorState } : {}),
+      },
+    } satisfies SpeedEffect);
+  }
+
+  for (const match of text.matchAll(/you (?:have|gain)\s+(?:a\s+)?(Fly|Swim|Climb|Burrow) Speed of\s+(\d+)\s+feet/gi)) {
+    effects.push({
+      id: createFeatureEffectId(source, "speed", effects.length),
+      type: "speed",
+      source,
+      mode: "grant_mode",
+      movementMode: match[1].trim().toLowerCase() as SpeedEffect["movementMode"],
+      amount: { kind: "fixed", value: Number(match[2]) },
+      gate: {
+        ...(rageGate ? { duration: rageGate.duration } : {}),
+        ...(armorState ? { armorState } : {}),
+      },
     } satisfies SpeedEffect);
   }
 }
@@ -666,6 +1153,71 @@ function parseHitPointBonusEffects(source: FeatureEffectSource, text: string, ef
   }
 }
 
+function parseAttackEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  if (/extra attack as a result of using a weapon that has the Light property/i.test(text) && /add your ability modifier to the damage of that attack/i.test(text)) {
+    effects.push({
+      id: createFeatureEffectId(source, "attack", effects.length),
+      type: "attack",
+      source,
+      mode: "add_ability_to_damage",
+      gate: {
+        duration: "passive",
+        weaponFilters: ["light_weapon"],
+        notes: "extra_attack_damage",
+      },
+      summary: "Add your ability modifier to the Light-property extra attack damage.",
+    } satisfies AttackEffect);
+  }
+
+  if (/add your ability modifier to the damage of the extra attack/i.test(text) && /crossbow that has the Light property/i.test(text)) {
+    effects.push({
+      id: createFeatureEffectId(source, "attack", effects.length),
+      type: "attack",
+      source,
+      mode: "add_ability_to_damage",
+      gate: {
+        duration: "passive",
+        weaponFilters: ["light_crossbow"],
+        notes: "extra_attack_damage",
+      },
+      summary: "Add your ability modifier to the Light crossbow extra attack damage.",
+    } satisfies AttackEffect);
+  }
+
+  if (/make one extra attack as a Bonus Action/i.test(text) && /different weapon, which must be a Melee weapon that lacks the Two-Handed property/i.test(text)) {
+    effects.push({
+      id: createFeatureEffectId(source, "attack", effects.length),
+      type: "attack",
+      source,
+      mode: "triggered_attack",
+      gate: {
+        duration: "passive",
+        weaponFilters: ["melee_weapon", "no_two_handed"],
+        notes: "light_property_bonus_attack",
+      },
+      frequency: "special",
+      summary: "After a Light-weapon attack, you can make a bonus-action attack with a different melee weapon that lacks Two-Handed.",
+    } satisfies AttackEffect);
+  }
+
+  if (/rage damage/i.test(text) && /using strength/i.test(text) && /weapon|unarmed strike/i.test(text)) {
+    effects.push({
+      id: createFeatureEffectId(source, "attack", effects.length),
+      type: "attack",
+      source,
+      mode: "bonus_damage",
+      amount: { kind: "named_progression", key: "barbarian_rage_damage" },
+      damageType: "same_as_attack",
+      gate: {
+        duration: "while_raging",
+        attackAbility: "str",
+        notes: "weapon_or_unarmed",
+      },
+      summary: "Rage Damage bonus on Strength weapon and unarmed attacks",
+    } satisfies AttackEffect);
+  }
+}
+
 function parseInitiativeModifierEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
   if (/add your Proficiency Bonus to (?:your )?(?:the )?Initiative/i.test(text)) {
     effects.push({
@@ -675,6 +1227,83 @@ function parseInitiativeModifierEffects(source: FeatureEffectSource, text: strin
       amount: { kind: "proficiency_bonus" },
       summary: "Add Proficiency Bonus to Initiative",
     } satisfies ModifierEffect);
+  }
+}
+
+function parseSavingThrowModifierEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  for (const match of text.matchAll(/add your (Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) modifier to your (Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) saving throws/gi)) {
+    const amountAbility = ABILITY_NAME_MAP[match[1].toLowerCase()];
+    const targetAbility = toTitleCase(match[2]);
+    effects.push({
+      id: createFeatureEffectId(source, "modifier", effects.length),
+      type: "modifier",
+      source,
+      target: "saving_throw",
+      mode: "bonus",
+      amount: { kind: "ability_mod", ability: amountAbility },
+      appliesTo: [targetAbility],
+      summary: `Add ${amountAbility.toUpperCase()} modifier to ${targetAbility} saving throws`,
+    } satisfies ModifierEffect);
+  }
+
+  for (const match of text.matchAll(/gain a bonus to saving throws equal to your (Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) modifier(?:\s*\(minimum bonus of \+?(\d+)\))?/gi)) {
+    const ability = ABILITY_NAME_MAP[match[1].toLowerCase()];
+    const min = match[2] ? Number(match[2]) : undefined;
+    effects.push({
+      id: createFeatureEffectId(source, "modifier", effects.length),
+      type: "modifier",
+      source,
+      target: "saving_throw",
+      mode: "bonus",
+      amount: { kind: "ability_mod", ability, ...(min != null ? { min } : {}) },
+      summary: `Add ${ability.toUpperCase()} modifier to saving throws`,
+    } satisfies ModifierEffect);
+  }
+}
+
+function parseAdvantageModifierEffects(source: FeatureEffectSource, text: string, effects: FeatureEffect[]) {
+  const rageGate = createRageGate(source, text);
+  const addModifier = (
+    mode: "advantage" | "disadvantage",
+    target: ModifierEffect["target"],
+    appliesTo: string[],
+    summary: string,
+  ) => {
+    effects.push({
+      id: createFeatureEffectId(source, "modifier", effects.length),
+      type: "modifier",
+      source,
+      target,
+      mode,
+      appliesTo,
+      summary,
+      gate: rageGate,
+    } satisfies ModifierEffect);
+  };
+
+  for (const match of text.matchAll(/(?:have|gain)\s+(Advantage|Disadvantage)\s+on\s+(?:all\s+)?(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s*\(([^)]+)\)\s+checks\b/gi)) {
+    const mode = match[1].toLowerCase() === "advantage" ? "advantage" : "disadvantage";
+    const abilityName = toTitleCase(match[2]);
+    const skillNames = splitSkillNames(match[3]);
+    const matchEnd = (match.index ?? 0) + match[0].length;
+    if (skillNames.length === 0 || hasContextualQualifier(text, matchEnd)) continue;
+    addModifier(mode, "skill_check", skillNames, `${mode === "advantage" ? "Advantage" : "Disadvantage"} on ${abilityName} (${skillNames.join(", ")}) checks`);
+  }
+
+  for (const match of text.matchAll(/(?:have|gain)\s+(Advantage|Disadvantage)\s+on\s+(?:all\s+)?(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+checks\b/gi)) {
+    const mode = match[1].toLowerCase() === "advantage" ? "advantage" : "disadvantage";
+    const abilityName = toTitleCase(match[2]);
+    const matchEnd = (match.index ?? 0) + match[0].length;
+    if (hasContextualQualifier(text, matchEnd)) continue;
+    addModifier(mode, "ability_check", [abilityName], `${mode === "advantage" ? "Advantage" : "Disadvantage"} on ${abilityName} checks`);
+  }
+
+  for (const match of text.matchAll(/(?:have|gain)\s+(Advantage|Disadvantage)\s+on\s+(?:all\s+)?(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+saving throws\b/gi)) {
+    const mode = match[1].toLowerCase() === "advantage" ? "advantage" : "disadvantage";
+    const abilityName = toTitleCase(match[2]);
+    const matchEnd = (match.index ?? 0) + match[0].length;
+    if (hasContextualQualifier(text, matchEnd)) continue;
+    addModifier(mode, "saving_throw", [abilityName], `${mode === "advantage" ? "Advantage" : "Disadvantage"} on ${abilityName} saving throws`);
   }
 }
 
@@ -690,6 +1319,22 @@ function parseArmorClassBonusEffects(source: FeatureEffectSource, text: string, 
       summary: `+${armorBonusMatch[1]} AC while wearing armor`,
     } satisfies ArmorClassEffect);
     return;
+  }
+
+  const mediumArmorDexCapMatch = text.match(/while you're wearing Medium armor, you can add (\d+), rather than (\d+) to your AC if you have a Dexterity score of (\d+) or higher/i);
+  if (mediumArmorDexCapMatch) {
+    const bonusIncrease = Number(mediumArmorDexCapMatch[1]) - Number(mediumArmorDexCapMatch[2]);
+    const minimumDex = Number(mediumArmorDexCapMatch[3]);
+    if (bonusIncrease > 0) {
+      effects.push({
+        id: createFeatureEffectId(source, "armor_class", effects.length),
+        type: "armor_class", source, mode: "bonus",
+        bonus: { kind: "fixed", value: bonusIncrease },
+        gate: { duration: "passive", armorState: "not_unarmored", notes: `medium_armor_dex_cap:${minimumDex}` },
+        summary: `+${bonusIncrease} AC in Medium armor when Dexterity is ${minimumDex}+`,
+      } satisfies ArmorClassEffect);
+      return;
+    }
   }
 
   // Generic "+N to AC / Armor Class"
@@ -755,6 +1400,7 @@ export function parseFeatureEffects(input: ParseFeatureEffectsInput): ParsedFeat
     parseKnownSpellGrantEffects(source, cleanText, effects);
     parseAlwaysPreparedSpellGrantEffects(source, cleanText, effects);
     parseExpandedListSpellGrantEffects(source, cleanText, effects);
+    parseRitualOnlySpellGrantEffects(source, cleanText, effects);
     parseSpellGrantEffects(source, cleanText, effects);
     parseResourceGrantEffects(source, cleanText, effects);
     parseProficiencyGrantEffects(source, cleanText, effects);
@@ -764,7 +1410,10 @@ export function parseFeatureEffects(input: ParseFeatureEffectsInput): ParsedFeat
     parseArmorClassEffects(source, cleanText, effects);
     parseArmorClassBonusEffects(source, cleanText, effects);
     parseHitPointBonusEffects(source, cleanText, effects);
+    parseAttackEffects(source, cleanText, effects);
     parseInitiativeModifierEffects(source, cleanText, effects);
+    parseSavingThrowModifierEffects(source, cleanText, effects);
+    parseAdvantageModifierEffects(source, cleanText, effects);
     parseSensesEffects(source, cleanText, effects);
     parsePassiveScoreEffects(source, cleanText, effects);
   }
@@ -831,7 +1480,7 @@ export function buildGrantedSpellDataFromEffects(
           spellName: effect.spellName,
           sourceName: effect.source.name,
           mode: "at_will",
-          note: "",
+          note: effect.riderSummary ?? "",
         });
         continue;
       }
@@ -842,7 +1491,7 @@ export function buildGrantedSpellDataFromEffects(
           spellName: effect.spellName,
           sourceName: effect.source.name,
           mode: "known",
-          note: "Known spell.",
+          note: effect.riderSummary ? `Known spell. ${effect.riderSummary}` : "Known spell.",
         });
         continue;
       }
@@ -853,7 +1502,7 @@ export function buildGrantedSpellDataFromEffects(
           spellName: effect.spellName,
           sourceName: effect.source.name,
           mode: "always_prepared",
-          note: "Always prepared.",
+          note: effect.riderSummary ? `Always prepared. ${effect.riderSummary}` : "Always prepared.",
         });
         continue;
       }
@@ -902,6 +1551,14 @@ function resolveScalingValueInContext(value: ScalingValue | undefined, context: 
     const total = value.round === "up" ? Math.ceil(raw) : Math.floor(raw);
     return clampScalingValue(total, value);
   }
+  if (value.kind === "named_progression") {
+    if (value.key === "barbarian_rage_damage") {
+      if (context.level == null) return null;
+      if (context.level >= 16) return 4;
+      if (context.level >= 9) return 3;
+      return 2;
+    }
+  }
   return null;
 }
 
@@ -911,6 +1568,7 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
   tools: TaggedItem[];
   skills: TaggedItem[];
   expertise: TaggedItem[];
+  saves: TaggedItem[];
   languages: TaggedItem[];
   masteries: TaggedItem[];
 } {
@@ -920,6 +1578,7 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
     tools: [] as TaggedItem[],
     skills: [] as TaggedItem[],
     expertise: [] as TaggedItem[],
+    saves: [] as TaggedItem[],
     languages: [] as TaggedItem[],
     masteries: [] as TaggedItem[],
   };
@@ -933,6 +1592,7 @@ export function collectTaggedGrantsFromEffects(parsed: ParsedFeatureEffects[]): 
           : effect.category === "weapon" ? result.weapons
           : effect.category === "tool" ? result.tools
           : effect.category === "skill" ? result.skills
+          : effect.category === "saving_throw" ? result.saves
           : effect.category === "language" ? result.languages
           : null;
         if (!target) continue;
@@ -957,47 +1617,82 @@ export function collectSpellChoicesFromEffects(parsed: ParsedFeatureEffects[]): 
   return result;
 }
 
-export function collectDefensesFromEffects(parsed: ParsedFeatureEffects[]): {
+export function collectDefensesFromEffects(parsed: ParsedFeatureEffects[], opts?: EffectStateContext): {
   resistances: string[];
-  immunities: string[];
+  damageImmunities: string[];
+  conditionImmunities: string[];
 } {
   const resistances = new Set<string>();
-  const immunities = new Set<string>();
+  const damageImmunities = new Set<string>();
+  const conditionImmunities = new Set<string>();
 
   for (const parsedFeature of parsed) {
     for (const effect of parsedFeature.effects) {
       if (effect.type !== "defense") continue;
+      if (!isEffectActive(effect, opts)) continue;
       if (effect.mode === "damage_resistance") {
         effect.targets.forEach((target) => resistances.add(target));
       }
-      if (effect.mode === "damage_immunity" || effect.mode === "condition_immunity") {
-        effect.targets.forEach((target) => immunities.add(target));
+      if (effect.mode === "damage_immunity") {
+        effect.targets.forEach((target) => damageImmunities.add(target));
+      }
+      if (effect.mode === "condition_immunity") {
+        effect.targets.forEach((target) => conditionImmunities.add(target));
       }
     }
   }
 
   return {
     resistances: Array.from(resistances),
-    immunities: Array.from(immunities),
+    damageImmunities: Array.from(damageImmunities),
+    conditionImmunities: Array.from(conditionImmunities),
   };
 }
 
-export function deriveSpeedBonusFromEffects(parsed: ParsedFeatureEffects[], opts?: { armorState?: "any" | "no_armor" | "not_heavy" }): number {
+export function deriveSpeedBonusFromEffects(parsed: ParsedFeatureEffects[], opts?: { armorState?: "any" | "no_armor" | "not_heavy"; raging?: boolean }): number {
   let total = 0;
   for (const parsedFeature of parsed) {
     for (const effect of parsedFeature.effects) {
       if (effect.type !== "speed" || effect.mode !== "bonus") continue;
-      const gateArmorState = effect.gate?.armorState ?? "any";
-      if (gateArmorState !== "any" && opts?.armorState !== gateArmorState) continue;
+      if (!isEffectActive(effect, opts)) continue;
       if (effect.amount?.kind === "fixed") total += effect.amount.value;
     }
   }
   return total;
 }
 
+export function collectMovementModesFromEffects(
+  parsed: ParsedFeatureEffects[],
+  opts?: { baseWalkSpeed?: number; raging?: boolean; armorState?: "any" | "no_armor" | "not_heavy" }
+): Array<{ mode: Exclude<SpeedEffect["movementMode"], "walk" | undefined>; speed: number | null }> {
+  const bestByMode = new Map<Exclude<SpeedEffect["movementMode"], "walk" | undefined>, number | null>();
+
+  for (const parsedFeature of parsed) {
+    for (const effect of parsedFeature.effects) {
+      if (effect.type !== "speed" || effect.mode !== "grant_mode" || !effect.movementMode || effect.movementMode === "walk") continue;
+      if (!isEffectActive(effect, opts)) continue;
+      const mode = effect.movementMode;
+      const amount = effect.amount;
+      const resolved =
+        amount?.kind === "fixed" ? amount.value
+        : amount?.kind === "named_progression" && amount.key === "equal_to_speed" ? (opts?.baseWalkSpeed ?? null)
+        : null;
+      const existing = bestByMode.get(mode);
+      if (existing == null || (resolved != null && resolved > existing)) bestByMode.set(mode, resolved);
+    }
+  }
+
+  return Array.from(bestByMode.entries()).map(([mode, speed]) => ({ mode, speed }));
+}
+
 export function deriveArmorClassBonusFromEffects(
   parsed: ParsedFeatureEffects[],
-  opts?: { armorEquipped?: boolean; level?: number | null; scores?: Partial<Record<AbilKey, number | null>> }
+  opts?: {
+    armorEquipped?: boolean;
+    armorCategory?: "light" | "medium" | "heavy" | "shield" | "none";
+    level?: number | null;
+    scores?: Partial<Record<AbilKey, number | null>>;
+  }
 ): number {
   let total = 0;
   for (const parsedFeature of parsed) {
@@ -1006,6 +1701,12 @@ export function deriveArmorClassBonusFromEffects(
       const gateArmorState = effect.gate?.armorState ?? "any";
       if (gateArmorState === "not_unarmored" && !opts?.armorEquipped) continue;
       if (gateArmorState === "no_armor" && opts?.armorEquipped) continue;
+      if (effect.gate?.notes?.startsWith("medium_armor_dex_cap:")) {
+        if (opts?.armorCategory !== "medium") continue;
+        const minimumDex = Number(effect.gate.notes.split(":")[1] ?? 0);
+        const dexScore = opts?.scores?.dex ?? 10;
+        if (dexScore < minimumDex) continue;
+      }
       const resolved = resolveScalingValueInContext(effect.bonus, { level: opts?.level, scores: opts?.scores });
       if (resolved != null) total += resolved;
     }
@@ -1036,17 +1737,51 @@ export function deriveHitPointMaxBonusFromEffects(
 export function deriveModifierBonusFromEffects(
   parsed: ParsedFeatureEffects[],
   target: ModifierEffect["target"],
-  opts?: { level?: number | null; scores?: Partial<Record<AbilKey, number | null>> }
+  opts?: {
+    appliesTo?: string;
+    level?: number | null;
+    scores?: Partial<Record<AbilKey, number | null>>;
+    raging?: boolean;
+  }
 ): number {
   let total = 0;
   for (const parsedFeature of parsed) {
     for (const effect of parsedFeature.effects) {
       if (effect.type !== "modifier" || effect.target !== target || effect.mode !== "bonus") continue;
+      if (!isEffectActive(effect, { raging: opts?.raging })) continue;
+      if (effect.appliesTo?.length && opts?.appliesTo && !effect.appliesTo.some((value) => value.toLowerCase() === opts.appliesTo?.toLowerCase())) continue;
+      if (effect.appliesTo?.length && !opts?.appliesTo) continue;
       const resolved = resolveScalingValueInContext(effect.amount, { level: opts?.level, scores: opts?.scores });
       if (resolved != null) total += resolved;
     }
   }
   return total;
+}
+
+export function deriveModifierStateFromEffects(
+  parsed: ParsedFeatureEffects[],
+  target: ModifierEffect["target"],
+  opts?: {
+    appliesTo?: string;
+    raging?: boolean;
+  }
+): { advantage: boolean; disadvantage: boolean } {
+  let advantage = false;
+  let disadvantage = false;
+
+  for (const parsedFeature of parsed) {
+    for (const effect of parsedFeature.effects) {
+      if (effect.type !== "modifier" || effect.target !== target) continue;
+      if (effect.mode !== "advantage" && effect.mode !== "disadvantage") continue;
+      if (!isEffectActive(effect, { raging: opts?.raging })) continue;
+      if (effect.appliesTo?.length && opts?.appliesTo && !effect.appliesTo.some((value) => value.toLowerCase() === opts.appliesTo?.toLowerCase())) continue;
+      if (effect.appliesTo?.length && !opts?.appliesTo) continue;
+      if (effect.mode === "advantage") advantage = true;
+      if (effect.mode === "disadvantage") disadvantage = true;
+    }
+  }
+
+  return { advantage, disadvantage };
 }
 
 export function collectSensesFromEffects(parsed: ParsedFeatureEffects[]): Array<{ kind: SensesEffect["senses"][number]["kind"]; range: number }> {
@@ -1063,6 +1798,34 @@ export function collectSensesFromEffects(parsed: ParsedFeatureEffects[]): Array<
   }
 
   return Array.from(bestByKind.entries()).map(([kind, range]) => ({ kind, range }));
+}
+
+export function deriveAttackDamageBonusFromEffects(
+  parsed: ParsedFeatureEffects[],
+  opts?: {
+    level?: number | null;
+    scores?: Partial<Record<AbilKey, number | null>>;
+    raging?: boolean;
+    attackAbility?: AbilKey;
+    isWeapon?: boolean;
+    isUnarmed?: boolean;
+  }
+): number {
+  let total = 0;
+  for (const parsedFeature of parsed) {
+    for (const effect of parsedFeature.effects) {
+      if (effect.type !== "attack" || effect.mode !== "bonus_damage") continue;
+      if (!isEffectActive(effect, { raging: opts?.raging })) continue;
+      if (effect.gate?.attackAbility && effect.gate.attackAbility !== opts?.attackAbility) continue;
+      if (effect.gate?.notes === "weapon_or_unarmed" && !opts?.isWeapon && !opts?.isUnarmed) continue;
+      const amount = "kind" in (effect.amount ?? {}) ? resolveScalingValueInContext(effect.amount as ScalingValue, {
+        level: opts?.level,
+        scores: opts?.scores,
+      }) : null;
+      if (amount != null) total += amount;
+    }
+  }
+  return total;
 }
 
 export function deriveUnarmoredDefenseFromEffects(
@@ -1087,4 +1850,30 @@ export function deriveUnarmoredDefenseFromEffects(
   }
 
   return best;
+}
+
+export function canAddAbilityModifierToExtraAttackDamageFromEffects(
+  parsed: ParsedFeatureEffects[],
+  item: WeaponLike | null | undefined
+): boolean {
+  for (const parsedFeature of parsed) {
+    for (const effect of parsedFeature.effects) {
+      if (effect.type !== "attack" || effect.mode !== "add_ability_to_damage") continue;
+      if (weaponMatchesFilters(item, effect.gate?.weaponFilters)) return true;
+    }
+  }
+  return false;
+}
+
+export function canUseWeaponForBonusAttackFromEffects(
+  parsed: ParsedFeatureEffects[],
+  item: WeaponLike | null | undefined
+): boolean {
+  for (const parsedFeature of parsed) {
+    for (const effect of parsedFeature.effects) {
+      if (effect.type !== "attack" || effect.mode !== "triggered_attack") continue;
+      if (weaponMatchesFilters(item, effect.gate?.weaponFilters)) return true;
+    }
+  }
+  return false;
 }

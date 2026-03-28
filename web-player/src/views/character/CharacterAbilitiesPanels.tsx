@@ -1,7 +1,7 @@
 import React from "react";
 import { C } from "@/lib/theme";
 import { CollapsiblePanel, ProfDot, Tooltip } from "@/views/character/CharacterViewParts";
-import type { AbilKey, ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
+import type { AbilKey, ProficiencyMap } from "@/views/character/CharacterSheetTypes";
 import { ABILITY_FULL, ABILITY_LABELS, ALL_SKILLS } from "@/views/character/CharacterSheetConstants";
 import { getSaveBonus, getSkillBonus, getSkillProficiencyTier, hasNamedProficiency } from "@/views/character/CharacterSheetUtils";
 import { formatWeaponProficiencyName } from "@/views/character/CharacterInventory";
@@ -10,6 +10,13 @@ export interface CharacterAbilitiesPanelsProps {
   scores: Record<AbilKey, number | null>;
   pb: number;
   prof?: ProficiencyMap | null;
+  saveBonuses?: Partial<Record<AbilKey, number>>;
+  abilityCheckAdvantages?: Partial<Record<AbilKey, boolean>>;
+  abilityCheckDisadvantages?: Partial<Record<AbilKey, boolean>>;
+  saveAdvantages?: Partial<Record<AbilKey, boolean>>;
+  saveDisadvantages?: Partial<Record<AbilKey, boolean>>;
+  skillAdvantages?: Record<string, boolean>;
+  skillDisadvantages?: Record<string, boolean>;
   accentColor: string;
   stealthDisadvantage: boolean;
   nonProficientArmorPenalty: boolean;
@@ -18,10 +25,57 @@ export interface CharacterAbilitiesPanelsProps {
   fmtMod: (value: number) => string;
 }
 
+function getModifierState(hasAdvantage: boolean, hasDisadvantage: boolean): "advantage" | "disadvantage" | null {
+  if (hasAdvantage === hasDisadvantage) return null;
+  return hasAdvantage ? "advantage" : "disadvantage";
+}
+
+function StateBadge({
+  state,
+  accentColor,
+  title,
+}: {
+  state: "advantage" | "disadvantage" | null;
+  accentColor: string;
+  title: string;
+}) {
+  if (!state) return null;
+  const positive = state === "advantage";
+  return (
+    <span
+      title={title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 18,
+        height: 18,
+        borderRadius: 999,
+        border: `1px solid ${positive ? accentColor + "88" : "rgba(248,113,113,0.55)"}`,
+        background: positive ? accentColor + "1f" : "rgba(248,113,113,0.14)",
+        color: positive ? accentColor : C.colorPinkRed,
+        fontSize: "var(--fs-small)",
+        fontWeight: 800,
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      {positive ? "A" : "D"}
+    </span>
+  );
+}
+
 export function CharacterAbilitiesPanels({
   scores,
   pb,
   prof,
+  saveBonuses,
+  abilityCheckAdvantages,
+  abilityCheckDisadvantages,
+  saveAdvantages,
+  saveDisadvantages,
+  skillAdvantages,
+  skillDisadvantages,
   accentColor,
   stealthDisadvantage,
   nonProficientArmorPenalty,
@@ -39,22 +93,36 @@ export function CharacterAbilitiesPanels({
               const score = scores[k];
               const m = mod(score);
               const isProfSave = prof ? hasNamedProficiency(prof.saves, ABILITY_FULL[k]) : false;
-              const save = getSaveBonus(ABILITY_FULL[k], k, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined);
-              const showSaveDisadvantage = nonProficientArmorPenalty && (k === "str" || k === "dex");
+              const save = getSaveBonus(ABILITY_FULL[k], k, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined, saveBonuses?.[k] ?? 0);
+              const abilityCheckState = getModifierState(Boolean(abilityCheckAdvantages?.[k]), Boolean(abilityCheckDisadvantages?.[k]));
+              const armorSaveDisadvantage = nonProficientArmorPenalty && (k === "str" || k === "dex");
+              const saveState = getModifierState(Boolean(saveAdvantages?.[k]), Boolean(saveDisadvantages?.[k]) || armorSaveDisadvantage);
               return (
                 <div key={k} style={{ minWidth: 0 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "44px minmax(56px, 1fr) 40px 40px", columnGap: 10, alignItems: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "44px minmax(56px, 1fr) 56px 56px", columnGap: 10, alignItems: "center" }}>
                     <div style={{ fontSize: "var(--fs-tiny)", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: isProfSave ? accentColor : C.muted }}>
                       {ABILITY_LABELS[k]}
                     </div>
                     <div style={{ padding: "8px 2px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: `1px solid ${isProfSave ? accentColor + "55" : "rgba(255,255,255,0.10)"}`, textAlign: "center", fontSize: "var(--fs-medium)", fontWeight: 900, color: isProfSave ? accentColor : C.text }}>
                       {score ?? "-"}
                     </div>
-                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: C.text }}>{fmtMod(m)}</div>
-                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: showSaveDisadvantage ? C.colorPinkRed : isProfSave ? accentColor : C.text, position: "relative" }}>
-                      <span title={showSaveDisadvantage ? "Disadvantage while wearing armor or a shield without proficiency" : undefined}>
-                        {fmtMod(save)}{showSaveDisadvantage ? " D" : ""}
+                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: abilityCheckState === "disadvantage" ? C.colorPinkRed : abilityCheckState === "advantage" ? accentColor : C.text, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                      <span>{fmtMod(m)}</span>
+                      <StateBadge
+                        state={abilityCheckState}
+                        accentColor={accentColor}
+                        title={`${abilityCheckState === "advantage" ? "Advantage" : "Disadvantage"} on ${ABILITY_FULL[k]} checks`}
+                      />
+                    </div>
+                    <div style={{ fontSize: "var(--fs-subtitle)", fontWeight: 700, textAlign: "center", color: saveState === "disadvantage" ? C.colorPinkRed : saveState === "advantage" ? accentColor : isProfSave ? accentColor : C.text, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                      <span title={armorSaveDisadvantage ? "Armor or shield without proficiency imposes disadvantage on Strength and Dexterity saves" : undefined}>
+                        {fmtMod(save)}
                       </span>
+                      <StateBadge
+                        state={saveState}
+                        accentColor={accentColor}
+                        title={`${saveState === "advantage" ? "Advantage" : "Disadvantage"} on ${ABILITY_FULL[k]} saving throws`}
+                      />
                       {isProfSave && <span style={{ position: "absolute", top: -2, right: 0, width: 5, height: 5, borderRadius: "50%", background: accentColor }} />}
                     </div>
                   </div>
@@ -74,9 +142,9 @@ export function CharacterAbilitiesPanels({
             const bonus = getSkillBonus(name, abil, scores, Math.max(1, (pb - 1) * 4), prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades });
             const src = prof?.skills.find((s) => s.name.toLowerCase() === name.toLowerCase())?.source;
             const expertiseSrc = prof?.expertise.find((s) => s.name.toLowerCase() === name.toLowerCase())?.source;
-            const showArmorPenalty = nonProficientArmorPenalty && (abil === "str" || abil === "dex");
-            const showStealthDisadvantage = name === "Stealth" && stealthDisadvantage;
-            const showDisadvantage = showArmorPenalty || showStealthDisadvantage;
+            const armorPenalty = nonProficientArmorPenalty && (abil === "str" || abil === "dex");
+            const stealthPenalty = name === "Stealth" && stealthDisadvantage;
+            const skillState = getModifierState(Boolean(skillAdvantages?.[name]), Boolean(skillDisadvantages?.[name]) || armorPenalty || stealthPenalty);
             return (
               <div
                 key={name}
@@ -118,28 +186,11 @@ export function CharacterAbilitiesPanels({
                   {isExpertise && (
                     <span style={{ fontSize: "var(--fs-tiny)", fontWeight: 800, color: accentColor }}>EXP</span>
                   )}
-                  {showDisadvantage && (
-                    <span
-                      title={showArmorPenalty ? "Disadvantage while wearing armor or a shield without proficiency" : "Disadvantage on Stealth checks from equipped armor"}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minWidth: 18,
-                        height: 18,
-                        borderRadius: 999,
-                        border: "1px solid rgba(248,113,113,0.55)",
-                        background: "rgba(248,113,113,0.14)",
-                        color: C.colorPinkRed,
-                        fontSize: "var(--fs-small)",
-                        fontWeight: 800,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      D
-                    </span>
-                  )}
+                  <StateBadge
+                    state={skillState}
+                    accentColor={accentColor}
+                    title={`${skillState === "advantage" ? "Advantage" : "Disadvantage"} on ${name} checks`}
+                  />
                 </span>
                 <span
                   style={{
@@ -147,12 +198,12 @@ export function CharacterAbilitiesPanels({
                     fontWeight: 700,
                     minWidth: 26,
                     textAlign: "right",
-                    color: showDisadvantage ? C.colorPinkRed : isExpertise ? accentColor : isProfSkill ? C.green : C.text,
+                    color: skillState === "disadvantage" ? C.colorPinkRed : skillState === "advantage" ? accentColor : isExpertise ? accentColor : isProfSkill ? C.green : C.text,
                   }}
                 >
                   {isProfSkill && (src || expertiseSrc)
-                    ? <Tooltip text={[src, expertiseSrc].filter(Boolean).join(" • ")}>{fmtMod(bonus)}{showDisadvantage ? " D" : ""}</Tooltip>
-                    : `${fmtMod(bonus)}${showDisadvantage ? " D" : ""}`}
+                    ? <Tooltip text={[src, expertiseSrc].filter(Boolean).join(" • ")}>{fmtMod(bonus)}</Tooltip>
+                    : fmtMod(bonus)}
                 </span>
               </div>
             );
@@ -215,4 +266,3 @@ export function CharacterProficienciesPanel({
     </CollapsiblePanel>
   );
 }
-

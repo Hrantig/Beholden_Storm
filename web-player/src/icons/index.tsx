@@ -114,6 +114,7 @@ export const conditionIconSvgByKey: Record<string, string> = {
   stunned: COND_STUNNED_SVG,
   unconscious: COND_UNCONSCIOUS_SVG,
   concentration: COND_CONCENTRATION_SVG,
+  rage: ATTACK_SVG,
   hex: COND_HEXED_SVG,
 };
 

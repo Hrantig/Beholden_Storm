@@ -34,7 +34,7 @@ export function registerAuthRoutes(app: Express, ctx: ServerContext) {
   app.post("/api/auth/login", (req, res) => {
     const body = parseBody(LoginBody, req);
     const row = db
-      .prepare("SELECT id, username, passhash, name, is_admin FROM users WHERE username = ?")
+      .prepare("SELECT id, username, passhash, name, is_admin FROM users WHERE LOWER(username) = LOWER(?)")
       .get(body.username) as Record<string, unknown> | undefined;
 
     if (!row || !verifyPassword(body.password, row.passhash as string)) {
@@ -77,7 +77,7 @@ export function registerAuthRoutes(app: Express, ctx: ServerContext) {
     }
 
     if (body.username && body.username !== row.username) {
-      const conflict = db.prepare("SELECT id FROM users WHERE username = ? AND id != ?").get(body.username, userId);
+      const conflict = db.prepare("SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?").get(body.username, userId);
       if (conflict) return res.status(409).json({ ok: false, message: "Username already taken" });
     }
 
@@ -85,7 +85,7 @@ export function registerAuthRoutes(app: Express, ctx: ServerContext) {
     const values: unknown[] = [];
 
     if (body.name !== undefined)        { setClauses.push("name = ?");     values.push(body.name); }
-    if (body.username !== undefined)    { setClauses.push("username = ?"); values.push(body.username); }
+    if (body.username !== undefined)    { setClauses.push("username = ?"); values.push(body.username.toLowerCase()); }
     if (body.newPassword !== undefined) { setClauses.push("passhash = ?"); values.push(hashPassword(body.newPassword)); }
 
     if (setClauses.length === 0) return res.json({ ok: true });

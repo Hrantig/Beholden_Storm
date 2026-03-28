@@ -17,16 +17,24 @@ import {
   buildGrantedSpellDataFromEffects,
   collectSensesFromEffects,
   collectDefensesFromEffects,
+  collectMovementModesFromEffects,
+  deriveAttackDamageBonusFromEffects,
   deriveArmorClassBonusFromEffects,
   deriveHitPointMaxBonusFromEffects,
   deriveModifierBonusFromEffects,
+  deriveModifierStateFromEffects,
   deriveSpeedBonusFromEffects,
   deriveUnarmoredDefenseFromEffects,
   parseFeatureEffects,
   type ParseFeatureEffectsInput,
 } from "@/domain/character/parseFeatureEffects";
+import {
+  buildAppliedCharacterFeatures,
+  buildDisplayPlayerFeatures,
+} from "@/domain/character/characterFeatures";
 import { CharacterDefensesPanel } from "@/views/character/CharacterDefensesPanel";
-import { SpellSlotsPanel, RichSpellsPanel, ItemSpellsPanel } from "@/views/character/CharacterSpellsPanel";
+import { RichSpellsPanel, ItemSpellsPanel } from "@/views/character/CharacterSpellsPanel";
+import { SpellSlotsPanel } from "@/views/character/SpellSlotsPanel";
 import { CharacterSupportPanels } from "@/views/character/CharacterSupportPanels";
 import {
   abilityMod,
@@ -42,12 +50,12 @@ import {
   normalizeWeaponProficiencyName,
   proficiencyBonus,
 } from "@/views/character/CharacterSheetUtils";
-import { featureMatchesSubclass, getPreparedSpellCount, isSubclassChoiceFeature } from "@/views/character-creator/utils/CharacterCreatorUtils";
+import { ABILITY_FULL, ALL_SKILLS } from "@/views/character/CharacterSheetConstants";
+import { getPreparedSpellCount } from "@/views/character-creator/utils/CharacterCreatorUtils";
 import type {
   AbilKey,
   CharacterCampaign,
   CharacterData,
-  ClassFeatureEntry,
   ConditionInstance,
   PlayerNote,
   ProficiencyMap,
@@ -158,6 +166,11 @@ interface InvocationFeatureDetail {
   text: string;
 }
 
+interface ClassFeatFeatureDetail {
+  featureName: string;
+  feat: FeatFeatureDetail;
+}
+
 interface SheetOverrides {
   tempHp: number;
   acBonus: number;
@@ -179,169 +192,6 @@ interface EditableSheetOverrideField {
 
 function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-function normalizePlayerFeatures(
-  charData: CharacterData | null | undefined,
-  characterLevel: number,
-  classDetail: ClassRestDetail | null,
-  raceDetail: RaceFeatureDetail | null,
-  backgroundDetail: BackgroundFeatureDetail | null,
-  bgOriginFeatDetail: FeatFeatureDetail | null,
-  raceFeatDetail: FeatFeatureDetail | null,
-  levelUpFeatDetails: LevelUpFeatDetail[],
-  invocationDetails: InvocationFeatureDetail[],
-): ClassFeatureEntry[] {
-  const selectedSubclass = String(charData?.subclass ?? "").trim();
-  const featureById = new Map<string, ClassFeatureEntry>();
-  const featureKeys = new Set<string>();
-  const addFeature = (feature: ClassFeatureEntry | null | undefined, options?: { force?: boolean }) => {
-    if (!feature) return;
-    if (selectedSubclass) {
-      const subclassLike = { name: feature.name, text: feature.text ?? "", optional: true, subclass: null };
-      if (!featureMatchesSubclass(subclassLike, selectedSubclass) || isSubclassChoiceFeature(subclassLike)) return;
-    } else {
-      const subclassLike = { name: feature.name, text: feature.text ?? "", optional: true, subclass: null };
-      if (!featureMatchesSubclass(subclassLike, selectedSubclass) || isSubclassChoiceFeature(subclassLike)) return;
-    }
-    if (!options?.force && !feature.preparedSpellProgression?.length && !shouldDisplayPlayerFeature(feature.name, feature.text ?? "")) return;
-    const dedupeKey = `${String(feature.name ?? "").trim().toLowerCase()}::${String(feature.text ?? "").trim().replace(/\s+/g, " ").toLowerCase()}`;
-    if (featureKeys.has(dedupeKey)) return;
-    if (featureById.has(feature.id)) return;
-    featureKeys.add(dedupeKey);
-    featureById.set(feature.id, feature);
-  };
-
-  for (const autolevel of classDetail?.autolevels ?? []) {
-    if (autolevel.level > characterLevel) continue;
-    for (const feature of autolevel.features ?? []) {
-      if (!featureMatchesSubclass(feature, selectedSubclass) || isSubclassChoiceFeature(feature)) continue;
-      const text = String(feature.text ?? "").trim();
-      if (!text) continue;
-      const name = String(feature.name ?? "").trim();
-      if (!name) continue;
-      if (!feature.preparedSpellProgression?.length && !/\b(short|long) rest\b/i.test(text) && !/\b(regain|recover)\b/i.test(text)) continue;
-      addFeature({
-        id: `class:${classDetail?.id}:${name}`,
-        name,
-        text,
-        preparedSpellProgression: feature.preparedSpellProgression,
-      });
-    }
-  }
-
-  for (const trait of raceDetail?.traits ?? []) {
-    const text = String(trait.text ?? "").trim();
-    if (!text) continue;
-    addFeature({
-      id: `race:${raceDetail?.id}:${trait.name}`,
-      name: trait.name,
-      text,
-      preparedSpellProgression: trait.preparedSpellProgression,
-    });
-  }
-
-  if (raceFeatDetail && String(raceFeatDetail.text ?? "").trim()) {
-    addFeature({
-      id: `race-feat:${raceFeatDetail.id}`,
-      name: raceFeatDetail.name,
-      text: String(raceFeatDetail.text ?? "").trim(),
-      preparedSpellProgression: raceFeatDetail.preparedSpellProgression,
-    });
-  }
-
-  for (const trait of backgroundDetail?.traits ?? []) {
-    const name = String(trait.name ?? "").trim();
-    const text = String(trait.text ?? "").trim();
-    if (!name || !text) continue;
-    if (/^description$/i.test(name)) continue;
-    if (/^ability scores?/i.test(name)) continue;
-    if (/^starting equipment$/i.test(name)) continue;
-    if (/^feat:/i.test(name)) continue;
-    addFeature({
-      id: `background:${backgroundDetail?.id}:${name}`,
-      name,
-      text,
-      preparedSpellProgression: trait.preparedSpellProgression,
-    });
-  }
-
-  if (bgOriginFeatDetail && String(bgOriginFeatDetail.text ?? "").trim()) {
-    addFeature({
-      id: bgOriginFeatDetail.name,
-      name: bgOriginFeatDetail.name,
-      text: String(bgOriginFeatDetail.text ?? "").trim(),
-      preparedSpellProgression: bgOriginFeatDetail.preparedSpellProgression,
-    }, { force: true });
-  }
-
-  for (const entry of levelUpFeatDetails) {
-    if (!String(entry.feat.text ?? "").trim()) continue;
-    addFeature({
-      id: `levelupfeat:${entry.level}:${entry.featId}`,
-      name: entry.feat.name,
-      text: String(entry.feat.text ?? "").trim(),
-      preparedSpellProgression: entry.feat.preparedSpellProgression,
-    }, { force: true });
-  }
-
-  for (const invocation of invocationDetails) {
-    addFeature({
-      id: `invocation:${invocation.id}`,
-      name: String(invocation.name ?? "").replace(/^Invocation:\s*/i, "").trim(),
-      text: invocation.text,
-    }, { force: true });
-  }
-
-  return Array.from(featureById.values()).map((feature) => ({
-      id: feature.id || feature.name,
-      name: feature.name,
-      text: feature.text ?? "",
-      preparedSpellProgression: feature.preparedSpellProgression,
-  }));
-}
-
-function shouldDisplayPlayerFeature(name: string, text: string): boolean {
-  const normalizedName = String(name ?? "").trim();
-  const normalizedText = String(text ?? "").trim();
-  const haystack = `${normalizedName} ${normalizedText}`;
-  if (!normalizedName && !normalizedText) return false;
-
-  if (
-    /^(description|creature type|size|speed|tool proficiency|tool proficiencies|skill proficiency|skill proficiencies|languages?|starting equipment)$/i.test(normalizedName)
-    || /^ability scores?/i.test(normalizedName)
-    || /^feat:/i.test(normalizedName)
-    || /^(level\s+\d+:\s+)?weapon mastery$/i.test(normalizedName)
-  ) {
-    return false;
-  }
-
-  if (
-    /^(resourceful|darkvision|superior darkvision|trance|fey ancestry|brave|hellish resistance|necrotic resistance|fire resistance|cold resistance|lightning resistance|poison resilience|dwarven resilience|gnomish cunning|lucky|relentless endurance|powerful build|celestial revelation|draconic flight|arcane recovery)$/i.test(normalizedName)
-  ) {
-    return true;
-  }
-
-  if (
-    /\b(darkvision|blindsight|tremorsense|truesight|short rest|long rest|regain|recover|heroic inspiration|advantage on saving throws|immune to the charmed|magic can't put you to sleep|resistance to|you have resistance to|damage resistance|can't be (?:put to sleep|surprised)|reroll|once per turn|once per combat|once per (?:short|long) rest)\b/i.test(haystack)
-  ) {
-    return true;
-  }
-
-  if (
-    /^(high elf lineage|wood elf lineage|drow lineage|forest lineage|celestial lineage|draconic ancestry|creature type|size|tool proficiency|tool proficiencies|skill proficiency|skill proficiencies|instrument training|artisan'?s tools|weapon training|armor training)$/i.test(normalizedName)
-  ) {
-    return false;
-  }
-
-  if (
-    /\b(creature type|you are a .*?(humanoid|celestial|fey|fiend|undead|construct|beast|dragon|elemental|giant|monstrosity|ooze|plant))\b/i.test(normalizedText)
-    || /\b(you have proficiency|you gain proficiency|you gain training|you have training|you know the .* cantrip|you always have .* prepared|you can cast .* without a spell slot|you learn the .* cantrip|you gain one skill proficiency|you gain one tool proficiency)\b/i.test(normalizedText)
-  ) {
-    return false;
-  }
-
-  return /(?:advantage|disadvantage|resistance|immunity|vision|rest|recover|regain|heroic inspiration|sleep|charmed|frightened|poisoned|reroll|movement|speed|climb speed|swim speed|fly speed)/i.test(haystack);
 }
 
 function collectClassResources(classDetail: ClassRestDetail | null, level: number): ResourceCounter[] {
@@ -400,6 +250,7 @@ export function CharacterView() {
   const [backgroundDetail, setBackgroundDetail] = useState<BackgroundFeatureDetail | null>(null);
   const [bgOriginFeatDetail, setBgOriginFeatDetail] = useState<FeatFeatureDetail | null>(null);
   const [raceFeatDetail, setRaceFeatDetail] = useState<FeatFeatureDetail | null>(null);
+  const [classFeatDetails, setClassFeatDetails] = useState<ClassFeatFeatureDetail[]>([]);
   const [levelUpFeatDetails, setLevelUpFeatDetails] = useState<LevelUpFeatDetail[]>([]);
   const [invocationDetails, setInvocationDetails] = useState<InvocationFeatureDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -497,6 +348,26 @@ export function CharacterView() {
       .catch(() => { if (alive) setBgOriginFeatDetail(null); });
     return () => { alive = false; };
   }, [char?.characterData?.chosenBgOriginFeatId]);
+
+  useEffect(() => {
+    const entries = Object.entries(char?.characterData?.chosenClassFeatIds ?? {}).filter(([, featId]): featId is string =>
+      typeof featId === "string" && featId.trim().length > 0
+    );
+    if (entries.length === 0) {
+      setClassFeatDetails([]);
+      return;
+    }
+    let alive = true;
+    Promise.all(
+      entries.map(async ([featureName, featId]) => {
+        const feat = await api<FeatFeatureDetail>(`/api/compendium/feats/${encodeURIComponent(featId)}`);
+        return { featureName, feat };
+      })
+    )
+      .then((details) => { if (alive) setClassFeatDetails(details); })
+      .catch(() => { if (alive) setClassFeatDetails([]); });
+    return () => { alive = false; };
+  }, [char?.characterData?.chosenClassFeatIds]);
 
   useEffect(() => {
     const entries = Array.isArray(char?.characterData?.chosenLevelUpFeats)
@@ -604,47 +475,48 @@ export function CharacterView() {
     str: char.strScore, dex: char.dexScore, con: char.conScore,
     int: char.intScore, wis: char.wisScore, cha: char.chaScore,
   };
-  const classFeaturesList = normalizePlayerFeatures(
-    char.characterData,
-    char.level,
+  const appliedFeatures = buildAppliedCharacterFeatures({
+    charData: char.characterData,
+    characterLevel: char.level,
     classDetail,
     raceDetail,
     backgroundDetail,
     bgOriginFeatDetail,
     raceFeatDetail,
+    classFeatDetails: classFeatDetails.map((entry) => entry.feat),
     levelUpFeatDetails,
     invocationDetails,
+  });
+  const classFeaturesList = buildDisplayPlayerFeatures({
+    charData: char.characterData,
+    characterLevel: char.level,
+    classDetail,
+    raceDetail,
+    backgroundDetail,
+    bgOriginFeatDetail,
+    raceFeatDetail,
+    classFeatDetails: classFeatDetails.map((entry) => entry.feat),
+    levelUpFeatDetails,
+    invocationDetails,
+  });
+  const parsedFeatureEffects = appliedFeatures.map((feature, index) =>
+    parseFeatureEffects({
+      source: { id: `feature:${index}:${feature.id}`, kind: feature.kind, name: feature.name, text: feature.text },
+      text: feature.text,
+    } satisfies ParseFeatureEffectsInput)
   );
-  const parsedFeatureEffects = [
-    ...classFeaturesList.map((feature, index) =>
-      parseFeatureEffects({
-        source: { id: `class-feature:${index}:${feature.id}`, kind: "class", name: feature.name, text: feature.text },
-        text: feature.text,
-      } satisfies ParseFeatureEffectsInput)
-    ),
-    ...(raceDetail?.traits ?? []).map((trait, index) =>
-      parseFeatureEffects({
-        source: { id: `race-trait:${index}:${trait.name}`, kind: "species", name: trait.name, text: trait.text },
-        text: trait.text,
-      } satisfies ParseFeatureEffectsInput)
-    ),
-    ...(backgroundDetail?.traits ?? []).map((trait, index) =>
-      parseFeatureEffects({
-        source: { id: `background-trait:${index}:${trait.name}`, kind: "background", name: trait.name, text: trait.text },
-        text: trait.text,
-      } satisfies ParseFeatureEffectsInput)
-    ),
-  ];
   const grantedSpellData = buildGrantedSpellDataFromEffects(parsedFeatureEffects, scores, char.level);
   const classResourcesWithSpellCasts = mergeResourceState(char.characterData?.resources, [
     ...collectClassResources(classDetail, char.level),
     ...grantedSpellData.resources,
   ]);
-  const effectDefenses = collectDefensesFromEffects(parsedFeatureEffects);
+  const rageActive = (char.conditions ?? []).some((c) => c.key === "rage");
+  const effectDefenses = collectDefensesFromEffects(parsedFeatureEffects, { raging: rageActive });
   const effectSenses = collectSensesFromEffects(parsedFeatureEffects);
   const parsedDefenses = {
     resistances: effectDefenses.resistances,
-    immunities: effectDefenses.immunities,
+    damageImmunities: effectDefenses.damageImmunities,
+    conditionImmunities: effectDefenses.conditionImmunities,
     vulnerabilities: [] as string[],
   };
   const preparedSpellLimit = classDetail ? getPreparedSpellCount(classDetail, char.level, char.characterData?.subclass ?? "") : 0;
@@ -664,6 +536,10 @@ export function CharacterView() {
   const wornShield = inventory.find((it) => getEquipState(it) === "offhand" && isShieldItem(it));
   const shieldBonus = wornShield ? 2 : 0;
   const wornArmor = inventory.find((it) => getEquipState(it) === "worn" && isArmorItem(it) && (it.ac ?? 0) > 0);
+  const speedArmorState =
+    !wornArmor ? "no_armor"
+    : /\bheavy armor\b/i.test(wornArmor.type ?? "") ? "any"
+    : "not_heavy";
   const armorWithoutProficiency = Boolean(wornArmor && !hasArmorProficiency(wornArmor, prof ?? undefined));
   const shieldWithoutProficiency = Boolean(wornShield && !hasArmorProficiency(wornShield, prof ?? undefined));
   const nonProficientArmorPenalty = armorWithoutProficiency || shieldWithoutProficiency;
@@ -697,25 +573,83 @@ export function CharacterView() {
   });
   const featureAcBonus = deriveArmorClassBonusFromEffects(parsedFeatureEffects, {
     armorEquipped: Boolean(wornArmor),
+    armorCategory:
+      wornArmor && /\bheavy\b/i.test(wornArmor.type ?? "") ? "heavy"
+      : wornArmor && /\bmedium\b/i.test(wornArmor.type ?? "") ? "medium"
+      : wornArmor && /\blight\b/i.test(wornArmor.type ?? "") ? "light"
+      : wornShield ? "shield"
+      : "none",
     level: char.level,
     scores: scoresByAbility,
   });
   const effectiveAc = Math.max(char.ac, wornArmorAc ?? 0, unarmoredDefenseAc ?? 0) + featureAcBonus + (overrides.acBonus ?? 0) + shieldBonus;
   const speedBonus = deriveSpeedBonusFromEffects(parsedFeatureEffects, {
-    armorState: wornArmor && /\bheavy armor\b/i.test(wornArmor.type ?? "") ? "any" : "not_heavy",
+    armorState: speedArmorState,
+    raging: rageActive,
   });
   const effectiveSpeed = char.speed + speedBonus;
+  const movementModes = collectMovementModesFromEffects(parsedFeatureEffects, {
+    baseWalkSpeed: effectiveSpeed,
+    armorState: speedArmorState,
+    raging: rageActive,
+  });
   const tempHp = overrides.tempHp ?? 0;
   const hpPct = effectiveHpMax > 0 ? Math.max(0, Math.min(1, char.hpCurrent / effectiveHpMax)) : 0;
   const tempPct = effectiveHpMax > 0 ? Math.min(1 - hpPct, tempHp / effectiveHpMax) : 0;
   const passiveScoreBonus = deriveModifierBonusFromEffects(parsedFeatureEffects, "passive_score", {
     level: char.level,
     scores: scoresByAbility,
+    raging: rageActive,
   });
   const passivePerc = getPassiveScore(getSkillBonus("Perception", "wis", scoresByAbility, char.level, prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades })) + passiveScoreBonus;
   const passiveInv  = getPassiveScore(getSkillBonus("Investigation", "int", scoresByAbility, char.level, prof ?? undefined, { jackOfAllTrades: hasJackOfAllTrades })) + passiveScoreBonus;
   const initiativeBonus = getInitiativeBonus(char.dexScore, char.level, { jackOfAllTrades: hasJackOfAllTrades })
-    + deriveModifierBonusFromEffects(parsedFeatureEffects, "initiative", { level: char.level, scores: scoresByAbility });
+    + deriveModifierBonusFromEffects(parsedFeatureEffects, "initiative", { level: char.level, scores: scoresByAbility, raging: rageActive });
+  const saveBonuses: Partial<Record<AbilKey, number>> = {
+    str: deriveModifierBonusFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: "Strength", level: char.level, scores: scoresByAbility, raging: rageActive }),
+    dex: deriveModifierBonusFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: "Dexterity", level: char.level, scores: scoresByAbility, raging: rageActive }),
+    con: deriveModifierBonusFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: "Constitution", level: char.level, scores: scoresByAbility, raging: rageActive }),
+    int: deriveModifierBonusFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: "Intelligence", level: char.level, scores: scoresByAbility, raging: rageActive }),
+    wis: deriveModifierBonusFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: "Wisdom", level: char.level, scores: scoresByAbility, raging: rageActive }),
+    cha: deriveModifierBonusFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: "Charisma", level: char.level, scores: scoresByAbility, raging: rageActive }),
+  };
+  const abilityCheckAdvantages: Partial<Record<AbilKey, boolean>> = {};
+  const abilityCheckDisadvantages: Partial<Record<AbilKey, boolean>> = {};
+  const saveAdvantages: Partial<Record<AbilKey, boolean>> = {};
+  const saveDisadvantages: Partial<Record<AbilKey, boolean>> = {};
+  (Object.keys(ABILITY_FULL) as AbilKey[]).forEach((ability) => {
+    const abilityName = ABILITY_FULL[ability];
+    const abilityCheckState = deriveModifierStateFromEffects(parsedFeatureEffects, "ability_check", { appliesTo: abilityName, raging: rageActive });
+    const saveState = deriveModifierStateFromEffects(parsedFeatureEffects, "saving_throw", { appliesTo: abilityName, raging: rageActive });
+    if (abilityCheckState.advantage) abilityCheckAdvantages[ability] = true;
+    if (abilityCheckState.disadvantage) abilityCheckDisadvantages[ability] = true;
+    if (saveState.advantage) saveAdvantages[ability] = true;
+    if (saveState.disadvantage) saveDisadvantages[ability] = true;
+  });
+  const skillAdvantages = Object.fromEntries(
+    ALL_SKILLS
+      .filter(({ name }) => deriveModifierStateFromEffects(parsedFeatureEffects, "skill_check", { appliesTo: name, raging: rageActive }).advantage)
+      .map(({ name }) => [name, true]),
+  ) as Record<string, boolean>;
+  const skillDisadvantages = Object.fromEntries(
+    ALL_SKILLS
+      .filter(({ name }) => deriveModifierStateFromEffects(parsedFeatureEffects, "skill_check", { appliesTo: name, raging: rageActive }).disadvantage)
+      .map(({ name }) => [name, true]),
+  ) as Record<string, boolean>;
+  const rageDamageBonus = deriveAttackDamageBonusFromEffects(parsedFeatureEffects, {
+    level: char.level,
+    scores: scoresByAbility,
+    raging: rageActive,
+    attackAbility: "str",
+    isWeapon: true,
+  });
+  const unarmedRageDamageBonus = deriveAttackDamageBonusFromEffects(parsedFeatureEffects, {
+    level: char.level,
+    scores: scoresByAbility,
+    raging: rageActive,
+    attackAbility: "str",
+    isUnarmed: true,
+  });
   const senses = effectSenses.map((sense) => `${sense.kind[0].toUpperCase()}${sense.kind.slice(1)} ${sense.range} ft.`);
   const editableOverrideFields: EditableSheetOverrideField[] = [
     { key: "tempHp", label: "Temp HP", help: "Current temporary hit points." },
@@ -804,6 +738,42 @@ export function CharacterView() {
     const unique = Array.from(new Set(next));
     const limited = preparedSpellLimit > 0 ? unique.slice(0, preparedSpellLimit) : unique;
     await saveCharacterData({ ...currentCharacterData, preparedSpells: limited });
+  }
+
+  async function addTrackedSpell(spellName: string) {
+    const normalized = spellName.replace(/\s*\[[^\]]+\]\s*$/u, "").trim().toLowerCase();
+    const existing = Array.isArray(currentCharacterData.proficiencies?.spells) ? currentCharacterData.proficiencies.spells : [];
+    if (existing.some((entry) => entry.name.replace(/\s*\[[^\]]+\]\s*$/u, "").trim().toLowerCase() === normalized)) return;
+    const nextSpells = [
+      ...existing,
+      { name: spellName, source: classDetail?.name ?? char.className ?? "Manual" },
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    await saveCharacterData({
+      ...currentCharacterData,
+      proficiencies: {
+        ...(currentCharacterData.proficiencies ?? {
+          skills: [], expertise: [], saves: [], armor: [], weapons: [], tools: [], languages: [], masteries: [], spells: [], invocations: [],
+        }),
+        spells: nextSpells,
+      },
+    });
+  }
+
+  async function removeTrackedSpell(spellName: string) {
+    const normalized = spellName.replace(/\s*\[[^\]]+\]\s*$/u, "").trim().toLowerCase();
+    const existing = Array.isArray(currentCharacterData.proficiencies?.spells) ? currentCharacterData.proficiencies.spells : [];
+    const nextSpells = existing.filter((entry) => entry.name.replace(/\s*\[[^\]]+\]\s*$/u, "").trim().toLowerCase() !== normalized);
+    const nextPrepared = preparedSpells.filter((key) => key !== normalized.replace(/[^a-z0-9]/g, ""));
+    await saveCharacterData({
+      ...currentCharacterData,
+      preparedSpells: nextPrepared,
+      proficiencies: {
+        ...(currentCharacterData.proficiencies ?? {
+          skills: [], expertise: [], saves: [], armor: [], weapons: [], tools: [], languages: [], masteries: [], spells: [], invocations: [],
+        }),
+        spells: nextSpells,
+      },
+    });
   }
 
   async function handleItemChargeChange(itemId: string, charges: number) {
@@ -924,8 +894,22 @@ export function CharacterView() {
     const next = has ? current.filter((c) => c.key !== key) : [...current, { key }];
     setCondSaving(true);
     try {
+      let nextCharacterData = currentCharacterData;
+      if (key === "rage" && !has) {
+        if (!/barbarian/i.test(String(char.className ?? ""))) return;
+        const rageResource = classResourcesWithSpellCasts.find((resource) => /^rage$/i.test(resource.name) || resource.key === "rage");
+        if (!rageResource || rageResource.current <= 0) return;
+        const nextResources = classResourcesWithSpellCasts.map((resource) =>
+          resource.key !== rageResource.key ? resource : { ...resource, current: Math.max(0, resource.current - 1) }
+        );
+        nextCharacterData = { ...currentCharacterData, resources: nextResources };
+        await saveCharacterData(nextCharacterData);
+      }
       await api(`/api/me/characters/${char.id}/conditions`, jsonInit("PATCH", { conditions: next }));
-      setChar((prev) => prev ? { ...prev, conditions: next } : prev);
+      setChar((prev) => prev ? { ...prev, conditions: next, characterData: { ...(prev.characterData ?? {}), ...nextCharacterData } } : prev);
+    } catch (error) {
+      fetchChar();
+      console.error("Condition update failed:", error);
     } finally { setCondSaving(false); }
   }
 
@@ -1052,7 +1036,7 @@ export function CharacterView() {
         </div>
       )}
       {/* ── 4-column layout ──────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, alignItems: "flex-start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(300px, 1fr))", gap: 16, alignItems: "flex-start" }}>
 
         {/* ── COL 1: HUD + Abilities & Saves + Skills + Proficiencies ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1098,6 +1082,13 @@ export function CharacterView() {
             scores={scores}
             pb={pb}
             prof={prof}
+            saveBonuses={saveBonuses}
+            abilityCheckAdvantages={abilityCheckAdvantages}
+            abilityCheckDisadvantages={abilityCheckDisadvantages}
+            saveAdvantages={saveAdvantages}
+            saveDisadvantages={saveDisadvantages}
+            skillAdvantages={skillAdvantages}
+            skillDisadvantages={skillDisadvantages}
             accentColor={accentColor}
             stealthDisadvantage={stealthDisadvantage}
             nonProficientArmorPenalty={nonProficientArmorPenalty}
@@ -1107,7 +1098,8 @@ export function CharacterView() {
           />
           <CharacterDefensesPanel
             resistances={parsedDefenses.resistances}
-            immunities={parsedDefenses.immunities}
+            damageImmunities={parsedDefenses.damageImmunities}
+            conditionImmunities={parsedDefenses.conditionImmunities}
             senses={senses}
             customResistances={char.characterData?.customResistances ?? []}
             customImmunities={char.characterData?.customImmunities ?? []}
@@ -1126,6 +1118,7 @@ export function CharacterView() {
           <CharacterCombatPanels
             effectiveAc={effectiveAc}
             speed={effectiveSpeed}
+            movementModes={movementModes}
             level={char.level}
             className={char.className}
             initiativeBonus={initiativeBonus}
@@ -1137,9 +1130,12 @@ export function CharacterView() {
             accentColor={accentColor}
             inventory={inventory}
             prof={prof}
-            characterData={char.characterData}
+            parsedFeatureEffects={parsedFeatureEffects}
             nonProficientArmorPenalty={nonProficientArmorPenalty}
             hasDisadvantage={hasDisadvantage}
+            rageDamageBonus={rageDamageBonus}
+            unarmedRageDamageBonus={unarmedRageDamageBonus}
+            rageActive={rageActive}
           />
           <ItemSpellsPanel
             items={inventory}
@@ -1152,27 +1148,28 @@ export function CharacterView() {
             spellcastingBlocked={nonProficientArmorPenalty}
           />
           {/* Known / Prepared spells — rich table with inline slots */}
-          {((prof?.spells.length ?? 0) > 0 || grantedSpellData.spells.length > 0) && (
-            <RichSpellsPanel
-              spells={prof?.spells ?? []}
-              grantedSpells={grantedSpellData.spells}
-              resources={classResourcesWithSpellCasts}
-              pb={pb}
-              intScore={char.intScore}
-              wisScore={char.wisScore}
-              chaScore={char.chaScore}
-              accentColor={accentColor}
-              classDetail={classDetail}
-              charLevel={char.level}
-              preparedLimit={preparedSpellLimit}
-              usedSpellSlots={char.characterData?.usedSpellSlots ?? {}}
-              preparedSpells={preparedSpells}
-              onSlotsChange={saveUsedSpellSlots}
-              onPreparedChange={savePreparedSpells}
-              onResourceChange={changeResourceCurrent}
-              spellcastingBlocked={nonProficientArmorPenalty}
-            />
-          )}
+          <RichSpellsPanel
+            spells={prof?.spells ?? []}
+            grantedSpells={grantedSpellData.spells}
+            resources={classResourcesWithSpellCasts}
+            pb={pb}
+            intScore={char.intScore}
+            wisScore={char.wisScore}
+            chaScore={char.chaScore}
+            accentColor={accentColor}
+            classDetail={classDetail}
+            charLevel={char.level}
+            preparedLimit={preparedSpellLimit}
+            usedSpellSlots={char.characterData?.usedSpellSlots ?? {}}
+            preparedSpells={preparedSpells}
+            onSlotsChange={saveUsedSpellSlots}
+            onPreparedChange={savePreparedSpells}
+            onAddSpell={addTrackedSpell}
+            onRemoveSpell={removeTrackedSpell}
+            addSpellSourceLabel={classDetail?.name ?? char.className ?? "Manual"}
+            onResourceChange={changeResourceCurrent}
+            spellcastingBlocked={nonProficientArmorPenalty}
+          />
 
         </div>
         {/* end COL 2 */}
@@ -1182,7 +1179,9 @@ export function CharacterView() {
           <InventoryPanel
             char={char}
             charData={char.characterData}
+            parsedFeatureEffects={parsedFeatureEffects}
             accentColor={accentColor}
+            campaignId={char.campaigns[0]?.campaignId ?? null}
             onSave={saveCharacterData}
           />
         </div>
@@ -1195,6 +1194,7 @@ export function CharacterView() {
           hitDiceMax={hitDiceMax}
           hitDieSize={hitDieSize}
           hitDieConMod={conMod}
+          featureHpMaxBonus={featureHpMaxBonus}
           classResources={classResourcesWithSpellCasts}
           playerNotesList={playerNotesList}
           allSharedNotes={allSharedNotes}

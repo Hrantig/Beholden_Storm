@@ -65,7 +65,7 @@ export function LoginView() {
             letterSpacing: "-0.5px",
           }}
         >
-          Beholden
+          Beholden - DM
         </h1>
         <p style={{ margin: "0 0 28px", color: theme.colors.muted, fontSize: "var(--fs-medium)" }}>
           Sign in to continue

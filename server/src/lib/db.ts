@@ -322,6 +322,23 @@ CREATE TABLE IF NOT EXISTS characters (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS party_inventory (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  weight REAL,
+  notes TEXT NOT NULL DEFAULT '',
+  source TEXT,
+  item_id TEXT,
+  rarity TEXT,
+  type TEXT,
+  description TEXT,
+  sort INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_adventures_campaign   ON adventures(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_encounters_adventure  ON encounters(adventure_id);
 CREATE INDEX IF NOT EXISTS idx_encounters_campaign   ON encounters(campaign_id);
@@ -347,6 +364,7 @@ CREATE INDEX IF NOT EXISTS idx_compfeat_name         ON compendium_feats(name CO
 CREATE INDEX IF NOT EXISTS idx_uchars_user           ON user_characters(user_id);
 CREATE INDEX IF NOT EXISTS idx_charcamps_char        ON character_campaigns(character_id);
 CREATE INDEX IF NOT EXISTS idx_charcamps_campaign    ON character_campaigns(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_party_inventory_campaign ON party_inventory(campaign_id);
 `;
 
 // ---------------------------------------------------------------------------

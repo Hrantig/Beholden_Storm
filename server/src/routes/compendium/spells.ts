@@ -9,6 +9,17 @@ import { SpellBody, buildSpellRecord } from "./helpers.js";
 export function registerSpellRoutes(app: Express, ctx: ServerContext, anyDm: RequestHandler) {
   const { db } = ctx;
 
+  const schoolAliases: Record<string, string[]> = {
+    abjuration: ["A", "Abjuration"],
+    conjuration: ["C", "Conjuration"],
+    divination: ["D", "Divination"],
+    enchantment: ["EN", "Enchantment"],
+    evocation: ["EV", "Evocation"],
+    illusion: ["I", "Illusion"],
+    necromancy: ["N", "Necromancy"],
+    transmutation: ["T", "Transmutation"],
+  };
+
   app.get("/api/spells/search", (req, res) => {
     const q = String(req.query.q ?? "").trim().toLowerCase();
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "50"), 10) || 50, 1), 500);
@@ -39,11 +50,16 @@ export function registerSpellRoutes(app: Express, ctx: ServerContext, anyDm: Req
       params.push(...cls.map(c => `%${c}%`));
     }
     if (schoolFilter) {
-      const schools = schoolFilter.split(",").map((s) => s.trim()).filter(Boolean);
-      if (schools.length > 0) {
-        const orParts = schools.map(() => "school LIKE ?");
+      const schools = schoolFilter
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .flatMap((school) => schoolAliases[school.toLowerCase()] ?? [school]);
+      const uniqueSchools = Array.from(new Set(schools));
+      if (uniqueSchools.length > 0) {
+        const orParts = uniqueSchools.map(() => "school LIKE ?");
         parts.push(`AND (${orParts.join(" OR ")})`);
-        params.push(...schools);
+        params.push(...uniqueSchools.map((school) => `%${school}%`));
       }
     }
     if (ritualOnly) {

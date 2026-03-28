@@ -11,7 +11,10 @@ import {
 import {
   classifyFeatSelection,
   extractClassStartingEquipment,
+  featureMatchesSubclass,
+  getFeatureSubclassName,
   getClassExpertiseChoices,
+  isSubclassChoiceFeature,
 } from "./CharacterCreatorUtils";
 import {
   dedupeTaggedItems,
@@ -110,6 +113,7 @@ export interface CreatorSpellSummaryLike {
 
 export interface CreatorFormLike {
   level: number;
+  subclass?: string | null;
   chosenSkills: string[];
   chosenClassLanguages: string[];
   chosenWeaponMasteries: string[];
@@ -153,6 +157,38 @@ export function parseSelectedClassOptionalFeatureEffects(
         source: {
           id: `creator-class-optional:${autolevel.level}:${feature.name}`,
           kind: "class",
+          name: feature.name,
+          level: autolevel.level,
+          parentName: classDetail.name,
+          text: feature.text,
+        },
+        text: feature.text,
+      } satisfies ParseFeatureEffectsInput));
+    }
+  }
+  return parsed;
+}
+
+export function parseAppliedClassFeatureEffects(
+  classDetail: CreatorClassDetailLike | null,
+  level: number,
+  selectedSubclass: string | null | undefined,
+  chosenOptionals: string[],
+): ParsedFeatureEffects[] {
+  if (!classDetail) return [];
+  const selected = new Set(chosenOptionals);
+  const parsed: ParsedFeatureEffects[] = [];
+  for (const autolevel of classDetail.autolevels) {
+    if (autolevel.level == null || autolevel.level > level) continue;
+    for (const feature of autolevel.features) {
+      if (!featureMatchesSubclass(feature, selectedSubclass) || isSubclassChoiceFeature(feature)) continue;
+      const isSubclassFeature = Boolean(getFeatureSubclassName(feature));
+      if (feature.optional && !isSubclassFeature && !selected.has(feature.name)) continue;
+      if (!String(feature.text ?? "").trim()) continue;
+      parsed.push(parseFeatureEffects({
+        source: {
+          id: `creator-class-feature:${autolevel.level}:${feature.name}`,
+          kind: isSubclassFeature ? "subclass" : "class",
           name: feature.name,
           level: autolevel.level,
           parentName: classDetail.name,
@@ -304,17 +340,19 @@ export function buildProficiencyMap(args: {
       form.chosenWeaponMasteries.forEach((name) => masteries.push({ name, source: masteryChoice.source }));
     }
 
-    const parsedOptionalFeatures = parseSelectedClassOptionalFeatureEffects(classDetail, form.level, form.chosenOptionals);
-    const optionalFeatureGrants = collectTaggedGrantsFromEffects(parsedOptionalFeatures);
-    optionalFeatureGrants.armor.forEach((entry) => pushArmor(entry.name, entry.source));
-    optionalFeatureGrants.weapons.forEach((entry) => pushWeapon(entry.name, entry.source));
-    optionalFeatureGrants.tools.forEach((entry) => tools.push(entry));
-    optionalFeatureGrants.skills.forEach((entry) => skills.push(entry));
-    optionalFeatureGrants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
-    optionalFeatureGrants.languages.forEach((entry) => pushLanguage(entry.name, entry.source));
-    const optionalSpellChoices = collectSpellChoicesFromEffects(parsedOptionalFeatures);
-    optionalSpellChoices.forEach((choice) => {
-      const key = `classoptional:${choice.id}`;
+    const parsedClassFeatures = parseAppliedClassFeatureEffects(classDetail, form.level, form.subclass ?? null, form.chosenOptionals);
+    const classFeatureGrants = collectTaggedGrantsFromEffects(parsedClassFeatures);
+    classFeatureGrants.armor.forEach((entry) => pushArmor(entry.name, entry.source));
+    classFeatureGrants.weapons.forEach((entry) => pushWeapon(entry.name, entry.source));
+    classFeatureGrants.tools.forEach((entry) => tools.push(entry));
+    classFeatureGrants.skills.forEach((entry) => skills.push(entry));
+    classFeatureGrants.expertise.forEach((entry) => pushExpertise(entry.name, entry.source));
+    classFeatureGrants.saves.forEach((entry) => saves.push(entry));
+    classFeatureGrants.languages.forEach((entry) => pushLanguage(entry.name, entry.source));
+    classFeatureGrants.spells.forEach((entry) => spells.push(entry));
+    const classFeatureSpellChoices = collectSpellChoicesFromEffects(parsedClassFeatures);
+    classFeatureSpellChoices.forEach((choice) => {
+      const key = `classfeature:${choice.id}`;
       (form.chosenFeatOptions[key] ?? []).forEach((name) => spells.push({ name, source: choice.source.name }));
     });
 

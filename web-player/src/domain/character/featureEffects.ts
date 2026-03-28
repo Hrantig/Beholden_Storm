@@ -46,6 +46,17 @@ export type ResetKind =
 
 export type RoundingMode = "up" | "down";
 
+export type WeaponFilter =
+  | "simple_weapon"
+  | "martial_weapon"
+  | "melee_weapon"
+  | "ranged_weapon"
+  | "finesse_weapon"
+  | "light_weapon"
+  | "crossbow_weapon"
+  | "light_crossbow"
+  | "no_two_handed";
+
 export type ScalingValue =
   | { kind: "fixed"; value: number }
   | { kind: "ability_mod"; ability: AbilKey; min?: number; max?: number }
@@ -68,6 +79,7 @@ export interface EffectGate {
   shieldAllowed?: boolean;
   weaponTag?: "melee" | "ranged" | "finesse" | "light" | "simple" | "martial";
   attackAbility?: AbilKey;
+  weaponFilters?: WeaponFilter[];
   notes?: string;
 }
 
@@ -84,15 +96,7 @@ export interface ChoiceSpec {
     | "feat"
     | "subclass_option"
     | "damage_type";
-  filters?: Array<
-    | "has_proficiency"
-    | "simple_weapon"
-    | "martial_weapon"
-    | "melee_weapon"
-    | "ranged_weapon"
-    | "finesse_weapon"
-    | "light_weapon"
-  >;
+  filters?: Array<"has_proficiency" | WeaponFilter>;
   canReplaceOnReset?: ResetKind;
 }
 
@@ -134,6 +138,8 @@ export interface SpellChoiceEffect extends FeatureEffectBase {
   count: ScalingValue;
   level: number;
   spellLists: string[];
+  schools?: string[];
+  note?: string;
 }
 
 export interface ProficiencyGrantEffect extends FeatureEffectBase {
@@ -182,6 +188,7 @@ export interface DefenseEffect extends FeatureEffectBase {
 export interface ModifierEffect extends FeatureEffectBase {
   type: "modifier";
   target:
+    | "ability_check"
     | "initiative"
     | "skill_check"
     | "saving_throw"

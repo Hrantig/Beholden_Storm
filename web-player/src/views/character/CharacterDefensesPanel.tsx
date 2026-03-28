@@ -147,7 +147,8 @@ function ReadonlyTagRow({ label, color, items }: ReadonlyTagRowProps) {
 
 export interface CharacterDefensesPanelProps {
   resistances: string[];
-  immunities: string[];
+  damageImmunities: string[];
+  conditionImmunities: string[];
   senses: string[];
   customResistances: string[];
   customImmunities: string[];
@@ -158,7 +159,8 @@ export interface CharacterDefensesPanelProps {
 
 export function CharacterDefensesPanel({
   resistances,
-  immunities,
+  damageImmunities,
+  conditionImmunities,
   senses,
   customResistances,
   customImmunities,
@@ -166,7 +168,7 @@ export function CharacterDefensesPanel({
   onCustomResistancesChange,
   onCustomImmunitiesChange,
 }: CharacterDefensesPanelProps) {
-  const hasAnything = resistances.length > 0 || immunities.length > 0 ||
+  const hasAnything = resistances.length > 0 || damageImmunities.length > 0 || conditionImmunities.length > 0 ||
     senses.length > 0 || customResistances.length > 0 || customImmunities.length > 0;
 
   // Always render the panel so users can add custom ones
@@ -185,13 +187,18 @@ export function CharacterDefensesPanel({
           onRemove={(v) => onCustomResistancesChange(customResistances.filter((x) => x !== v))}
         />
         <DefenseRow
-          label="Immunities"
+          label="Damage Immunities"
           color={C.colorRitual}
-          items={immunities}
+          items={damageImmunities}
           customItems={customImmunities}
           accentColor={accentColor}
           onAdd={(v) => onCustomImmunitiesChange([...customImmunities, v])}
           onRemove={(v) => onCustomImmunitiesChange(customImmunities.filter((x) => x !== v))}
+        />
+        <ReadonlyTagRow
+          label="Condition Immunities"
+          color={C.colorOrange}
+          items={conditionImmunities}
         />
         <ReadonlyTagRow
           label="Senses"
@@ -202,4 +209,3 @@ export function CharacterDefensesPanel({
     </CollapsiblePanel>
   );
 }
-

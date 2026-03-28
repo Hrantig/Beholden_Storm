@@ -1,7 +1,7 @@
 import React from "react";
 import { C } from "@/lib/theme";
 import { extractPrerequisite, stripPrerequisiteLine } from "@/views/character/CharacterSheetUtils";
-import { getFeatChoiceOptions } from "@/views/character-creator/utils/CharacterCreatorUtils";
+import { getFeatChoiceOptions, normalizeChoiceKey } from "@/views/character-creator/utils/CharacterCreatorUtils";
 import type { ParsedFeatChoiceLike as LevelUpFeatChoice } from "@/views/character-creator/utils/FeatChoiceTypes";
 
 export interface LevelUpSpellSummary {
@@ -336,9 +336,11 @@ export function ExpertiseSelectionSection(props: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {expertiseChoices.map((choice) => {
         const selected = chosenExpertise[choice.key] ?? [];
+        const proficientSkillKeys = new Set(proficientSkills.map((skill) => normalizeChoiceKey(skill)));
+        const existingExpertiseKeys = new Set(existingExpertise.map((skill) => normalizeChoiceKey(skill)));
         const options = (choice.options ?? proficientSkills)
-          .filter((skill) => proficientSkills.includes(skill))
-          .filter((skill) => !existingExpertise.includes(skill) || selected.includes(skill));
+          .filter((skill) => proficientSkillKeys.has(normalizeChoiceKey(skill)))
+          .filter((skill) => !existingExpertiseKeys.has(normalizeChoiceKey(skill)) || selected.some((entry) => normalizeChoiceKey(entry) === normalizeChoiceKey(skill)));
         return (
           <div key={choice.key}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
@@ -349,8 +351,8 @@ export function ExpertiseSelectionSection(props: {
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {options.map((skill) => {
-                const isSelected = selected.includes(skill);
-                const blocked = !isSelected && (selected.length >= choice.count || existingExpertise.includes(skill));
+                const isSelected = selected.some((entry) => normalizeChoiceKey(entry) === normalizeChoiceKey(skill));
+                const blocked = !isSelected && (selected.length >= choice.count || existingExpertiseKeys.has(normalizeChoiceKey(skill)));
                 return (
                   <ChoiceBtn
                     key={skill}

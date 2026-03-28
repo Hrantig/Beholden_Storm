@@ -1,10 +1,15 @@
 import { titleCase } from "@/lib/format/titleCase";
+import {
+  canAddAbilityModifierToExtraAttackDamageFromEffects,
+  canUseWeaponForBonusAttackFromEffects,
+} from "@/domain/character/parseFeatureEffects";
+import type { ParsedFeatureEffects } from "@/domain/character/featureEffects";
 import type { CharacterData, ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
 import { abilityMod, normalizeWeaponProficiencyName } from "@/views/character/CharacterSheetUtils";
 
 export type TaggedItemLike = TaggedItem;
 export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons" | "armor" | "masteries">;
-export type CharacterDataLike = Pick<CharacterData, "chosenOptionals" | "selectedFeatureNames" | "proficiencies" | "inventoryContainers">;
+export type CharacterDataLike = Pick<CharacterData, "proficiencies" | "inventoryContainers">;
 
 export interface CharacterLike {
   strScore: number | null;
@@ -220,20 +225,21 @@ export function isCurrencyItem(item: Pick<InventoryItem, "name"> | null | undefi
   return currencyCodeForItem(item) != null;
 }
 
-function hasSelectedFeatureNamed(charData: CharacterDataLike | null | undefined, pattern: RegExp): boolean {
-  return Boolean((charData?.selectedFeatureNames ?? []).some((name) => pattern.test(name)));
-}
-
-export function addsAbilityModToOffhandDamage(item: InventoryItem, charData: CharacterDataLike | null | undefined): boolean {
-  if (hasSelectedFeatureNamed(charData, /two-weapon fighting/i)) return true;
-  if (isRangedWeapon(item) && hasSelectedFeatureNamed(charData, /crossbow expert/i)) return true;
-  return false;
+export function addsAbilityModToOffhandDamage(
+  item: InventoryItem,
+  parsedFeatureEffects: ParsedFeatureEffects[] | null | undefined
+): boolean {
+  return canAddAbilityModifierToExtraAttackDamageFromEffects(parsedFeatureEffects ?? [], item);
 }
 
 export function isShieldItem(item: InventoryItem): boolean {
   const type = String(item.type ?? "").toLowerCase();
   const name = String(item.name ?? "").toLowerCase();
   return type.includes("shield") || (name.includes("shield") && !name.includes("torch"));
+}
+
+export function requiresTwoHands(item: InventoryItem): boolean {
+  return isWeaponItem(item) && hasItemProperty(item, "2H");
 }
 
 export function armorProficiencyNameForItem(item: InventoryItem): "Light Armor" | "Medium Armor" | "Heavy Armor" | "Shields" | null {
@@ -257,6 +263,7 @@ export function getEquipState(item: InventoryItem): EquipState {
   if (item.equipState) return item.equipState;
   if (item.equipped) {
     if (isArmorItem(item)) return "worn";
+    if (requiresTwoHands(item)) return "mainhand-2h";
     if (!item.dmg1 && item.dmg2) return "mainhand-2h";
     return "mainhand-1h";
   }
@@ -293,20 +300,19 @@ export function hasItemProperty(item: InventoryItem, code: string): boolean {
   return (item.properties ?? []).some((p) => String(p).trim().toUpperCase() === code.toUpperCase());
 }
 
-function hasDualWielder(charData: CharacterDataLike | null): boolean {
-  return (charData?.selectedFeatureNames ?? []).some((f) => /dual wield/i.test(f));
-}
-
-export function canEquipOffhand(item: InventoryItem, charData: CharacterDataLike | null): boolean {
+export function canEquipOffhand(
+  item: InventoryItem,
+  parsedFeatureEffects: ParsedFeatureEffects[] | null | undefined
+): boolean {
   if (isShieldOrTorch(item)) return true;
   if (!isWeaponItem(item)) return false;
   if (hasItemProperty(item, "L")) return true;
-  if (hasDualWielder(charData) && (hasItemProperty(item, "F") || hasItemProperty(item, "V"))) return true;
+  if (canUseWeaponForBonusAttackFromEffects(parsedFeatureEffects ?? [], item)) return true;
   return false;
 }
 
 export function canUseTwoHands(item: InventoryItem): boolean {
-  return isWeaponItem(item) && Boolean(item.dmg2);
+  return isWeaponItem(item) && (requiresTwoHands(item) || Boolean(item.dmg2));
 }
 
 function isMartialWeapon(item: InventoryItem): boolean {

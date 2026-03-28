@@ -169,7 +169,7 @@ export function CampaignPartyView() {
   React.useEffect(() => {
     fetchParty();
     // Fetch campaign name from campaigns list
-    api<{ id: string; name: string }[]>("/api/campaigns")
+    api<{ id: string; name: string }[]>("/api/me/campaigns")
       .then((list) => {
         const c = list.find((c) => c.id === campaignId);
         if (c) setCampaignName(c.name);
