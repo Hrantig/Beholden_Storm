@@ -46,6 +46,24 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     })));
   });
 
+  // Player-facing: all campaigns the current user is a member of (any role).
+  app.get("/api/me/campaigns", (req, res) => {
+    const user = req.user!;
+    const rows = db.prepare(`
+        SELECT c.id, c.name, c.color, c.image_url, c.shared_notes, c.created_at, c.updated_at,
+               COUNT(p.id) AS player_count
+        FROM campaigns c
+        LEFT JOIN players p ON p.campaign_id = c.id
+        WHERE c.id IN (SELECT campaign_id FROM campaign_membership WHERE user_id = ?)
+        GROUP BY c.id
+        ORDER BY c.updated_at DESC
+      `).all(user.userId) as Record<string, unknown>[];
+    res.json(rows.map((r) => ({
+      ...rowToCampaign(r),
+      playerCount: r.player_count as number,
+    })));
+  });
+
   app.post("/api/campaigns", requireAdmin, (req, res) => {
     const body = parseBody(CampaignUpsertBody, req);
     const name = (body.name ?? "").toString().trim() || "New Campaign";

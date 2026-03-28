@@ -5,9 +5,22 @@ import {
   ARTISAN_TOOLS,
   MUSICAL_INSTRUMENTS,
 } from "./proficiencyConstants.js";
+import {
+  parsePreparedSpellProgression,
+  type PreparedSpellProgressionTable as ParsedFeatPreparedSpellTable,
+} from "./preparedSpellProgression.js";
 
 const ABILITY_SCORES = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"] as const;
 const DAMAGE_TYPES = ["Acid", "Cold", "Fire", "Force", "Lightning", "Necrotic", "Poison", "Psychic", "Radiant", "Thunder"] as const;
+const KNOWN_CANTRIPS = [
+  "Acid Splash", "Blade Ward", "Booming Blade", "Chill Touch", "Control Flames", "Create Bonfire",
+  "Dancing Lights", "Druidcraft", "Eldritch Blast", "Elementalism", "Fire Bolt", "Friends", "Frostbite",
+  "Green-Flame Blade", "Guidance", "Gust", "Infestation", "Light", "Lightning Lure", "Mage Hand",
+  "Magic Stone", "Mending", "Message", "Mind Sliver", "Minor Illusion", "Mold Earth", "Poison Spray",
+  "Prestidigitation", "Produce Flame", "Ray of Frost", "Resistance", "Sacred Flame", "Shape Water",
+  "Shillelagh", "Shocking Grasp", "Sorcerous Burst", "Spare the Dying", "Starry Wisp", "Thaumaturgy",
+  "Thorn Whip", "Thunderclap", "Toll the Dead", "True Strike", "Vicious Mockery", "Word of Radiance",
+] as const;
 const WEAPON_MASTERY_KINDS = [
   "Battleaxe", "Blowgun", "Club", "Dagger", "Dart", "Flail", "Glaive", "Greataxe", "Greatclub", "Greatsword",
   "Halberd", "Hand Crossbow", "Handaxe", "Heavy Crossbow", "Javelin", "Lance", "Light Crossbow", "Light Hammer",
@@ -49,6 +62,15 @@ export interface ParsedFeatGrants {
   bonuses: Array<{ target: string; value: number }>;
 }
 
+export interface ParsedFeatUse {
+  count: number;
+  countFrom?: "proficiency_bonus" | "ability_modifier";
+  ability?: string | null;
+  minimum?: number | null;
+  recharge: "short_rest" | "long_rest" | "short_or_long_rest" | null;
+  note: string;
+}
+
 export interface ParsedFeat {
   category: string | null;
   baseName: string;
@@ -58,6 +80,8 @@ export interface ParsedFeat {
   source: string | null;
   grants: ParsedFeatGrants;
   choices: ParsedFeatChoice[];
+  uses: ParsedFeatUse[];
+  preparedSpellProgression: ParsedFeatPreparedSpellTable[];
   notes: string[];
   modifierDetails: ParsedFeatModifier[];
 }
@@ -140,6 +164,193 @@ function addIfMissing(list: string[], values: string[]) {
   }
 }
 
+function splitSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function extractSpellNames(text: string): string[] {
+  const cleaned = text
+    .replace(/\bthe\b/gi, "")
+    .replace(/\bspells?\b/gi, "")
+    .replace(/\bcantrips?\b/gi, "")
+    .replace(/\bprepared\b/gi, "")
+    .replace(/[().:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return [];
+  return uniq(
+    cleaned
+      .replace(/\band\/or\b/gi, ",")
+      .replace(/\band\b/gi, ",")
+      .replace(/\bor\b/gi, ",")
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => /^[A-Z][A-Za-z' -]+$/.test(part))
+  );
+}
+
+function isKnownCantrip(name: string): boolean {
+  return KNOWN_CANTRIPS.some((cantrip) => cantrip.toLowerCase() === name.toLowerCase());
+}
+
+function addNamedSpellGrants(paragraph: string, grants: ParsedFeatGrants) {
+  for (const sentence of splitSentences(paragraph)) {
+    let match = sentence.match(/You (?:learn|know) the ([A-Z][A-Za-z' -]+?) spell/i);
+    if (match) {
+      const spellName = match[1]?.trim();
+      if (spellName) {
+        if (/\bcantrip\b/i.test(sentence) || isKnownCantrip(spellName)) addIfMissing(grants.cantrips, [spellName]);
+        else addIfMissing(grants.spells, [spellName]);
+      }
+      continue;
+    }
+
+    match = sentence.match(/You always have (.+?) spells? prepared/i);
+    if (match) {
+      const text = String(match[1] ?? "").replace(/\bthat spell\b/gi, "").trim();
+      addIfMissing(grants.spells, extractSpellNames(text));
+      continue;
+    }
+
+    match = sentence.match(/You can cast (.+?) spells? but only as Rituals/i);
+    if (match) {
+      addIfMissing(grants.spells, extractSpellNames(match[1] ?? ""));
+      continue;
+    }
+
+    match = sentence.match(/You can cast the ([A-Z][A-Za-z' -]+?) spell but only as a Ritual/i);
+    if (match) {
+      addIfMissing(grants.spells, [match[1]!.trim()]);
+      continue;
+    }
+
+    match = sentence.match(/(?:You know|You learn) ([A-Z][A-Za-z' -]+?)\.?$/i);
+    if (match) {
+      const spellName = match[1]?.trim();
+      if (spellName && isKnownCantrip(spellName)) addIfMissing(grants.cantrips, [spellName]);
+    }
+  }
+}
+
+function addFeatNotes(paragraph: string, notes: string[]) {
+  const normalized = paragraph.replace(/\s+/g, " ").trim();
+  if (!normalized) return;
+
+  if (/spellcasting ability for (?:this spell|the spell|it|them|the spells) is/i.test(normalized) || /is your spellcasting ability for (?:this spell|the spell|it|them|the spells)/i.test(normalized)) {
+    const abilitySentence = splitSentences(normalized).find((sentence) => /spellcasting ability/i.test(sentence));
+    if (abilitySentence && !notes.includes(abilitySentence)) notes.push(abilitySentence);
+  }
+
+  if (/without expending a spell slot/i.test(normalized) || /without a spell slot/i.test(normalized)) {
+    const freeCastSentence = splitSentences(normalized).find((sentence) => /without expending a spell slot|without a spell slot/i.test(sentence));
+    if (freeCastSentence && !notes.includes(freeCastSentence)) notes.push(freeCastSentence);
+  }
+
+  if (/finish a (?:Short or )?Long Rest/i.test(normalized) || /finish a Short or Long Rest/i.test(normalized)) {
+    const recoverySentence = splitSentences(normalized).find((sentence) => /finish a (?:Short or )?Long Rest|finish a Short or Long Rest/i.test(sentence));
+    if (recoverySentence && !notes.includes(recoverySentence)) notes.push(recoverySentence);
+  }
+}
+
+function pushChoice(choices: ParsedFeatChoice[], choice: ParsedFeatChoice) {
+  const key = JSON.stringify({
+    type: choice.type,
+    count: choice.count,
+    options: choice.options,
+    level: choice.level,
+    linkedTo: choice.linkedTo,
+    note: choice.note,
+  });
+  const exists = choices.some((entry) => JSON.stringify({
+    type: entry.type,
+    count: entry.count,
+    options: entry.options,
+    level: entry.level,
+    linkedTo: entry.linkedTo,
+    note: entry.note,
+  }) === key);
+  if (!exists) choices.push(choice);
+}
+
+function detectRecharge(text: string): ParsedFeatUse["recharge"] {
+  if (/finish a Short or Long Rest/i.test(text)) return "short_or_long_rest";
+  if (/finish a Long Rest/i.test(text)) return "long_rest";
+  if (/finish a Short Rest/i.test(text)) return "short_rest";
+  return null;
+}
+
+function pushUse(uses: ParsedFeatUse[], use: ParsedFeatUse) {
+  const key = JSON.stringify({
+    count: use.count,
+    countFrom: use.countFrom ?? null,
+    ability: use.ability ?? null,
+    minimum: use.minimum ?? null,
+    recharge: use.recharge ?? null,
+    note: use.note,
+  });
+  const exists = uses.some((entry) => JSON.stringify({
+    count: entry.count,
+    countFrom: entry.countFrom ?? null,
+    ability: entry.ability ?? null,
+    minimum: entry.minimum ?? null,
+    recharge: entry.recharge ?? null,
+    note: entry.note,
+  }) === key);
+  if (!exists) uses.push(use);
+}
+
+function parseUsageScaling(paragraph: string, uses: ParsedFeatUse[]) {
+  const normalized = paragraph.replace(/\s+/g, " ").trim();
+  if (!normalized) return;
+
+  const recharge = detectRecharge(normalized);
+
+  let match = normalized.match(/a number of times equal to your (Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) modifier \(minimum of (?:once|(\d+))\)/i);
+  if (match) {
+    pushUse(uses, {
+      count: 1,
+      countFrom: "ability_modifier",
+      ability: match[1]?.toLowerCase() ?? null,
+      minimum: match[2] ? Number(match[2]) : 1,
+      recharge,
+      note: match[0],
+    });
+  }
+
+  match = normalized.match(/a number of times equal to your Proficiency Bonus/i);
+  if (match) {
+    pushUse(uses, {
+      count: 1,
+      countFrom: "proficiency_bonus",
+      ability: null,
+      minimum: null,
+      recharge,
+      note: match[0],
+    });
+  }
+
+  match = normalized.match(/can cast .*? once without (?:expending )?a spell slot/i);
+  if (match) {
+    pushUse(uses, {
+      count: 1,
+      recharge,
+      note: match[0],
+    });
+  }
+
+  match = normalized.match(/can cast .*? twice without expending a spell slot/i);
+  if (match) {
+    pushUse(uses, {
+      count: 2,
+      recharge,
+      note: match[0],
+    });
+  }
+}
+
 export function parseFeat(args: {
   name: string;
   text: string;
@@ -150,6 +361,7 @@ export function parseFeat(args: {
   const { category, baseName, variant } = normalizeFeatName(args.name);
   const { body, source } = cleanFeatText(args.text);
   const paragraphs = splitIntoParagraphs(body);
+  const preparedSpellProgression = parsePreparedSpellProgression(body);
   const repeatable = /Repeatable[:.]/i.test(body);
 
   const grants: ParsedFeatGrants = {
@@ -166,6 +378,7 @@ export function parseFeat(args: {
   };
   const modifierDetails = (args.modifiers ?? []).map(parseModifier).filter(Boolean) as ParsedFeatModifier[];
   const choices: ParsedFeatChoice[] = [];
+  const uses: ParsedFeatUse[] = [];
   const notes: string[] = [];
 
   for (const modifier of modifierDetails) {
@@ -178,19 +391,22 @@ export function parseFeat(args: {
 
   for (const paragraph of paragraphs) {
     if (/^Repeatable[.:]/i.test(paragraph)) continue;
+    addNamedSpellGrants(paragraph, grants);
+    addFeatNotes(paragraph, notes);
+    parseUsageScaling(paragraph, uses);
 
     let match = paragraph.match(/You (?:gain )?learn (\w+) cantrips? of your choice from the ([^.]+?) spell list/i);
     if (match) {
       const count = wordToNumber(match[1] ?? "1");
       const lists = splitList(match[2] ?? "");
-      choices.push({
+      pushChoice(choices, {
         id: "spell_list_primary",
         type: "spell_list",
         count: 1,
         options: lists,
         note: "Choose the spell list for this feat.",
       });
-      choices.push({
+      pushChoice(choices, {
         id: "cantrips_primary",
         type: "spell",
         count,
@@ -198,6 +414,93 @@ export function parseFeat(args: {
         level: 0,
         linkedTo: "spell_list_primary",
         note: "Choose cantrips from the selected spell list.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/You know one cantrip of your choice from the ([^.]+?) spell list\.\s*Also, choose a level (\d+) spell from that spell list/i);
+    if (match) {
+      const lists = splitList(match[1] ?? "");
+      pushChoice(choices, {
+        id: `single_cantrip_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: lists,
+        level: 0,
+        note: "Choose a cantrip from the listed spell list.",
+      });
+      pushChoice(choices, {
+        id: `spell_from_same_list_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: lists,
+        level: Number(match[2] ?? "1"),
+        note: "Choose a spell from the same spell list.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/You learn (\w+) spells? of your choice\.\s*These spells can come from the ([^.]+?) spell list(?:s)? or any combination thereof/i);
+    if (match) {
+      pushChoice(choices, {
+        id: `spells_from_lists_${choices.length + 1}`,
+        type: "spell",
+        count: wordToNumber(match[1] ?? "1"),
+        options: splitList(match[2] ?? ""),
+        level: null,
+        note: "Choose spells from any of the listed spell lists.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/You learn (\w+) [A-Z][A-Za-z]+ cantrips? of your choice/i);
+    if (match) {
+      choices.push({
+        id: `named_cantrip_choice_${choices.length + 1}`,
+        type: "spell",
+        count: wordToNumber(match[1] ?? "1"),
+        options: null,
+        level: 0,
+        note: "Choose cantrips granted by this feat.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/one cantrip from the ([^.]+?) spell list/i);
+    if (match) {
+      choices.push({
+        id: `single_cantrip_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: splitList(match[1] ?? ""),
+        level: 0,
+        note: "Choose a cantrip from the listed spell list.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/You know one extra cantrip from the ([^.]+?) spell list/i);
+    if (match) {
+      pushChoice(choices, {
+        id: `extra_cantrip_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: splitList(match[1] ?? ""),
+        level: 0,
+        note: "Choose an extra cantrip from the listed spell list.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/You know one cantrip of your choice from the ([^.]+?) spell list/i);
+    if (match) {
+      pushChoice(choices, {
+        id: `single_cantrip_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: splitList(match[1] ?? ""),
+        level: 0,
+        note: "Choose a cantrip from the listed spell list.",
       });
       continue;
     }
@@ -351,6 +654,61 @@ export function parseFeat(args: {
       continue;
     }
 
+    match = paragraph.match(/one level (\d+) spell of your choice from the ([^.]+?) school of magic/i);
+    if (match) {
+      choices.push({
+        id: `spell_school_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: splitList(match[2] ?? ""),
+        level: Number(match[1] ?? "1"),
+        note: "Choose a spell from one of the listed schools of magic.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/one level (\d+) spell of your choice from the ([^.]+?) spell list/i);
+    if (match) {
+      choices.push({
+        id: `spell_list_pick_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: splitList(match[2] ?? ""),
+        level: Number(match[1] ?? "1"),
+        note: "Choose a spell from one of the listed spell lists.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/Also, choose a level (\d+) spell from that spell list/i);
+    if (match) {
+      pushChoice(choices, {
+        id: `spell_from_same_list_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: null,
+        level: Number(match[1] ?? "1"),
+        note: "Choose a spell from the spell list referenced earlier in this feat.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/Choose one level (\d+) spell from the ([^.]+?) school of magic\.\s*You always have that spell and the ([A-Z][A-Za-z' -]+?) spell prepared/i);
+    if (match) {
+      const schools = splitList(match[2] ?? "");
+      const fixedSpell = match[3]?.trim();
+      pushChoice(choices, {
+        id: `spell_school_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: schools,
+        level: Number(match[1] ?? "1"),
+        note: "Choose a spell from one of the listed schools of magic.",
+      });
+      if (fixedSpell) addIfMissing(grants.spells, [fixedSpell]);
+      continue;
+    }
+
     match = paragraph.match(/Choose a number of level (\d+) spells equal to your Proficiency Bonus that have the Ritual tag/i);
     if (match) {
       choices.push({
@@ -375,6 +733,19 @@ export function parseFeat(args: {
         level: Number(match[1]),
         linkedTo: "spell_list_primary",
         note: "Choose a spell from the spell list selected earlier.",
+      });
+      continue;
+    }
+
+    match = paragraph.match(/If you already know (?:it|that cantrip), you learn a different ([^.]+?) cantrip of your choice/i);
+    if (match) {
+      choices.push({
+        id: `replacement_cantrip_${choices.length + 1}`,
+        type: "spell",
+        count: 1,
+        options: null,
+        level: 0,
+        note: "If you already know the granted cantrip, choose a different cantrip.",
       });
       continue;
     }
@@ -458,17 +829,6 @@ export function parseFeat(args: {
       addIfMissing(grants.languages, parseLanguageOptions(paragraph));
     }
 
-    match = paragraph.match(/You learn the ([A-Z][A-Za-z' -]+?) spell/i);
-    if (match && !sentenceHasChoiceLanguage(paragraph)) {
-      const spellName = match[1]?.trim();
-      if (spellName) addIfMissing(grants.cantrips, [spellName]);
-    }
-
-    match = paragraph.match(/You always have the ([A-Z][A-Za-z' -]+?) spell prepared/i);
-    if (match && !sentenceHasChoiceLanguage(paragraph)) {
-      const spellName = match[1]?.trim();
-      if (spellName) addIfMissing(grants.spells, [spellName]);
-    }
   }
 
   if (choices.length === 0 && repeatable) {
@@ -494,6 +854,8 @@ export function parseFeat(args: {
       cantrips: uniq(grants.cantrips),
     },
     choices,
+    uses,
+    preparedSpellProgression,
     notes,
     modifierDetails,
   };

@@ -62,8 +62,8 @@ export function PlayerForm(props: {
           title={props.imageUrl ? "Change photo" : "Add photo"}
           style={{
             width: 72, height: 72, borderRadius: 8, flexShrink: 0,
-            background: props.imageUrl ? "transparent" : theme.colors.surface,
-            border: `1px solid ${theme.colors.border}`,
+            background: props.imageUrl ? "transparent" : theme.colors.inputBg,
+            border: `1px solid ${theme.colors.panelBorder}`,
             overflow: "hidden", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}

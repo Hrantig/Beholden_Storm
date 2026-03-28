@@ -58,6 +58,25 @@ const OverridesBody = z.object({
   hpMaxBonus: z.number().int(),
 });
 
+function normalizeCharacterData(value: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  if (value == null) return null;
+  const next = { ...value } as Record<string, unknown>;
+  const classFeatures = Array.isArray(next.classFeatures) ? next.classFeatures : [];
+  const selectedFeatureNames = Array.isArray(next.selectedFeatureNames) ? next.selectedFeatureNames : [];
+  if (selectedFeatureNames.length === 0 && classFeatures.length > 0) {
+    next.selectedFeatureNames = classFeatures
+      .map((feature) => {
+        if (feature && typeof feature === "object" && typeof (feature as { name?: unknown }).name === "string") {
+          return ((feature as { name: string }).name).trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  delete next.classFeatures;
+  return next;
+}
+
 export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { uid, now } = ctx.helpers;
@@ -145,7 +164,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       p.strScore ?? null, p.dexScore ?? null, p.conScore ?? null,
       p.intScore ?? null, p.wisScore ?? null, p.chaScore ?? null,
       p.color ?? null,
-      p.characterData ? JSON.stringify(p.characterData) : null,
+      p.characterData ? JSON.stringify(normalizeCharacterData(p.characterData)) : null,
       t, t
     );
 
@@ -194,7 +213,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       p.characterData !== undefined
         ? (p.characterData === null
           ? null
-          : JSON.stringify({ ...(ex.characterData ?? {}), ...p.characterData }))
+          : JSON.stringify(normalizeCharacterData({ ...(ex.characterData ?? {}), ...p.characterData })))
         : existing.character_data_json,
       t, charId, userId
     );

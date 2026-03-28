@@ -1,4 +1,5 @@
 import type { Ruleset, RaceChoices } from "@/lib/characterRules";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
 import type { ParsedFeatChoiceLike, ParsedFeatDetailLike } from "./FeatChoiceTypes";
 
 export interface ClassSummary { id: string; name: string; hd: number | null; ruleset?: Ruleset | null }
@@ -13,7 +14,7 @@ export interface ClassDetail {
   autolevels: {
     level: number; scoreImprovement: boolean;
     slots: number[] | null;
-    features: { name: string; text: string; optional: boolean }[];
+    features: { name: string; text: string; optional: boolean; preparedSpellProgression?: PreparedSpellProgressionTable[] }[];
     counters: { name: string; value: number; reset: string }[];
   }[];
 }
@@ -51,7 +52,7 @@ export interface RaceDetail {
   resist: string | null;
   vision: { type: string; range: number }[];
   parsedChoices?: RaceChoices;
-  traits: { name: string; text: string; category: string | null; modifier: string[] }[];
+  traits: { name: string; text: string; category: string | null; modifier: string[]; preparedSpellProgression?: PreparedSpellProgressionTable[] }[];
 }
 
 export interface BgSummary { id: string; name: string; ruleset?: Ruleset | null }
@@ -85,7 +86,7 @@ export interface StructuredBgProficiencies {
 export interface BgDetail {
   id: string; name: string; proficiency: string; ruleset?: Ruleset | null;
   proficiencies?: StructuredBgProficiencies;
-  traits: { name: string; text: string }[];
+  traits: { name: string; text: string; preparedSpellProgression?: PreparedSpellProgressionTable[] }[];
   equipment?: string;
 }
 
@@ -101,6 +102,7 @@ export interface ClassFeatureEntry {
   id: string;
   name: string;
   text: string;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 export interface CreatorSpellListChoiceEntry {

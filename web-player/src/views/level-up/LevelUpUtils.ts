@@ -27,7 +27,7 @@ export interface BuildLevelUpPayloadArgs {
       chosenSpells?: string[];
       chosenInvocations?: string[];
       chosenFeatOptions?: Record<string, string[]>;
-      classFeatures?: Array<{ id?: string; name: string; text?: string }>;
+      selectedFeatureNames?: string[];
       proficiencies?: {
         spells?: LevelUpTaggedEntry[];
         invocations?: LevelUpTaggedEntry[];
@@ -342,19 +342,13 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
   const nextLevelUpFeats = chosenFeatDetail
     ? [...existingLevelUpFeats, { level: nextLevel, featId: chosenFeatDetail.id }]
     : existingLevelUpFeats;
-  const existingFeatures = Array.isArray(char.characterData?.classFeatures) ? char.characterData.classFeatures : [];
-  const featureMap = new Map(existingFeatures.map((feature) => [feature.id || feature.name, feature]));
+  const existingFeatureNames = Array.isArray(char.characterData?.selectedFeatureNames) ? char.characterData.selectedFeatureNames : [];
+  const featureNames = new Set(existingFeatureNames);
   for (const feature of newFeatures) {
-    if (!featureMap.has(feature.name)) {
-      featureMap.set(feature.name, { id: feature.name, name: feature.name, text: feature.text ?? "" });
-    }
+    featureNames.add(feature.name);
   }
   if (chosenFeatDetail) {
-    featureMap.set(`levelupfeat:${nextLevel}:${chosenFeatDetail.id}`, {
-      id: `levelupfeat:${nextLevel}:${chosenFeatDetail.id}`,
-      name: chosenFeatDetail.name,
-      text: chosenFeatDetail.text ?? "",
-    });
+    featureNames.add(chosenFeatDetail.name);
   }
 
   const nextCharacterData = {
@@ -365,7 +359,7 @@ export function buildLevelUpPayload(args: BuildLevelUpPayloadArgs): Record<strin
     chosenSpells,
     chosenInvocations,
     chosenFeatOptions: nextChosenFeatOptions,
-    classFeatures: Array.from(featureMap.values()),
+    selectedFeatureNames: Array.from(featureNames),
     proficiencies: {
       ...(proficiencies ?? {}),
       skills: [

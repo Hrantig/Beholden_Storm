@@ -35,31 +35,31 @@ export default defineConfig({
     allowedHosts,
     proxy: {
       "/api": {
-        target: `http://127.0.0.1:${SERVER_PORT}`,
+        target: `http://localhost:${SERVER_PORT}`,
         configure: (proxy) => {
           proxy.on("error", () => {});
         },
       },
       "/campaign-images": {
-        target: `http://127.0.0.1:${SERVER_PORT}`,
+        target: `http://localhost:${SERVER_PORT}`,
         configure: (proxy) => {
           proxy.on("error", () => {});
         },
       },
       "/player-images": {
-        target: `http://127.0.0.1:${SERVER_PORT}`,
+        target: `http://localhost:${SERVER_PORT}`,
         configure: (proxy) => {
           proxy.on("error", () => {});
         },
       },
       "/character-images": {
-        target: `http://127.0.0.1:${SERVER_PORT}`,
+        target: `http://localhost:${SERVER_PORT}`,
         configure: (proxy) => {
           proxy.on("error", () => {});
         },
       },
       "/ws": {
-        target: `http://127.0.0.1:${SERVER_PORT}`,
+        target: `http://localhost:${SERVER_PORT}`,
         ws: true,
         changeOrigin: true,
         configure: (proxy) => {

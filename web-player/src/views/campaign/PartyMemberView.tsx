@@ -117,7 +117,7 @@ export function PartyMemberView() {
   const cantrips: string[] = cd?.chosenCantrips ?? [];
   const invocations: string[] = cd?.chosenInvocations ?? [];
   const inventory: any[] = cd?.inventory ?? [];
-  const classFeatures: { name: string; text?: string }[] = cd?.classFeatures ?? (cd?.chosenOptionals ?? []).map((n: string) => ({ name: n }));
+  const classFeatures: { name: string; text?: string }[] = (cd?.selectedFeatureNames ?? []).map((n: string) => ({ name: n }));
   const playerNotes: { id: string; title: string; text: string }[] = cd?.playerNotesList ?? [];
   const sharedNotes: { id: string; title: string; text: string }[] = (() => {
     try { return cd?.sharedNotes ? JSON.parse(cd.sharedNotes) : []; } catch { return []; }
@@ -388,4 +388,3 @@ function SpellRow({ name, color }: { name: string; color: string }) {
     </div>
   );
 }
-

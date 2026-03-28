@@ -55,7 +55,7 @@ export function PlayerHomeView() {
 
   function reload() {
     return Promise.all([
-      api<Campaign[]>("/api/campaigns"),
+      api<Campaign[]>("/api/me/campaigns"),
       api<UserCharacter[]>("/api/me/characters"),
     ]).then(([camps, chars]) => {
       setCampaigns(camps);

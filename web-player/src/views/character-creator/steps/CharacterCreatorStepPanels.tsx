@@ -1,5 +1,6 @@
 import React from "react";
 import { C } from "@/lib/theme";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
 import { abilityNamesToKeys, parseSkillList } from "../utils/CharacterCreatorUtils";
 import { NavButtons, SpellPicker } from "../shared/CharacterCreatorParts";
 import {
@@ -13,6 +14,7 @@ import {
   statLabelStyle, statValueStyle,
 } from "../shared/CharacterCreatorStyles";
 import { Select } from "@/ui/Select";
+import { PreparedSpellProgressionBlock } from "@/views/character/CharacterViewParts";
 
 interface ClassSummaryLike {
   id: string;
@@ -31,7 +33,7 @@ interface ClassDetailLike {
   description: string;
   autolevels: Array<{
     level: number;
-    features: Array<{ name: string; text: string; optional: boolean }>;
+    features: Array<{ name: string; text: string; optional: boolean; preparedSpellProgression?: PreparedSpellProgressionTable[] }>;
   }>;
 }
 
@@ -52,7 +54,7 @@ interface RaceDetailLike {
   size: string | null;
   vision: Array<{ type: string; range: number }>;
   resist: string | null;
-  traits: Array<{ name: string; text: string }>;
+  traits: Array<{ name: string; text: string; preparedSpellProgression?: PreparedSpellProgressionTable[] }>;
 }
 
 interface RaceChoiceSetLike {
@@ -65,7 +67,7 @@ interface RaceChoiceSetLike {
 
 interface OptionalGroupLike {
   level: number;
-  features: Array<{ name: string; text: string }>;
+  features: Array<{ name: string; text: string; preparedSpellProgression?: PreparedSpellProgressionTable[] }>;
 }
 
 interface FeatureGrantBadge {
@@ -76,6 +78,22 @@ interface FeatureGrantBadge {
 interface TaggedItemLike {
   name: string;
   source: string;
+}
+
+function collectPreparedSpellProgressionTables(
+  entries: Array<{ preparedSpellProgression?: PreparedSpellProgressionTable[] }>
+): PreparedSpellProgressionTable[] {
+  const seen = new Set<string>();
+  const collected: PreparedSpellProgressionTable[] = [];
+  for (const entry of entries) {
+    for (const table of entry.preparedSpellProgression ?? []) {
+      const key = JSON.stringify(table);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      collected.push(table);
+    }
+  }
+  return collected;
 }
 
 interface Step5ClassFeatChoiceLike {
@@ -244,6 +262,13 @@ export function renderClassStep({
   classDetail: ClassDetailLike | null;
   abilityLabels: Record<string, string>;
 }): { main: React.ReactNode; side: React.ReactNode } {
+  const classPreparedSpellProgression = classDetail
+    ? collectPreparedSpellProgressionTables(
+        classDetail.autolevels.flatMap((autolevel) =>
+          autolevel.features.filter((feature) => !feature.optional)
+        )
+      )
+    : [];
   const filtered = classSearch
     ? classes.filter((c) => c.name.toLowerCase().includes(classSearch.toLowerCase()))
     : classes;
@@ -360,6 +385,12 @@ export function renderClassStep({
         <div style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.6, marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
           {classDetail.description.slice(0, 500)}
           {classDetail.description.length > 500 ? "…" : ""}
+        </div>
+      )}
+      {classPreparedSpellProgression.length > 0 && (
+        <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+          <div style={{ color: C.muted, fontSize: "var(--fs-small)", fontWeight: 700, marginBottom: 8 }}>Prepared Spell Progression</div>
+          <PreparedSpellProgressionBlock tables={classPreparedSpellProgression} compact accentColor={C.accentHl} />
         </div>
       )}
     </div>
@@ -687,6 +718,9 @@ export function renderSpeciesStep({
           <span style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.5 }}>
             {t.text.replace(/Source:.*$/m, "").trim()}
           </span>
+          {t.preparedSpellProgression?.length ? (
+            <PreparedSpellProgressionBlock tables={t.preparedSpellProgression} compact accentColor={C.accentHl} />
+          ) : null}
         </div>
       ))}
       {chosenRaceFeatId && raceFeatDetail && (
@@ -977,7 +1011,7 @@ export function renderLevelStep({
   chosenClassEquipmentOption: string | null;
   chooseClassEquipmentOption: (id: string) => void;
   className: string | null;
-  features: Array<{ level: number; name: string; text: string }>;
+  features: Array<{ level: number; name: string; text: string; preparedSpellProgression?: PreparedSpellProgressionTable[] }>;
   levelUpFeatChoices: Array<{ level: number; selectedFeatId: string | null; options: Array<{ id: string; name: string }> }>;
   chooseLevelUpFeat: (level: number, featId: string) => void;
   levelUpFeatConflict: boolean;
@@ -1059,6 +1093,9 @@ export function renderLevelStep({
                         ))}
                       </div>
                     )}
+                    {f.preparedSpellProgression?.length ? (
+                      <PreparedSpellProgressionBlock tables={f.preparedSpellProgression} compact accentColor={chosen ? C.accentHl : C.colorMagic} />
+                    ) : null}
                   </button>
                 );
               })}
@@ -1153,6 +1190,9 @@ export function renderLevelStep({
           <div style={{ color: "rgba(160,180,220,0.65)", fontSize: "var(--fs-small)", lineHeight: 1.4 }}>
             {f.text.slice(0, 300)}{f.text.length > 300 ? "…" : ""}
           </div>
+          {f.preparedSpellProgression?.length ? (
+            <PreparedSpellProgressionBlock tables={f.preparedSpellProgression} compact accentColor={C.accentHl} />
+          ) : null}
         </div>
       ))}
     </div>

@@ -1,10 +1,11 @@
 import type { ParsedFeatChoiceLike, ParsedFeatDetailLike } from "@/views/character-creator/utils/FeatChoiceTypes";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
 
 export interface AutoLevel {
   level: number;
   scoreImprovement: boolean;
   slots: number[] | null;
-  features: { name: string; text: string; optional: boolean }[];
+  features: { name: string; text: string; optional: boolean; preparedSpellProgression?: PreparedSpellProgressionTable[] }[];
   counters: { name: string; value: number; reset: string }[];
 }
 

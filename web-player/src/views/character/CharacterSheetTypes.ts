@@ -1,4 +1,5 @@
 import type { InventoryContainer, InventoryItem } from "@/views/character/CharacterInventory";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
 
 export type AbilKey = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -30,6 +31,7 @@ export interface ClassFeatureEntry {
   id: string;
   name: string;
   text: string;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 export interface ResourceCounter {
@@ -89,6 +91,7 @@ export interface CharacterData {
   hitDiceCurrent?: number | null;
   xp?: number;
   chosenOptionals?: string[];
+  selectedFeatureNames?: string[];
   chosenClassFeatIds?: Record<string, string>;
   chosenLevelUpFeats?: Array<{ level: number; featId: string }>;
   chosenSkills?: string[];
@@ -97,7 +100,6 @@ export interface CharacterData {
   chosenCantrips?: string[];
   chosenSpells?: string[];
   chosenInvocations?: string[];
-  classFeatures?: ClassFeatureEntry[];
   resources?: ResourceCounter[];
   proficiencies?: ProficiencyMap;
   inventory?: InventoryItem[];

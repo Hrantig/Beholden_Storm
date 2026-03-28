@@ -23,6 +23,25 @@ export function parseJson<T>(s: unknown, fallback: T): T {
   try { return JSON.parse(s) as T; } catch { return fallback; }
 }
 
+function normalizeCharacterData(value: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return value;
+  const next = { ...value } as Record<string, unknown>;
+  const classFeatures = Array.isArray(next.classFeatures) ? next.classFeatures : [];
+  const selectedFeatureNames = Array.isArray(next.selectedFeatureNames) ? next.selectedFeatureNames : [];
+  if (selectedFeatureNames.length === 0 && classFeatures.length > 0) {
+    next.selectedFeatureNames = classFeatures
+      .map((feature) => {
+        if (feature && typeof feature === "object" && typeof (feature as { name?: unknown }).name === "string") {
+          return ((feature as { name: string }).name).trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  delete next.classFeatures;
+  return next;
+}
+
 export function rowToUser(row: Record<string, unknown>) {
   return {
     id: row.id as string,
@@ -154,7 +173,7 @@ export function rowToUserCharacter(row: Record<string, unknown>): StoredUserChar
     chaScore: (row.cha_score as number | null) ?? null,
     color: (row.color as string | null) ?? null,
     imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
-    characterData: parseJson(row.character_data_json, null),
+    characterData: normalizeCharacterData(parseJson(row.character_data_json, null)),
     ...(row.death_saves_json
       ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
       : {}),

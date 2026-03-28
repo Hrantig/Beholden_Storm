@@ -1,5 +1,7 @@
 import React from "react";
 import { C } from "@/lib/theme";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
+import { PreparedSpellProgressionBlock } from "@/views/character/CharacterViewParts";
 import { ABILITY_NAME_TO_KEY, ALL_SKILLS, ALL_TOOLS } from "../constants/CharacterCreatorConstants";
 import { NavButtons } from "../shared/CharacterCreatorParts";
 import { detailBoxStyle, headingStyle, inputStyle, labelStyle, profChipStyle, sourceTagStyle } from "../shared/CharacterCreatorStyles";
@@ -20,6 +22,7 @@ interface BackgroundFeatSummaryLike {
 interface BackgroundTraitLike {
   name: string;
   text: string;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 interface BackgroundLanguagesLike {
@@ -482,6 +485,9 @@ export function renderBackgroundStep<TForm extends BackgroundFormLike>(args: {
               <div key={trait.name} style={{ marginBottom: 6, fontSize: "var(--fs-small)" }}>
                 <span style={{ fontWeight: 700, color: C.accentHl }}>{trait.name}. </span>
                 <span style={{ color: "rgba(160,180,220,0.65)" }}>{trait.text.replace(/Source:.*$/m, "").trim()}</span>
+                {trait.preparedSpellProgression?.length ? (
+                  <PreparedSpellProgressionBlock tables={trait.preparedSpellProgression} compact accentColor={C.accentHl} />
+                ) : null}
               </div>
             ))}
           </div>

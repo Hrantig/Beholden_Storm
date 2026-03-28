@@ -23,6 +23,7 @@ export function LoginView() {
 
   return (
     <div style={styles.page}>
+      <div style={styles.overlay} />
       <div style={styles.card}>
         <h1 style={styles.title}>Beholden</h1>
         <p style={styles.subtitle}>Sign in to continue</p>
@@ -76,13 +77,25 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "var(--bg)",
+    backgroundImage: "url('/beholden_logo.png')",
+    backgroundSize: "40%",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontFamily: "system-ui, Segoe UI, Arial, sans-serif",
     color: "var(--text)",
+    position: "relative",
+  },
+  overlay: {
+    position: "absolute",
+    inset: 0,
+    background: "rgba(0,0,0,0.72)",
   },
   card: {
+    position: "relative",
+    zIndex: 1,
     background: "var(--panel-bg)",
     border: "1px solid var(--panel-border)",
     borderRadius: "var(--radius-panel)",

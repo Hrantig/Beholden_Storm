@@ -22,7 +22,7 @@ function AuthGate() {
       <div
         style={{
           minHeight: "100vh",
-          background: C.bg,
+          background: "var(--bg)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

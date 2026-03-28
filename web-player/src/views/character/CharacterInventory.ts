@@ -1,11 +1,10 @@
 import { titleCase } from "@/lib/format/titleCase";
-import type { ClassFeatureEntry, CharacterData, ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
+import type { CharacterData, ProficiencyMap, TaggedItem } from "@/views/character/CharacterSheetTypes";
 import { abilityMod, normalizeWeaponProficiencyName } from "@/views/character/CharacterSheetUtils";
 
 export type TaggedItemLike = TaggedItem;
 export type ProficiencyMapLike = Pick<ProficiencyMap, "weapons" | "armor" | "masteries">;
-export type ClassFeatureEntryLike = ClassFeatureEntry;
-export type CharacterDataLike = Pick<CharacterData, "chosenOptionals" | "classFeatures" | "proficiencies" | "inventoryContainers">;
+export type CharacterDataLike = Pick<CharacterData, "chosenOptionals" | "selectedFeatureNames" | "proficiencies" | "inventoryContainers">;
 
 export interface CharacterLike {
   strScore: number | null;
@@ -221,13 +220,13 @@ export function isCurrencyItem(item: Pick<InventoryItem, "name"> | null | undefi
   return currencyCodeForItem(item) != null;
 }
 
-function hasClassFeatureNamed(charData: CharacterDataLike | null | undefined, pattern: RegExp): boolean {
-  return Boolean(charData?.classFeatures?.some((feature) => pattern.test(feature.name)));
+function hasSelectedFeatureNamed(charData: CharacterDataLike | null | undefined, pattern: RegExp): boolean {
+  return Boolean((charData?.selectedFeatureNames ?? []).some((name) => pattern.test(name)));
 }
 
 export function addsAbilityModToOffhandDamage(item: InventoryItem, charData: CharacterDataLike | null | undefined): boolean {
-  if (hasClassFeatureNamed(charData, /two-weapon fighting/i)) return true;
-  if (isRangedWeapon(item) && hasClassFeatureNamed(charData, /crossbow expert/i)) return true;
+  if (hasSelectedFeatureNamed(charData, /two-weapon fighting/i)) return true;
+  if (isRangedWeapon(item) && hasSelectedFeatureNamed(charData, /crossbow expert/i)) return true;
   return false;
 }
 
@@ -295,7 +294,7 @@ export function hasItemProperty(item: InventoryItem, code: string): boolean {
 }
 
 function hasDualWielder(charData: CharacterDataLike | null): boolean {
-  return (charData?.chosenOptionals ?? []).some((f) => /dual wield/i.test(f));
+  return (charData?.selectedFeatureNames ?? []).some((f) => /dual wield/i.test(f));
 }
 
 export function canEquipOffhand(item: InventoryItem, charData: CharacterDataLike | null): boolean {

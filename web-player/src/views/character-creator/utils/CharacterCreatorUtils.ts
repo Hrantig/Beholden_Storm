@@ -1,4 +1,5 @@
 import { wordOrNumberToInt, type Ruleset, type RaceChoices } from "@/lib/characterRules";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
 import { abilityMod } from "@/views/character/CharacterSheetUtils";
 import type { ParsedFeatChoiceLike as CreatorParsedFeatChoiceLike } from "./FeatChoiceTypes";
 import {
@@ -23,6 +24,7 @@ interface CreatorFeatureLike {
   text: string;
   optional?: boolean;
   subclass?: string | null;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 interface CreatorAutolevelLike {
@@ -53,6 +55,7 @@ export interface CreatorItemSummaryLike {
 export interface CreatorRaceTraitLike {
   name: string;
   text: string;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 export type { RaceChoices };

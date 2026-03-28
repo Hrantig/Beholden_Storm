@@ -6,6 +6,7 @@ import { normalizeHp } from "./normalizeHp.js";
 import { parseBackgroundProficiencies, parseRaceChoicesByRuleset } from "../../lib/proficiencyConstants.js";
 import { parseFeat } from "../../lib/featParser.js";
 import { inferRuleset } from "../../lib/inferRuleset.js";
+import { parsePreparedSpellProgression } from "../../lib/preparedSpellProgression.js";
 
 export function importCompendiumXml(args: {
   xml: string;
@@ -245,6 +246,7 @@ export function importCompendiumXml(args: {
           modifier: f?.modifier ? asArray(f.modifier).map((m: any) =>
             typeof m === "string" ? m : (m?.["#text"] ?? asText(m) ?? "")
           ) : [],
+          preparedSpellProgression: parsePreparedSpellProgression(asText(f?.text) || ""),
         }));
         const counters = asArray(al?.counter).map((ct: any) => ({
           name: asText(ct?.name) || "",
@@ -288,6 +290,7 @@ export function importCompendiumXml(args: {
         modifier: t?.modifier ? asArray(t.modifier).map((m: any) =>
           typeof m === "string" ? m : (m?.["#text"] ?? asText(m) ?? "")
         ) : [],
+        preparedSpellProgression: parsePreparedSpellProgression(asText(t?.text) || ""),
       }));
 
       // Parse vision traits (Darkvision, Blindsight, Truesight, Tremorsense)
@@ -328,6 +331,7 @@ export function importCompendiumXml(args: {
       const traits = asArray(bg?.trait).map((t: any) => ({
         name: asText(t?.name) || "",
         text: asText(t?.text) || "",
+        preparedSpellProgression: parsePreparedSpellProgression(asText(t?.text) || ""),
       }));
 
       const bgRuleset = inferRuleset(name, traits.map((t) => `${t.name}\n${t.text}`).join("\n"));

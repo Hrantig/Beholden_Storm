@@ -905,6 +905,7 @@ export function CharacterCreatorView() {
                 id: f.name,
                 name: f.name,
                 text: f.text?.trim() ?? "",
+                preparedSpellProgression: f.preparedSpellProgression,
               });
               continue;
             }
@@ -914,6 +915,7 @@ export function CharacterCreatorView() {
               id: f.name,
               name: f.name,
               text: f.text?.trim() ?? "",
+              preparedSpellProgression: f.preparedSpellProgression,
             });
           }
         }
@@ -932,6 +934,7 @@ export function CharacterCreatorView() {
         }));
         return [...orderedFeatures, ...selectedBgOriginFeat, ...selectedClassFeats, ...selectedLevelUpFeats];
       })();
+      const selectedFeatureNames = classFeatures.map((feature) => feature.name);
       const startingInventory = isEditing
         ? undefined
         : buildStartingInventoryFromUtils(form, bgDetail, classDetail, items);
@@ -961,9 +964,9 @@ export function CharacterCreatorView() {
           gender: optionalText(form.gender),
           hd: classDetail?.hd ?? null,
           chosenOptionals: form.chosenOptionals,
+          selectedFeatureNames,
           chosenClassFeatIds: form.chosenClassFeatIds,
           chosenLevelUpFeats: form.chosenLevelUpFeats,
-          classFeatures,
           chosenRaceSkills: form.chosenRaceSkills,
           chosenRaceLanguages: form.chosenRaceLanguages,
           chosenRaceTools: form.chosenRaceTools,

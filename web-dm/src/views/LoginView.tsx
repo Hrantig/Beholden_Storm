@@ -31,14 +31,22 @@ export function LoginView() {
       style={{
         minHeight: "100vh",
         background: theme.colors.bg,
+        backgroundImage: "url('/beholden_logo.png')",
+        backgroundSize: "40%",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         color: theme.colors.text,
+        position: "relative",
       }}
     >
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)" }} />
       <div
         style={{
+          position: "relative",
+          zIndex: 1,
           background: theme.colors.panelBg,
           border: `1px solid ${theme.colors.panelBorder}`,
           borderRadius: theme.radius.panel,

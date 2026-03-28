@@ -38,7 +38,6 @@ export function CharacterSupportPanels(props: {
   onDeleteSharedNote: (id: string) => void;
   onSavePlayerNotesOrder: (list: PlayerNote[]) => void;
   onSaveSharedNotesOrder: (list: PlayerNote[]) => void;
-  onSaveClassFeaturesOrder: (list: ClassFeatureEntry[]) => void;
 }) {
   const {
     accentColor,
@@ -67,7 +66,6 @@ export function CharacterSupportPanels(props: {
     onDeleteSharedNote,
     onSavePlayerNotesOrder,
     onSaveSharedNotesOrder,
-    onSaveClassFeaturesOrder,
   } = props;
 
   return (
@@ -248,26 +246,17 @@ export function CharacterSupportPanels(props: {
 
       {classFeaturesList.length > 0 && (
         <CollapsiblePanel title="Player Features" color={accentColor} storageKey="player-features">
-          <DraggableList
-            items={classFeaturesList}
-            expandedIds={expandedClassFeatureIds}
-            onSelect={(id) => onToggleClassFeatureExpanded(id)}
-            onReorder={(ids) => {
-              const byId = Object.fromEntries(classFeaturesList.map((feature) => [feature.id, feature]));
-              onSaveClassFeaturesOrder(ids.map((id) => byId[id]).filter(Boolean));
-            }}
-            renderItem={(it) => {
-              const feature = classFeaturesList.find((entry) => entry.id === it.id)!;
-              return (
-                <ClassFeatureItem
-                  feature={feature}
-                  expanded={expandedClassFeatureIds.includes(it.id)}
-                  accentColor={accentColor}
-                  onToggle={() => onToggleClassFeatureExpanded(it.id)}
-                />
-              );
-            }}
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {classFeaturesList.map((feature) => (
+              <ClassFeatureItem
+                key={feature.id}
+                feature={feature}
+                expanded={expandedClassFeatureIds.includes(feature.id)}
+                accentColor={accentColor}
+                onToggle={() => onToggleClassFeatureExpanded(feature.id)}
+              />
+            ))}
+          </div>
         </CollapsiblePanel>
       )}
 

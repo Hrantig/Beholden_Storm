@@ -8,6 +8,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { parseFeat } from "../../lib/featParser.js";
 import { parseBackgroundProficiencies, parseRaceChoicesByRuleset } from "../../lib/proficiencyConstants.js";
 import { inferRuleset } from "../../lib/inferRuleset.js";
+import { parsePreparedSpellProgression } from "../../lib/preparedSpellProgression.js";
 
 export function registerLoreRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
@@ -28,6 +29,19 @@ export function registerLoreRoutes(app: Express, ctx: ServerContext) {
     if (!row) return res.status(404).json({ ok: false, message: "Not found" });
     const cls = JSON.parse(row.data_json);
     if (!cls.ruleset) cls.ruleset = inferRuleset(cls.name);
+    if (Array.isArray(cls.autolevels)) {
+      cls.autolevels = cls.autolevels.map((al: any) => ({
+        ...al,
+        features: Array.isArray(al?.features)
+          ? al.features.map((feature: any) => ({
+              ...feature,
+              preparedSpellProgression: Array.isArray(feature?.preparedSpellProgression)
+                ? feature.preparedSpellProgression
+                : parsePreparedSpellProgression(String(feature?.text ?? "")),
+            }))
+          : [],
+      }));
+    }
     res.json(cls);
   });
 
@@ -55,6 +69,14 @@ export function registerLoreRoutes(app: Express, ctx: ServerContext) {
         Array.isArray(race.traits) ? race.traits.map((t: any) => ({ name: String(t?.name ?? ""), text: String(t?.text ?? "") })) : [],
       );
     }
+    if (Array.isArray(race.traits)) {
+      race.traits = race.traits.map((trait: any) => ({
+        ...trait,
+        preparedSpellProgression: Array.isArray(trait?.preparedSpellProgression)
+          ? trait.preparedSpellProgression
+          : parsePreparedSpellProgression(String(trait?.text ?? "")),
+      }));
+    }
     res.json(race);
   });
 
@@ -81,6 +103,14 @@ export function registerLoreRoutes(app: Express, ctx: ServerContext) {
       trait: bg.traits,
       ruleset: bg.ruleset,
     });
+    if (Array.isArray(bg.traits)) {
+      bg.traits = bg.traits.map((trait: any) => ({
+        ...trait,
+        preparedSpellProgression: Array.isArray(trait?.preparedSpellProgression)
+          ? trait.preparedSpellProgression
+          : parsePreparedSpellProgression(String(trait?.text ?? "")),
+      }));
+    }
     res.json(bg);
   });
 

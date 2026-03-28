@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, jsonInit } from "@/services/api";
 import { C } from "@/lib/theme";
+import type { PreparedSpellProgressionTable } from "@/types/preparedSpellProgression";
 import { rollDiceExpr, hasDiceTerm } from "@/lib/dice";
 import { useWs } from "@/services/ws";
 import {
@@ -115,6 +116,7 @@ interface ClassRestDetail {
       name: string;
       text: string;
       optional?: boolean;
+      preparedSpellProgression?: PreparedSpellProgressionTable[];
     }>;
   }>;
 }
@@ -122,6 +124,7 @@ interface ClassRestDetail {
 interface LoreTraitDetail {
   name: string;
   text: string;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 interface RaceFeatureDetail {
@@ -140,6 +143,7 @@ interface FeatFeatureDetail {
   id: string;
   name: string;
   text?: string | null;
+  preparedSpellProgression?: PreparedSpellProgressionTable[];
 }
 
 interface LevelUpFeatDetail {
@@ -188,7 +192,6 @@ function normalizePlayerFeatures(
   levelUpFeatDetails: LevelUpFeatDetail[],
   invocationDetails: InvocationFeatureDetail[],
 ): ClassFeatureEntry[] {
-  const saved = charData?.classFeatures ?? [];
   const selectedSubclass = String(charData?.subclass ?? "").trim();
   const featureById = new Map<string, ClassFeatureEntry>();
   const featureKeys = new Set<string>();
@@ -201,31 +204,13 @@ function normalizePlayerFeatures(
       const subclassLike = { name: feature.name, text: feature.text ?? "", optional: true, subclass: null };
       if (!featureMatchesSubclass(subclassLike, selectedSubclass) || isSubclassChoiceFeature(subclassLike)) return;
     }
-    if (!options?.force && !shouldDisplayPlayerFeature(feature.name, feature.text ?? "")) return;
+    if (!options?.force && !feature.preparedSpellProgression?.length && !shouldDisplayPlayerFeature(feature.name, feature.text ?? "")) return;
     const dedupeKey = `${String(feature.name ?? "").trim().toLowerCase()}::${String(feature.text ?? "").trim().replace(/\s+/g, " ").toLowerCase()}`;
     if (featureKeys.has(dedupeKey)) return;
     if (featureById.has(feature.id)) return;
     featureKeys.add(dedupeKey);
     featureById.set(feature.id, feature);
   };
-
-  if (saved.length > 0) {
-    for (const feature of saved) {
-      addFeature({
-        id: feature.id || feature.name,
-        name: feature.name,
-        text: feature.text ?? "",
-      });
-    }
-  } else {
-    for (const name of charData?.chosenOptionals ?? []) {
-      addFeature({
-        id: name,
-        name,
-        text: "",
-      });
-    }
-  }
 
   for (const autolevel of classDetail?.autolevels ?? []) {
     if (autolevel.level > characterLevel) continue;
@@ -235,11 +220,12 @@ function normalizePlayerFeatures(
       if (!text) continue;
       const name = String(feature.name ?? "").trim();
       if (!name) continue;
-      if (!/\b(short|long) rest\b/i.test(text) && !/\b(regain|recover)\b/i.test(text)) continue;
+      if (!feature.preparedSpellProgression?.length && !/\b(short|long) rest\b/i.test(text) && !/\b(regain|recover)\b/i.test(text)) continue;
       addFeature({
         id: `class:${classDetail?.id}:${name}`,
         name,
         text,
+        preparedSpellProgression: feature.preparedSpellProgression,
       });
     }
   }
@@ -251,6 +237,7 @@ function normalizePlayerFeatures(
       id: `race:${raceDetail?.id}:${trait.name}`,
       name: trait.name,
       text,
+      preparedSpellProgression: trait.preparedSpellProgression,
     });
   }
 
@@ -259,6 +246,7 @@ function normalizePlayerFeatures(
       id: `race-feat:${raceFeatDetail.id}`,
       name: raceFeatDetail.name,
       text: String(raceFeatDetail.text ?? "").trim(),
+      preparedSpellProgression: raceFeatDetail.preparedSpellProgression,
     });
   }
 
@@ -274,6 +262,7 @@ function normalizePlayerFeatures(
       id: `background:${backgroundDetail?.id}:${name}`,
       name,
       text,
+      preparedSpellProgression: trait.preparedSpellProgression,
     });
   }
 
@@ -282,6 +271,7 @@ function normalizePlayerFeatures(
       id: bgOriginFeatDetail.name,
       name: bgOriginFeatDetail.name,
       text: String(bgOriginFeatDetail.text ?? "").trim(),
+      preparedSpellProgression: bgOriginFeatDetail.preparedSpellProgression,
     }, { force: true });
   }
 
@@ -291,6 +281,7 @@ function normalizePlayerFeatures(
       id: `levelupfeat:${entry.level}:${entry.featId}`,
       name: entry.feat.name,
       text: String(entry.feat.text ?? "").trim(),
+      preparedSpellProgression: entry.feat.preparedSpellProgression,
     }, { force: true });
   }
 
@@ -306,6 +297,7 @@ function normalizePlayerFeatures(
       id: feature.id || feature.name,
       name: feature.name,
       text: feature.text ?? "",
+      preparedSpellProgression: feature.preparedSpellProgression,
   }));
 }
 
@@ -999,13 +991,6 @@ export function CharacterView() {
     await saveCharacterData({ customImmunities: values });
   }
 
-  async function saveClassFeaturesList(list: ClassFeatureEntry[]) {
-    await saveCharacterData({
-      classFeatures: list,
-      chosenOptionals: list.map((feature) => feature.name),
-    });
-  }
-
   function saveSharedNotesList(list: PlayerNote[]) {
     // list = the full allSharedNotes after an edit/delete.
     // Persist only player-owned notes; separate out any campaign notes that were edited.
@@ -1230,7 +1215,6 @@ export function CharacterView() {
           onDeleteSharedNote={(id) => handleNoteDelete("shared", id)}
           onSavePlayerNotesOrder={(list) => { void savePlayerNotesList(list); }}
           onSaveSharedNotesOrder={saveSharedNotesList}
-          onSaveClassFeaturesOrder={(list) => { void saveClassFeaturesList(list); }}
         />
         {/* end COL 4 */}
 
