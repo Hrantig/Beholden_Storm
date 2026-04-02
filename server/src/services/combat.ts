@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import { now, uid } from "../lib/runtime.js";
 import { rowToCombatant, rowToPlayer, COMBATANT_COLS, PLAYER_COLS } from "../lib/db.js";
 import type { StoredCombatant, StoredPlayer } from "../server/userData.js";
-import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import { DEFAULT_OVERRIDES } from "../lib/defaults.js";
 
 /** Ensures a combat record exists for the encounter; creates it if missing. */
 export function ensureCombat(db: Database.Database, encounterId: string): void {
@@ -47,11 +47,13 @@ export function createPlayerCombatant({
     hpCurrent: player.hpCurrent,
     hpMax: player.hpMax,
     hpDetails: null,
-    ac: player.ac,
+    ac: player.defensePhysical,
     acDetails: null,
     attackOverrides: null,
     conditions: Array.isArray(player.conditions) ? player.conditions : [],
-    deathSaves: player.deathSaves ?? { ...DEFAULT_DEATH_SAVES },
+    phase: null,
+    actionPointsUsed: 0,
+    usedReaction: false,
     createdAt: t,
     updatedAt: t,
   };
@@ -62,13 +64,15 @@ export function insertCombatant(db: Database.Database, c: StoredCombatant): void
   db.prepare(
     `INSERT INTO combatants
        (id, encounter_id, base_type, base_id, name, label, initiative, friendly, color,
-        hp_current, hp_max, hp_details, ac, ac_details, sort, used_reaction, used_legendary_actions,
-        overrides_json, conditions_json, death_saves_json, used_spell_slots_json, attack_overrides_json,
-        created_at, updated_at)
+      hp_current, hp_max, hp_details, ac, ac_details, sort,
+      overrides_json, conditions_json, attack_overrides_json,
+      phase, action_points_used, dual_phase, used_reaction,
+      created_at, updated_at)
      VALUES
        (?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?, ?,
         ?, ?)`
   ).run(
     c.id, c.encounterId, c.baseType, c.baseId, c.name, c.label,
@@ -77,13 +81,13 @@ export function insertCombatant(db: Database.Database, c: StoredCombatant): void
     c.color,
     c.hpCurrent, c.hpMax, c.hpDetails, c.ac, c.acDetails,
     c.sort ?? null,
-    c.usedReaction ? 1 : 0,
-    c.usedLegendaryActions ?? 0,
     JSON.stringify(c.overrides ?? DEFAULT_OVERRIDES),
     JSON.stringify(c.conditions ?? []),
-    c.deathSaves ? JSON.stringify(c.deathSaves) : null,
-    c.usedSpellSlots ? JSON.stringify(c.usedSpellSlots) : null,
     c.attackOverrides != null ? JSON.stringify(c.attackOverrides) : null,
+    c.phase ?? null,
+    c.actionPointsUsed ?? 0,
+    c.dualPhase ? 1 : 0,
+    c.usedReaction ? 1 : 0,
     c.createdAt,
     c.updatedAt,
   );
@@ -106,12 +110,11 @@ export function syncCombatantToPlayer(
   if (!pRow) return null;
   db.prepare(`
     UPDATE players SET
-      hp_current=?, conditions_json=?, death_saves_json=?, overrides_json=?, updated_at=?
+      hp_current=?, conditions_json=?, overrides_json=?, updated_at=?
     WHERE id=?
   `).run(
     combatant.hpCurrent,
     JSON.stringify(combatant.conditions ?? []),
-    combatant.deathSaves ? JSON.stringify(combatant.deathSaves) : null,
     JSON.stringify(combatant.overrides ?? DEFAULT_OVERRIDES),
     t,
     combatant.baseId
@@ -139,12 +142,9 @@ export function hydratePlayerCombatant(
     label: combatant.label || player.characterName,
     hpCurrent: player.hpCurrent,
     hpMax: player.hpMax,
-    ac: player.ac,
+    ac: player.defensePhysical,
     conditions: player.conditions ?? [],
     overrides: player.overrides ?? combatant.overrides,
-    ...((player.deathSaves ?? combatant.deathSaves) !== undefined
-      ? { deathSaves: player.deathSaves ?? combatant.deathSaves }
-      : {}),
   };
 }
 

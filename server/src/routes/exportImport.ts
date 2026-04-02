@@ -24,7 +24,7 @@ import {
   COMBATANT_COLS,
 } from "../lib/db.js";
 import { insertCombatant, ensureCombat } from "../services/combat.js";
-import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import { DEFAULT_OVERRIDES} from "../lib/defaults.js";
 import { seedDefaultConditions } from "../services/conditions.js";
 import type { StoredCombatant } from "../server/userData.js";
 
@@ -205,36 +205,38 @@ export function registerExportImportRoutes(app: Express, ctx: ServerContext) {
       const players = toArray(doc["players"]);
       for (const p of players) {
         const overrides = (p["overrides"] as Record<string, unknown>) ?? {};
-        db.prepare(`
-          INSERT OR IGNORE INTO players
-            (id, campaign_id, player_name, character_name, class, species, level,
-             hp_max, hp_current, ac, str, dex, con, int, wis, cha, color,
-             overrides_json, conditions_json, death_saves_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          String(p["id"]),
-          campaignId,
-          String(p["playerName"] ?? ""),
-          String(p["characterName"] ?? ""),
-          String(p["class"] ?? ""),
-          String(p["species"] ?? ""),
-          Number(p["level"] ?? 1),
-          Number(p["hpMax"] ?? 10),
-          Number(p["hpCurrent"] ?? 10),
-          Number(p["ac"] ?? 10),
-          p["str"] != null ? Number(p["str"]) : null,
-          p["dex"] != null ? Number(p["dex"]) : null,
-          p["con"] != null ? Number(p["con"]) : null,
-          p["int"] != null ? Number(p["int"]) : null,
-          p["wis"] != null ? Number(p["wis"]) : null,
-          p["cha"] != null ? Number(p["cha"]) : null,
-          (p["color"] as string | null) ?? null,
-          JSON.stringify(p["overrides"] ?? DEFAULT_OVERRIDES),
-          JSON.stringify(p["conditions"] ?? []),
-          p["deathSaves"] != null ? JSON.stringify(p["deathSaves"]) : null,
-          Number(p["createdAt"] ?? Date.now()),
-          Number(p["updatedAt"] ?? Date.now())
-        );
+db.prepare(`
+  INSERT OR IGNORE INTO players
+    (id, campaign_id, player_name, character_name, ancestry, paths_json, level,
+     hp_max, hp_current, focus_max, focus_current, investiture_max, investiture_current,
+     movement, defense_physical, defense_cognitive, defense_spiritual, deflect,
+     color, overrides_json, conditions_json, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`).run(
+  String(p["id"]),
+  campaignId,
+  String(p["playerName"] ?? ""),
+  String(p["characterName"] ?? ""),
+  String(p["ancestry"] ?? "Unknown"),
+  JSON.stringify(Array.isArray(p["paths"]) ? p["paths"] : []),
+  Number(p["level"] ?? 1),
+  Number(p["hpMax"] ?? 10),
+  Number(p["hpCurrent"] ?? 10),
+  Number(p["focusMax"] ?? 0),
+  Number(p["focusCurrent"] ?? 0),
+  p["investitureMax"] != null ? Number(p["investitureMax"]) : null,
+  p["investitureCurrent"] != null ? Number(p["investitureCurrent"]) : null,
+  Number(p["movement"] ?? 0),
+  Number(p["defensePhysical"] ?? 0),
+  Number(p["defenseCognitive"] ?? 0),
+  Number(p["defenseSpiritual"] ?? 0),
+  Number(p["deflect"] ?? 0),
+  (p["color"] as string | null) ?? null,
+  JSON.stringify(p["overrides"] ?? DEFAULT_OVERRIDES),
+  JSON.stringify(p["conditions"] ?? []),
+  Number(p["createdAt"] ?? Date.now()),
+  Number(p["updatedAt"] ?? Date.now())
+);
       }
 
       // iNPCs
@@ -346,32 +348,31 @@ export function registerExportImportRoutes(app: Express, ctx: ServerContext) {
           : [];
         for (const [ci, raw] of combatants.entries()) {
           const c: StoredCombatant = {
-            id: String(raw["id"] ?? ctx.helpers.uid()),
-            encounterId: encId,
-            baseType: (raw["baseType"] as any) ?? "monster",
-            baseId: String(raw["baseId"] ?? ""),
-            name: String(raw["name"] ?? ""),
-            label: String(raw["label"] ?? ""),
-            initiative: raw["initiative"] != null ? Number(raw["initiative"]) : null,
-            friendly: Boolean(raw["friendly"]),
-            color: String(raw["color"] ?? "#cccccc"),
-            hpCurrent: raw["hpCurrent"] != null ? Number(raw["hpCurrent"]) : null,
-            hpMax: raw["hpMax"] != null ? Number(raw["hpMax"]) : null,
-            hpDetails: (raw["hpDetails"] as string | null) ?? null,
-            ac: raw["ac"] != null ? Number(raw["ac"]) : null,
-            acDetails: (raw["acDetails"] as string | null) ?? null,
-            sort: raw["sort"] != null ? Number(raw["sort"]) : ci + 1,
-            usedReaction: Boolean(raw["usedReaction"]),
-            usedLegendaryActions: Number(raw["usedLegendaryActions"] ?? 0),
-            overrides: (raw["overrides"] as any) ?? DEFAULT_OVERRIDES,
-            conditions: Array.isArray(raw["conditions"]) ? raw["conditions"] : [],
-            deathSaves: (raw["deathSaves"] as any) ?? DEFAULT_DEATH_SAVES,
-            usedSpellSlots:
-              (raw["usedSpellSlots"] as Record<string, number> | undefined) ?? {},
-            attackOverrides: (raw["attackOverrides"] as any) ?? null,
-            createdAt: Number(raw["createdAt"] ?? Date.now()),
-            updatedAt: Number(raw["updatedAt"] ?? Date.now()),
-          };
+  id: String(raw["id"] ?? ctx.helpers.uid()),
+  encounterId: encId,
+  baseType: (raw["baseType"] as any) ?? "monster",
+  baseId: String(raw["baseId"] ?? ""),
+  name: String(raw["name"] ?? ""),
+  label: String(raw["label"] ?? ""),
+  initiative: raw["initiative"] != null ? Number(raw["initiative"]) : null,
+  friendly: Boolean(raw["friendly"]),
+  color: String(raw["color"] ?? "#cccccc"),
+  hpCurrent: raw["hpCurrent"] != null ? Number(raw["hpCurrent"]) : null,
+  hpMax: raw["hpMax"] != null ? Number(raw["hpMax"]) : null,
+  hpDetails: (raw["hpDetails"] as string | null) ?? null,
+  ac: raw["ac"] != null ? Number(raw["ac"]) : null,
+  acDetails: (raw["acDetails"] as string | null) ?? null,
+  sort: raw["sort"] != null ? Number(raw["sort"]) : ci + 1,
+  usedReaction: Boolean(raw["usedReaction"]),
+  phase: (raw["phase"] as "fast" | "slow" | null) ?? null,
+  actionPointsUsed: Number(raw["actionPointsUsed"] ?? 0),
+  dualPhase: Boolean(raw["dualPhase"]),
+  overrides: (raw["overrides"] as any) ?? DEFAULT_OVERRIDES,
+  conditions: Array.isArray(raw["conditions"]) ? raw["conditions"] : [],
+  attackOverrides: (raw["attackOverrides"] as any) ?? null,
+  createdAt: Number(raw["createdAt"] ?? Date.now()),
+  updatedAt: Number(raw["updatedAt"] ?? Date.now()),
+};
           try {
             insertCombatant(db, c);
           } catch {

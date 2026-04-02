@@ -6,7 +6,7 @@ import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { rowToPlayer, PLAYER_COLS } from "../lib/db.js";
 import { ConditionInstanceSchema, OverridesSchema } from "../lib/schemas.js";
-import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import { DEFAULT_OVERRIDES} from "../lib/defaults.js";
 import { ACCEPTED_IMAGE_TYPES, resizeToWebP } from "../lib/imageHelpers.js";
 import { absolutizePublicUrl } from "../lib/publicUrl.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
@@ -14,42 +14,44 @@ import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
 const PlayerCreateBody = z.object({
   playerName: z.string().trim().optional(),
   characterName: z.string().trim().optional(),
-  class: z.string().trim().optional(),
-  species: z.string().trim().optional(),
+  ancestry: z.string().trim().optional(),
+  paths: z.array(z.string()).optional(),
   level: z.number().int().optional(),
   hpMax: z.number().int().optional(),
   hpCurrent: z.number().int().optional(),
-  ac: z.number().int().optional(),
-  str: z.number().int().optional(),
-  dex: z.number().int().optional(),
-  con: z.number().int().optional(),
-  int: z.number().int().optional(),
-  wis: z.number().int().optional(),
-  cha: z.number().int().optional(),
+  focusMax: z.number().int().optional(),
+  focusCurrent: z.number().int().optional(),
+  investitureMax: z.number().int().nullable().optional(),
+  investitureCurrent: z.number().int().nullable().optional(),
+  movement: z.number().int().optional(),
+  defensePhysical: z.number().int().optional(),
+  defenseCognitive: z.number().int().optional(),
+  defenseSpiritual: z.number().int().optional(),
+  deflect: z.number().int().optional(),
+  injuryCount: z.number().int().optional(),
   color: z.string().optional(),
 });
 
 const PlayerUpdateBody = z.object({
   playerName: z.string().trim().optional(),
   characterName: z.string().trim().optional(),
-  class: z.string().trim().optional(),
-  species: z.string().trim().optional(),
+  ancestry: z.string().trim().optional(),
+  paths: z.array(z.string()).optional(),
   level: z.number().int().optional(),
   hpMax: z.number().int().optional(),
   hpCurrent: z.number().int().optional(),
-  ac: z.number().int().optional(),
-  str: z.number().int().optional(),
-  dex: z.number().int().optional(),
-  con: z.number().int().optional(),
-  int: z.number().int().optional(),
-  wis: z.number().int().optional(),
-  cha: z.number().int().optional(),
+  focusMax: z.number().int().optional(),
+  focusCurrent: z.number().int().optional(),
+  investitureMax: z.number().int().nullable().optional(),
+  investitureCurrent: z.number().int().nullable().optional(),
+  movement: z.number().int().optional(),
+  defensePhysical: z.number().int().optional(),
+  defenseCognitive: z.number().int().optional(),
+  defenseSpiritual: z.number().int().optional(),
+  deflect: z.number().int().optional(),
+  injuryCount: z.number().int().optional(),
   conditions: z.array(ConditionInstanceSchema).optional(),
   overrides: OverridesSchema.optional(),
-  deathSaves: z.object({
-    success: z.number().int().min(0).max(3),
-    fail: z.number().int().min(0).max(3),
-  }).optional(),
 });
 
 export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
@@ -121,35 +123,37 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     const id = uid();
     const t = now();
     db.prepare(`
-      INSERT INTO players
-        (id, campaign_id, player_name, character_name, class, species, level,
-         hp_max, hp_current, ac, str, dex, con, int, wis, cha, color,
-         overrides_json, conditions_json, death_saves_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      campaignId,
-      p.playerName || "Player",
-      p.characterName || "Character",
-      p.class || "Class",
-      p.species || "Species",
-      p.level ?? 1,
-      p.hpMax ?? 10,
-      p.hpCurrent ?? p.hpMax ?? 10,
-      p.ac ?? 10,
-      p.str ?? 10,
-      p.dex ?? 10,
-      p.con ?? 10,
-      p.int ?? 10,
-      p.wis ?? 10,
-      p.cha ?? 10,
-      p.color ?? "green",
-      JSON.stringify(DEFAULT_OVERRIDES),
-      JSON.stringify([]),
-      JSON.stringify(DEFAULT_DEATH_SAVES),
-      t,
-      t
-    );
+  INSERT INTO players
+    (id, campaign_id, player_name, character_name, ancestry, paths_json, level,
+     hp_max, hp_current, focus_max, focus_current, investiture_max, investiture_current,
+     movement, defense_physical, defense_cognitive, defense_spiritual, deflect,
+     color, overrides_json, conditions_json, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    campaignId,
+    p.playerName || "Player",
+    p.characterName || "Character",
+    p.ancestry || "Unknown",
+    JSON.stringify(p.paths ?? []),
+    p.level ?? 1,
+    p.hpMax ?? 10,
+    p.hpCurrent ?? p.hpMax ?? 10,
+    p.focusMax ?? 0,
+    p.focusCurrent ?? p.focusMax ?? 0,
+    p.investitureMax ?? null,
+    p.investitureCurrent ?? null,
+    p.movement ?? 0,
+    p.defensePhysical ?? 0,
+    p.defenseCognitive ?? 0,
+    p.defenseSpiritual ?? 0,
+    p.deflect ?? 0,
+    p.color ?? "green",
+    JSON.stringify(DEFAULT_OVERRIDES),
+    JSON.stringify([]),
+    t,
+    t
+  );
     ctx.broadcast("players:changed", { campaignId });
     const row = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(id) as Record<string, unknown>;
     res.json(rowToPlayer(row));
@@ -165,38 +169,40 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     const existing = rowToPlayer(existingRow);
     const p = parseBody(PlayerUpdateBody, req);
     const t = now();
-
-    const deathSaves = p.deathSaves ?? existing.deathSaves ?? DEFAULT_DEATH_SAVES;
+    const playerName = p.playerName ?? existing.playerName;
+    const characterName = p.characterName ?? existing.characterName;
+    const ancestry = p.ancestry ?? existing.ancestry;
+    const paths = p.paths ?? existing.paths ?? [];
+    const level = p.level ?? existing.level;
+    const hpMax = p.hpMax ?? existing.hpMax;
+    const hpCurrent = p.hpCurrent ?? existing.hpCurrent;
+    const focusMax = p.focusMax ?? existing.focusMax;
+    const focusCurrent = p.focusCurrent ?? existing.focusCurrent;
+    const investitureMax = p.investitureMax !== undefined ? p.investitureMax : existing.investitureMax;
+    const investitureCurrent = p.investitureCurrent !== undefined ? p.investitureCurrent : existing.investitureCurrent;
+    const movement = p.movement ?? existing.movement;
+    const defensePhysical = p.defensePhysical ?? existing.defensePhysical;
+    const defenseCognitive = p.defenseCognitive ?? existing.defenseCognitive;
+    const defenseSpiritual = p.defenseSpiritual ?? existing.defenseSpiritual;
+    const deflect = p.deflect ?? existing.deflect;
     const conditions = p.conditions ?? existing.conditions ?? [];
     const overrides = p.overrides ?? existing.overrides ?? DEFAULT_OVERRIDES;
 
-    const playerName = p.playerName ?? existing.playerName;
-    const characterName = p.characterName ?? existing.characterName;
-    const level = p.level ?? existing.level;
-    const cls = p.class ?? existing.class;
-    const species = p.species ?? existing.species;
-    const hpMax = p.hpMax ?? existing.hpMax;
-    const hpCurrent = p.hpCurrent ?? existing.hpCurrent;
-    const ac = p.ac ?? existing.ac;
-    const str = p.str ?? existing.str ?? 10;
-    const dex = p.dex ?? existing.dex ?? 10;
-    const con = p.con ?? existing.con ?? 10;
-    const int_ = p.int ?? existing.int ?? 10;
-    const wis = p.wis ?? existing.wis ?? 10;
-    const cha = p.cha ?? existing.cha ?? 10;
-
     db.prepare(`
       UPDATE players SET
-        player_name=?, character_name=?, class=?, species=?, level=?,
-        hp_max=?, hp_current=?, ac=?, str=?, dex=?, con=?, int=?, wis=?, cha=?,
-        overrides_json=?, conditions_json=?, death_saves_json=?, updated_at=?
+        player_name=?, character_name=?, ancestry=?, paths_json=?, level=?,
+        hp_max=?, hp_current=?, focus_max=?, focus_current=?,
+        investiture_max=?, investiture_current=?,
+        movement=?, defense_physical=?, defense_cognitive=?, defense_spiritual=?, deflect=?,
+        overrides_json=?, conditions_json=?, updated_at=?
       WHERE id=?
     `).run(
-      playerName, characterName, cls, species, level,
-      hpMax, hpCurrent, ac, str, dex, con, int_, wis, cha,
+      playerName, characterName, ancestry, JSON.stringify(paths), level,
+      hpMax, hpCurrent, focusMax, focusCurrent,
+      investitureMax, investitureCurrent,
+      movement, defensePhysical, defenseCognitive, defenseSpiritual, deflect,
       JSON.stringify(overrides),
       JSON.stringify(conditions),
-      JSON.stringify(deathSaves),
       t,
       playerId
     );

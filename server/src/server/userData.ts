@@ -16,9 +16,8 @@ export interface Timestamps {
 
 export interface StoredOverrides {
   tempHp: number;
-  acBonus: number;
+  deflectBonus: number;
   hpMaxBonus: number;
-  inspiration?: boolean;
 }
 
 // Alias kept for call-site compatibility.
@@ -132,23 +131,23 @@ export interface StoredPlayer extends Timestamps {
   userId?: string | null;
   playerName: string;
   characterName: string;
-  class: string;
-  species: string;
+  ancestry: string;
+  paths: string[];
   level: number;
   hpMax: number;
   hpCurrent: number;
-  ac: number;
-  speed?: number;
+  focusMax: number;
+  focusCurrent: number;
+  investitureMax: number | null;
+  investitureCurrent: number | null;
+  movement: number;
+  defensePhysical: number;
+  defenseCognitive: number;
+  defenseSpiritual: number;
+  deflect: number;
+  injuryCount: number;
   overrides?: StoredOverrides;
   conditions?: StoredConditionInstance[];
-  deathSaves?: StoredDeathSaves;
-  // Ability scores
-  str?: number;
-  dex?: number;
-  con?: number;
-  int?: number;
-  wis?: number;
-  cha?: number;
   color?: string;
   imageUrl?: string | null;
   sharedNotes?: string;
@@ -230,16 +229,14 @@ export interface StoredCombatant extends Timestamps {
   acDetails: string | null;
   attackOverrides: unknown | null;
   conditions: StoredConditionInstance[];
-  /** Encounter-scoped death save tracking for player combatants (success/fail). */
-  deathSaves?: StoredDeathSaves;
-  /** Whether this combatant has used their reaction this turn. Resets at the start of their next turn. */
+  /** Fast or Slow phase declaration for this round. Null until declared. */
+  phase?: "fast" | "slow" | null;
+  /** Action points used in the current phase. Resets each phase. */
+  actionPointsUsed?: number;
+  /** Whether this combatant acts in both Fast and Slow NPC phases. */
+  dualPhase?: boolean;
+  /** Whether this combatant has used their reaction this round. Resets each round. */
   usedReaction?: boolean;
-  /** How many legendary actions have been spent this round. Resets at the start of this combatant's turn. */
-  usedLegendaryActions?: number;
-  /** How many legendary resistance uses have been spent this fight. */
-  usedLegendaryResistances?: number;
-  /** Spell slots spent per level. Keys are spell level as string ("1"–"9"), values are count of used slots. */
-  usedSpellSlots?: Record<string, number>;
   sort?: number;
 }
 

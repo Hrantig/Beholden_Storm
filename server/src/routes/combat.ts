@@ -60,11 +60,10 @@ const CombatantUpdateBody = z.object({
   attackOverrides: AttackOverrideSchema.optional(),
   overrides: OverridesSchema.optional(),
   conditions: z.array(ConditionInstanceSchema).optional(),
-  deathSaves: z.object({ success: z.number(), fail: z.number() }).optional(),
   usedReaction: z.boolean().optional(),
-  usedLegendaryActions: z.number().int().min(0).optional(),
-  usedLegendaryResistances: z.number().int().min(0).optional(),
-  usedSpellSlots: z.record(z.number()).optional(),
+  phase: z.enum(["fast", "slow"]).nullable().optional(),
+  actionPointsUsed: z.number().int().min(0).optional(),
+  dualPhase: z.boolean().optional(),
 });
 
 export function registerCombatRoutes(app: Express, ctx: ServerContext) {
@@ -78,37 +77,35 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
     ensureCombat(db, encounterId);
 
     const rows = db.prepare(`
-      SELECT c.*,
-        p.character_name   AS p_character_name,
-        p.player_name      AS p_player_name,
-        p.hp_current       AS p_hp_current,
-        p.hp_max           AS p_hp_max,
-        p.ac               AS p_ac,
-        p.conditions_json  AS p_conditions_json,
-        p.death_saves_json AS p_death_saves_json,
-        p.overrides_json   AS p_overrides_json
-      FROM combatants c
-      LEFT JOIN players p ON c.base_type = 'player' AND p.id = c.base_id
-      WHERE c.encounter_id = ?
-      ORDER BY COALESCE(c.sort, 9999), c.created_at
-    `).all(encounterId) as Record<string, unknown>[];
+  SELECT c.*,
+    p.character_name  AS p_character_name,
+    p.player_name     AS p_player_name,
+    p.hp_current      AS p_hp_current,
+    p.hp_max          AS p_hp_max,
+    p.defense_physical AS p_defense_physical,
+    p.conditions_json AS p_conditions_json,
+    p.overrides_json  AS p_overrides_json
+  FROM combatants c
+  LEFT JOIN players p ON c.base_type = 'player' AND p.id = c.base_id
+  WHERE c.encounter_id = ?
+  ORDER BY COALESCE(c.sort, 9999), c.created_at
+`).all(encounterId) as Record<string, unknown>[];
 
-    const merged = rows.map((row) => {
-      const c = rowToCombatant(row);
-      if (row.base_type !== "player" || row.p_character_name == null) return c;
-      return {
-        ...c,
-        name: row.p_character_name as string,
-        playerName: row.p_player_name as string,
-        label: c.label || (row.p_character_name as string),
-        hpCurrent: row.p_hp_current as number,
-        hpMax: row.p_hp_max as number,
-        ac: row.p_ac as number,
-        conditions: parseJson(row.p_conditions_json, [] as unknown[]),
-        deathSaves: parseJson(row.p_death_saves_json, null) ?? c.deathSaves,
-        overrides: parseJson(row.p_overrides_json, DEFAULT_OVERRIDES),
-      };
-    });
+const merged = rows.map((row) => {
+  const c = rowToCombatant(row);
+  if (row.base_type !== "player" || row.p_character_name == null) return c;
+  return {
+    ...c,
+    name: row.p_character_name as string,
+    playerName: row.p_player_name as string,
+    label: c.label || (row.p_character_name as string),
+    hpCurrent: row.p_hp_current as number,
+    hpMax: row.p_hp_max as number,
+    ac: row.p_defense_physical as number,
+    conditions: parseJson(row.p_conditions_json, [] as unknown[]),
+    overrides: parseJson(row.p_overrides_json, DEFAULT_OVERRIDES),
+  };
+});
 
     res.json(merged);
   });
@@ -392,65 +389,56 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
       const body = parseBody(CombatantUpdateBody, req);
       const t = now();
 
-      const deathSaves = body.deathSaves
-        ? {
-            success: Math.max(0, Math.floor(body.deathSaves.success)),
-            fail: Math.max(0, Math.floor(body.deathSaves.fail)),
-          }
-        : existing.deathSaves;
-
       const next: StoredCombatant = {
-        ...existing,
-        label: body.label ?? existing.label,
-        initiative: body.initiative !== undefined ? body.initiative : (existing.initiative ?? null),
-        friendly: body.friendly ?? existing.friendly,
-        color: body.color ?? existing.color,
-        hpCurrent: body.hpCurrent ?? existing.hpCurrent,
-        hpMax: body.hpMax ?? existing.hpMax,
-        hpDetails: body.hpDetails !== undefined ? body.hpDetails : existing.hpDetails,
-        ac: body.ac ?? existing.ac,
-        acDetails: body.acDetails !== undefined ? body.acDetails : existing.acDetails,
-        attackOverrides: body.attackOverrides !== undefined ? (body.attackOverrides as unknown | null) : existing.attackOverrides,
-        overrides: (body.overrides ?? existing.overrides) as StoredOverrides,
-        conditions: (body.conditions ?? existing.conditions ?? []) as StoredConditionInstance[],
-        ...(deathSaves !== undefined ? { deathSaves } : {}),
-        usedReaction: body.usedReaction ?? existing.usedReaction ?? false,
-        usedLegendaryActions: body.usedLegendaryActions ?? existing.usedLegendaryActions ?? 0,
-        usedLegendaryResistances: body.usedLegendaryResistances ?? existing.usedLegendaryResistances ?? 0,
-        usedSpellSlots: body.usedSpellSlots ?? existing.usedSpellSlots ?? {},
-        updatedAt: t,
-      };
+  ...existing,
+  label: body.label ?? existing.label,
+  initiative: body.initiative !== undefined ? body.initiative : (existing.initiative ?? null),
+  friendly: body.friendly ?? existing.friendly,
+  color: body.color ?? existing.color,
+  hpCurrent: body.hpCurrent ?? existing.hpCurrent,
+  hpMax: body.hpMax ?? existing.hpMax,
+  hpDetails: body.hpDetails !== undefined ? body.hpDetails : existing.hpDetails,
+  ac: body.ac ?? existing.ac,
+  acDetails: body.acDetails !== undefined ? body.acDetails : existing.acDetails,
+  attackOverrides: body.attackOverrides !== undefined ? (body.attackOverrides as unknown | null) : existing.attackOverrides,
+  overrides: (body.overrides ?? existing.overrides) as StoredOverrides,
+  conditions: (body.conditions ?? existing.conditions ?? []) as StoredConditionInstance[],
+  usedReaction: body.usedReaction ?? existing.usedReaction ?? false,
+  phase: body.phase !== undefined ? body.phase : (existing.phase ?? null),
+  actionPointsUsed: body.actionPointsUsed ?? existing.actionPointsUsed ?? 0,
+  dualPhase: body.dualPhase ?? existing.dualPhase ?? false,
+  updatedAt: t,
+};
 
       db.prepare(`
-        UPDATE combatants SET
-          label=?, initiative=?, friendly=?, color=?,
-          hp_current=?, hp_max=?, hp_details=?, ac=?, ac_details=?,
-          attack_overrides_json=?, overrides_json=?, conditions_json=?,
-          death_saves_json=?, used_reaction=?, used_legendary_actions=?,
-          used_legendary_resistances=?, used_spell_slots_json=?, updated_at=?
-        WHERE id=? AND encounter_id=?
-      `).run(
-        next.label,
-        next.initiative,
-        next.friendly ? 1 : 0,
-        next.color,
-        next.hpCurrent,
-        next.hpMax,
-        next.hpDetails,
-        next.ac,
-        next.acDetails,
-        next.attackOverrides != null ? JSON.stringify(next.attackOverrides) : null,
-        JSON.stringify(next.overrides ?? DEFAULT_OVERRIDES),
-        JSON.stringify(next.conditions ?? []),
-        next.deathSaves ? JSON.stringify(next.deathSaves) : null,
-        next.usedReaction ? 1 : 0,
-        next.usedLegendaryActions ?? 0,
-        next.usedLegendaryResistances ?? 0,
-        next.usedSpellSlots ? JSON.stringify(next.usedSpellSlots) : null,
-        t,
-        combatantId,
-        encounterId
-      );
+  UPDATE combatants SET
+    label=?, initiative=?, friendly=?, color=?,
+    hp_current=?, hp_max=?, hp_details=?, ac=?, ac_details=?,
+    attack_overrides_json=?, overrides_json=?, conditions_json=?,
+    used_reaction=?, phase=?, action_points_used=?, dual_phase=?,
+    updated_at=?
+  WHERE id=? AND encounter_id=?
+`).run(
+  next.label,
+  next.initiative,
+  next.friendly ? 1 : 0,
+  next.color,
+  next.hpCurrent,
+  next.hpMax,
+  next.hpDetails,
+  next.ac,
+  next.acDetails,
+  next.attackOverrides != null ? JSON.stringify(next.attackOverrides) : null,
+  JSON.stringify(next.overrides ?? DEFAULT_OVERRIDES),
+  JSON.stringify(next.conditions ?? []),
+  next.usedReaction ? 1 : 0,
+  next.phase ?? null,
+  next.actionPointsUsed ?? 0,
+  next.dualPhase ? 1 : 0,
+  t,
+  combatantId,
+  encounterId
+);
 
       // Sync player record for player-type combatants
       const syncedCampaignId = syncCombatantToPlayer(db, next, t);

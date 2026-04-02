@@ -2,17 +2,24 @@
 // SQL column constants — single source of truth for SELECT column lists.
 // Use as: db.prepare(`SELECT ${COLS} FROM table WHERE ...`)
 
+
 export const ADVENTURE_COLS =
   "id, campaign_id, name, status, sort, created_at, updated_at";
 
 export const ENCOUNTER_COLS =
   "id, campaign_id, adventure_id, name, status, sort, " +
   "combat_round, combat_active_combatant_id, created_at, updated_at";
-
+  
+// PLAYER_COLS must stay in sync with:
+//   - server/src/lib/db.ts (CREATE TABLE players)
+//   - server/src/lib/dbConverters.ts (rowToPlayer)
+//   - server/src/server/userData.ts (StoredPlayer)
+//   - web-dm/src/domain/types/domain.ts (Player)
 export const PLAYER_COLS =
-  "id, campaign_id, user_id, player_name, character_name, class, species, level, " +
-  "hp_max, hp_current, ac, speed, str, dex, con, int, wis, cha, color, image_url, " +
-  "overrides_json, conditions_json, death_saves_json, shared_notes, created_at, updated_at";
+  "id, campaign_id, user_id, player_name, character_name, ancestry, paths_json, level, " +
+  "hp_max, hp_current, focus_max, focus_current, investiture_max, investiture_current, " +
+  "movement, defense_physical, defense_cognitive, defense_spiritual, deflect, injury_count, " +
+  "color, image_url, overrides_json, conditions_json, shared_notes, created_at, updated_at";
 
 export const USER_CHARACTER_COLS =
   "id, user_id, name, player_name, class_name, species, level, " +
@@ -40,9 +47,14 @@ export const CHARACTER_COLS =
   "str_score, dex_score, con_score, int_score, wis_score, cha_score, " +
   "notes, created_at, updated_at";
 
+// COMBATANT_COLS must stay in sync with:
+//   - server/src/lib/db.ts (CREATE TABLE combatants)
+//   - server/src/lib/dbConverters.ts (rowToCombatant)
+//   - server/src/server/userData.ts (StoredCombatant)
+//   - web-dm/src/domain/types/domain.ts (Combatant)
+
 export const COMBATANT_COLS =
   "id, encounter_id, base_type, base_id, name, label, initiative, friendly, " +
   "color, hp_current, hp_max, hp_details, ac, ac_details, sort, used_reaction, " +
-  "used_legendary_actions, used_legendary_resistances, overrides_json, " +
-  "conditions_json, death_saves_json, used_spell_slots_json, " +
-  "attack_overrides_json, created_at, updated_at";
+  "phase, action_points_used, dual_phase, overrides_json, " +
+  "conditions_json, attack_overrides_json, created_at, updated_at";

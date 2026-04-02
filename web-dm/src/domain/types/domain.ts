@@ -42,23 +42,24 @@ export interface Player {
   campaignId: Id;
   playerName: string;
   characterName: string;
-  class: string;
-  species: string;
+  ancestry: string;
+  paths: string[];
   level: number;
   hpMax: number;
   hpCurrent: number;
-  ac: number;
-  speed?: number;
-  str?: number;
-  dex?: number;
-  con?: number;
-  int?: number;
-  wis?: number;
-  cha?: number;
+  focusMax: number;
+  focusCurrent: number;
+  investitureMax: number | null;
+  investitureCurrent: number | null;
+  movement: number;
+  defensePhysical: number;
+  defenseCognitive: number;
+  defenseSpiritual: number;
+  deflect: number;
+  injuryCount: number;
   // Runtime fields synced from server
   overrides?: CombatantOverrides;
   conditions?: ConditionInstance[];
-  deathSaves?: DeathSaves;
   color?: string;
   imageUrl?: string | null;
   sharedNotes?: string;
@@ -72,7 +73,7 @@ export type CombatantBaseType = "player" | "monster" | "inpc";
 
 export interface CombatantOverrides {
   tempHp: number;
-  acBonus: number;
+  deflectBonus: number;
   hpMaxBonus: number;
 }
 
@@ -82,10 +83,10 @@ export interface ConditionInstance {
   [k: string]: unknown;
 }
 
-export interface DeathSaves {
-  success: number;
-  fail: number;
-}
+// export interface DeathSaves {
+//   success: number;
+//   fail: number;
+// }
 
 export interface Combatant {
   id: Id;
@@ -112,14 +113,10 @@ export interface Combatant {
   acDetails: string | null;
   attackOverrides: unknown | null;
   conditions: ConditionInstance[];
-  deathSaves?: DeathSaves | null;
   usedReaction?: boolean;
-  /** How many legendary actions have been spent this round. */
-  usedLegendaryActions?: number;
-  /** How many legendary resistance uses have been spent this fight. */
-  usedLegendaryResistances?: number;
-  /** Spell slots spent per level. Keys are spell level ("1"–"9"), values are count of used slots. */
-  usedSpellSlots?: Record<string, number>;
+  phase?: "fast" | "slow" | null;
+  actionPointsUsed?: number;
+  dualPhase?: boolean;
 
   createdAt?: number;
   updatedAt?: number;

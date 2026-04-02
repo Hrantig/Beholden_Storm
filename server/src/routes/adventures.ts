@@ -22,7 +22,7 @@ import {
   AttackOverrideSchema,
   OverridesSchema,
 } from "../lib/schemas.js";
-import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import { DEFAULT_OVERRIDES} from "../lib/defaults.js";
 
 const AdventureCreateBody = z.object({
   name: z.string().trim().optional(),
@@ -236,31 +236,31 @@ export function registerAdventureRoutes(app: Express, ctx: ServerContext) {
 
         for (const [ci, c] of enc.combatants.entries()) {
           const combatant: StoredCombatant = {
-            id: uid(),
-            encounterId: encId,
-            baseType: c.baseType,
-            baseId: c.baseId,
-            name: c.name,
-            label: c.label,
-            initiative: c.initiative,
-            friendly: c.friendly,
-            color: c.color,
-            hpMax: c.hpMax,
-            hpCurrent: c.hpCurrent,
-            hpDetails: c.hpDetails,
-            ac: c.ac,
-            acDetails: c.acDetails,
-            attackOverrides: c.attackOverrides ?? null,
-            conditions: (c.conditions ?? []) as StoredConditionInstance[],
-            overrides: c.overrides,
-            sort: c.sort ?? ci + 1,
-            deathSaves: { ...DEFAULT_DEATH_SAVES },
-            usedReaction: false,
-            usedLegendaryActions: 0,
-            usedSpellSlots: {},
-            createdAt: t,
-            updatedAt: t,
-          };
+          id: uid(),
+          encounterId: encId,
+          baseType: c.baseType,
+          baseId: c.baseId,
+          name: c.name,
+          label: c.label,
+          initiative: c.initiative,
+          friendly: c.friendly,
+          color: c.color,
+          hpMax: c.hpMax,
+          hpCurrent: c.hpCurrent,
+          hpDetails: c.hpDetails,
+          ac: c.ac,
+          acDetails: c.acDetails,
+          attackOverrides: c.attackOverrides ?? null,
+          conditions: (c.conditions ?? []) as StoredConditionInstance[],
+          overrides: c.overrides,
+          sort: c.sort ?? ci + 1,
+          usedReaction: false,
+          phase: null,
+          actionPointsUsed: 0,
+          dualPhase: false,
+          createdAt: t,
+          updatedAt: t,
+        };
           insertCombatant(db, combatant);
         }
       }

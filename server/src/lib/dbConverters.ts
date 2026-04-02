@@ -1,7 +1,7 @@
 // server/src/lib/dbConverters.ts
 // Row → domain object converters, shared across all route files.
 
-import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "./defaults.js";
+import { DEFAULT_OVERRIDES} from "./defaults.js";
 import { absolutizePublicUrl } from "./publicUrl.js";
 import type {
   StoredCampaign,
@@ -126,26 +126,25 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
     userId: (row.user_id as string | null) ?? null,
     playerName: row.player_name as string,
     characterName: row.character_name as string,
-    class: row.class as string,
-    species: row.species as string,
+    ancestry: row.ancestry as string,
+    paths: parseJson(row.paths_json, []),
     level: row.level as number,
     hpMax: row.hp_max as number,
     hpCurrent: row.hp_current as number,
-    ac: row.ac as number,
-    ...(row.speed != null ? { speed: row.speed as number } : {}),
-    ...(row.str != null ? { str: row.str as number } : {}),
-    ...(row.dex != null ? { dex: row.dex as number } : {}),
-    ...(row.con != null ? { con: row.con as number } : {}),
-    ...(row.int != null ? { int: row.int as number } : {}),
-    ...(row.wis != null ? { wis: row.wis as number } : {}),
-    ...(row.cha != null ? { cha: row.cha as number } : {}),
+    focusMax: row.focus_max as number,
+    focusCurrent: row.focus_current as number,
+    investitureMax: row.investiture_max != null ? row.investiture_max as number : null,
+    investitureCurrent: row.investiture_current != null ? row.investiture_current as number : null,
+    movement: row.movement as number,
+    defensePhysical: row.defense_physical as number,
+    defenseCognitive: row.defense_cognitive as number,
+    defenseSpiritual: row.defense_spiritual as number,
+    deflect: row.deflect as number,
+    injuryCount: row.injury_count as number,
     ...(row.color != null ? { color: row.color as string } : {}),
     imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
     overrides: parseJson(row.overrides_json, DEFAULT_OVERRIDES),
     conditions: parseJson(row.conditions_json, []),
-    ...(row.death_saves_json
-      ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
-      : {}),
     sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
@@ -175,8 +174,8 @@ export function rowToUserCharacter(row: Record<string, unknown>): StoredUserChar
     imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
     characterData: normalizeCharacterData(parseJson(row.character_data_json, null)),
     ...(row.death_saves_json
-      ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
-      : {}),
+  ? { deathSaves: parseJson(row.death_saves_json, { success: 0, fail: 0 }) }
+  : {}),
     sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
@@ -267,16 +266,11 @@ export function rowToCombatant(row: Record<string, unknown>): StoredCombatant {
     acDetails: (row.ac_details as string | null) ?? null,
     ...(row.sort != null ? { sort: row.sort as number } : {}),
     usedReaction: Boolean(row.used_reaction),
-    usedLegendaryActions: (row.used_legendary_actions as number) ?? 0,
-    usedLegendaryResistances: (row.used_legendary_resistances as number) ?? 0,
+    phase: (row.phase as "fast" | "slow" | null) ?? null,
+    actionPointsUsed: (row.action_points_used as number) ?? 0,
+    dualPhase: Boolean(row.dual_phase),
     overrides: parseJson(row.overrides_json, DEFAULT_OVERRIDES),
     conditions: parseJson(row.conditions_json, []),
-    ...(row.death_saves_json
-      ? { deathSaves: parseJson(row.death_saves_json, DEFAULT_DEATH_SAVES) }
-      : {}),
-    ...(row.used_spell_slots_json
-      ? { usedSpellSlots: parseJson(row.used_spell_slots_json, {} as Record<string, number>) }
-      : {}),
     attackOverrides: row.attack_overrides_json
       ? parseJson(row.attack_overrides_json, null)
       : null,

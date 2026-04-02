@@ -8,7 +8,7 @@ import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { rowToUserCharacter, USER_CHARACTER_COLS } from "../lib/db.js";
 import { requireAuth } from "../middleware/auth.js";
-import { DEFAULT_OVERRIDES, DEFAULT_DEATH_SAVES } from "../lib/defaults.js";
+import { DEFAULT_OVERRIDES} from "../lib/defaults.js";
 import {
   type Assignment,
   getAssignments,
@@ -446,28 +446,29 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
 
       // Create a players row for this campaign
       const playerId = uid();
-      db.prepare(`
-        INSERT INTO players
-          (id, campaign_id, user_id, player_name, character_name, class, species, level,
-           hp_max, hp_current, ac, speed, str, dex, con, int, wis, cha, color,
-           overrides_json, conditions_json, death_saves_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        playerId, campaignId, userId,
-        char.playerName || "Player",
-        char.name,
-        char.className || "Class",
-        char.species || "Species",
-        char.level,
-        char.hpMax, char.hpCurrent, char.ac, char.speed,
-        char.strScore, char.dexScore, char.conScore,
-        char.intScore, char.wisScore, char.chaScore,
-        char.color,
-        JSON.stringify(DEFAULT_OVERRIDES),
-        JSON.stringify([]),
-        JSON.stringify(DEFAULT_DEATH_SAVES),
-        t, t
-      );
+db.prepare(`
+  INSERT INTO players
+    (id, campaign_id, user_id, player_name, character_name, ancestry, paths_json, level,
+     hp_max, hp_current, focus_max, focus_current, movement,
+     defense_physical, defense_cognitive, defense_spiritual, deflect,
+     color, overrides_json, conditions_json, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`).run(
+  playerId, campaignId, userId,
+  char.playerName || "Player",
+  char.name,
+  "Unknown",
+  JSON.stringify([]),
+  char.level,
+  char.hpMax, char.hpCurrent,
+  0, 0,
+  0,
+  0, 0, 0, 0,
+  char.color,
+  JSON.stringify(DEFAULT_OVERRIDES),
+  JSON.stringify([]),
+  t, t
+);
 
       // Upsert character_campaigns link
       if (existing_link) {

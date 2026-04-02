@@ -6,41 +6,84 @@ import { IconCamera } from "@/icons";
 export type PlayerFormState = {
   playerName: string;
   characterName: string;
-  clazz: string;
-  species: string;
+  ancestry: string;
+  paths: string;
   lvl: string;
-  ac: string;
-  speed: string;
-  pStr: string;
-  pDex: string;
-  pCon: string;
-  pInt: string;
-  pWis: string;
-  pCha: string;
+  movement: string;
+  defensePhysical: string;
+  defenseCognitive: string;
+  defenseSpiritual: string;
+  deflect: string;
   hpMax: string;
   hpCur: string;
+  focusMax: string;
+  focusCur: string;
+  investitureMax: string;
+  investitureCur: string;
+  injuryCount: string;
 };
 
 export type PlayerFormHandlers = {
   setPlayerName: (v: string) => void;
   setCharacterName: (v: string) => void;
-  setClazz: (v: string) => void;
-  setSpecies: (v: string) => void;
+  setAncestry: (v: string) => void;
+  setPaths: (v: string) => void;
   setLvl: (v: string) => void;
-  setAc: (v: string) => void;
-  setSpeed: (v: string) => void;
-  setPStr: (v: string) => void;
-  setPDex: (v: string) => void;
-  setPCon: (v: string) => void;
-  setPInt: (v: string) => void;
-  setPWis: (v: string) => void;
-  setPCha: (v: string) => void;
+  setMovement: (v: string) => void;
+  setDefensePhysical: (v: string) => void;
+  setDefenseCognitive: (v: string) => void;
+  setDefenseSpiritual: (v: string) => void;
+  setDeflect: (v: string) => void;
   setHpMax: (v: string) => void;
   setHpCur: (v: string) => void;
+  setFocusMax: (v: string) => void;
+  setFocusCur: (v: string) => void;
+  setInvestitureMax: (v: string) => void;
+  setInvestitureCur: (v: string) => void;
+  setInjuryCount: (v: string) => void;
 };
 
 function digitsOnly(v: string) {
   return v.replace(/[^0-9]/g, "");
+}
+
+function ResourceRow(props: {
+  label: string;
+  maxValue: string;
+  curValue: string;
+  onMaxChange: (v: string) => void;
+  onCurChange: (v: string) => void;
+  mode: "create" | "edit";
+}) {
+  return (
+    <div>
+      <div style={{ color: theme.colors.muted, marginBottom: 6 }}>{props.label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>Max</div>
+          <Input
+            value={props.maxValue}
+            onChange={(e) => {
+              const v = digitsOnly(e.target.value);
+              props.onMaxChange(v);
+              if (props.mode === "create") props.onCurChange(v);
+            }}
+            inputMode="numeric"
+          />
+        </div>
+        {props.mode === "edit" && (
+          <div>
+            <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>Current</div>
+            <Input
+              value={props.curValue}
+              onChange={(e) => props.onCurChange(digitsOnly(e.target.value))}
+              inputMode="numeric"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function PlayerForm(props: {
@@ -56,6 +99,8 @@ export function PlayerForm(props: {
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
+
+      {/* Photo */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div
           onClick={props.onImageClick}
@@ -89,6 +134,8 @@ export function PlayerForm(props: {
           )}
         </div>
       </div>
+
+      {/* Identity */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
           <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Player name</div>
@@ -102,71 +149,81 @@ export function PlayerForm(props: {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
-          <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Class</div>
-          <Input value={s.clazz} onChange={(e) => h.setClazz(e.target.value)} />
+          <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Ancestry</div>
+          <Input value={s.ancestry} onChange={(e) => h.setAncestry(e.target.value)} />
         </div>
-        <div>
-          <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Species</div>
-          <Input value={s.species} onChange={(e) => h.setSpecies(e.target.value)} />
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
           <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Level</div>
           <Input value={s.lvl} onChange={(e) => h.setLvl(digitsOnly(e.target.value))} inputMode="numeric" />
         </div>
-        <div>
-          <div style={{ color: theme.colors.muted, marginBottom: 6 }}>AC</div>
-          <Input value={s.ac} onChange={(e) => h.setAc(digitsOnly(e.target.value))} inputMode="numeric" />
-        </div>
       </div>
 
       <div>
-        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Speed</div>
-        <Input value={s.speed} onChange={(e) => h.setSpeed(digitsOnly(e.target.value))} placeholder="30" inputMode="numeric" />
+        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Paths <span style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted }}>(comma-separated)</span></div>
+        <Input value={s.paths} onChange={(e) => h.setPaths(e.target.value)} placeholder="e.g. Windrunner, Scholar" />
       </div>
 
+      {/* Movement */}
       <div>
-        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Ability scores</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-          <Score label="STR" value={s.pStr} onChange={h.setPStr} />
-          <Score label="DEX" value={s.pDex} onChange={h.setPDex} />
-          <Score label="CON" value={s.pCon} onChange={h.setPCon} />
-          <Score label="INT" value={s.pInt} onChange={h.setPInt} />
-          <Score label="WIS" value={s.pWis} onChange={h.setPWis} />
-          <Score label="CHA" value={s.pCha} onChange={h.setPCha} />
-        </div>
+        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Movement</div>
+        <Input value={s.movement} onChange={(e) => h.setMovement(digitsOnly(e.target.value))} inputMode="numeric" />
       </div>
 
+      {/* Defenses */}
       <div>
-        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>HP</div>
-        <Input
-          value={s.hpMax}
-          onChange={(e) => {
-            const v = digitsOnly(e.target.value);
-            h.setHpMax(v);
-            if (props.mode === "create") h.setHpCur(v);
-          }}
-          inputMode="numeric"
-        />
-
-        {props.mode === "edit" ? (
-          <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
-            <div style={{ color: theme.colors.muted }}>Current HP</div>
-            <Input value={s.hpCur} onChange={(e) => h.setHpCur(digitsOnly(e.target.value))} inputMode="numeric" />
+        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Defenses</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>Physical</div>
+            <Input value={s.defensePhysical} onChange={(e) => h.setDefensePhysical(digitsOnly(e.target.value))} inputMode="numeric" />
           </div>
-        ) : null}
+          <div>
+            <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>Cognitive</div>
+            <Input value={s.defenseCognitive} onChange={(e) => h.setDefenseCognitive(digitsOnly(e.target.value))} inputMode="numeric" />
+          </div>
+          <div>
+            <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>Spiritual</div>
+            <Input value={s.defenseSpiritual} onChange={(e) => h.setDefenseSpiritual(digitsOnly(e.target.value))} inputMode="numeric" />
+          </div>
+          <div>
+            <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>Deflect</div>
+            <Input value={s.deflect} onChange={(e) => h.setDeflect(digitsOnly(e.target.value))} inputMode="numeric" />
+          </div>
+        </div>
       </div>
-    </div>
-  );
-}
 
-function Score(props: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginBottom: 4 }}>{props.label}</div>
-      <Input value={props.value} onChange={(e) => props.onChange(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" />
+      {/* Resources */}
+      <ResourceRow
+        label="HP"
+        maxValue={s.hpMax}
+        curValue={s.hpCur}
+        onMaxChange={h.setHpMax}
+        onCurChange={h.setHpCur}
+        mode={props.mode}
+      />
+      <ResourceRow
+        label="Focus"
+        maxValue={s.focusMax}
+        curValue={s.focusCur}
+        onMaxChange={h.setFocusMax}
+        onCurChange={h.setFocusCur}
+        mode={props.mode}
+      />
+      <ResourceRow
+        label="Investiture"
+        maxValue={s.investitureMax}
+        curValue={s.investitureCur}
+        onMaxChange={h.setInvestitureMax}
+        onCurChange={h.setInvestitureCur}
+        mode={props.mode}
+      />
+
+      {/* Injury tracking */}
+      <div>
+        <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Active injuries</div>
+        <Input value={s.injuryCount} onChange={(e) => h.setInjuryCount(digitsOnly(e.target.value))} inputMode="numeric" />
+      </div>
+
     </div>
   );
 }
