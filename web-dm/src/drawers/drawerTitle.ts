@@ -31,6 +31,7 @@ export function getDrawerTitle(d: DrawerState): string {
     case "combatantOverrides":
       return "Overrides";
     case "combatantConditions":
+    case "playerConditions":
       return "Conditions";
     case "viewTreasure":
       return d.title;

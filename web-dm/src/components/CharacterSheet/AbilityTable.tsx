@@ -42,7 +42,7 @@ const labelStyle: React.CSSProperties = {
   color: theme.colors.muted,
 };
 
-function AbilityGroup({ keys, abilities, saves }: { keys: AbilityKey[]; abilities: CharacterSheetStats["abilities"]; saves?: CharacterSheetStats["saves"] }) {
+function AbilityGroup({ keys, abilities, saves }: { keys: AbilityKey[]; abilities: Record<AbilityKey, number>; saves?: CharacterSheetStats["saves"] }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ display: "grid", gridTemplateColumns: cols, gap: 6, marginBottom: 6 }}>
@@ -70,7 +70,7 @@ function AbilityGroup({ keys, abilities, saves }: { keys: AbilityKey[]; abilitie
   );
 }
 
-export function AbilityTable({ stats }: { stats: CharacterSheetStats }) {
+export function AbilityTable({ stats }: { stats: CharacterSheetStats & { abilities: Record<AbilityKey, number> } }) {
   const left: AbilityKey[] = ["str", "dex", "con"];
   const right: AbilityKey[] = ["int", "wis", "cha"];
   return (

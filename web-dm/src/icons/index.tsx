@@ -78,7 +78,23 @@ export const IconAttack = make("attack");
 export const IconConditions = make("conditions");
 export const IconPlayer = make("person");
 
-// Condition icons
+// Condition icons — Stormlight
+export const IconAfflicted = make("afflicted");
+export const IconDetermined = make("determined");
+export const IconDisoriented = make("disoriented");
+export const IconEmpowered = make("empowered");
+export const IconEnhanced = make("enhanced");
+export const IconExhausted = make("exhausted");
+export const IconFocused = make("focused");
+export const IconImmobilized = make("immobilized");
+export const IconProne = make("prone");
+export const IconRestrained = make("restrained");
+export const IconSlowed = make("slowed");
+export const IconStunned = make("stunned");
+export const IconSurprised = make("surprised");
+export const IconUnconscious = make("unconscious");
+
+// Condition icons — retained for backwards compatibility / other uses
 export const IconBlinded = make("blinded");
 export const IconCharmed = make("charmed");
 export const IconDeafened = make("deafened");
@@ -92,10 +108,6 @@ export const IconTargeted = make("targeted");
 export const IconParalyzed = make("paralyzed");
 export const IconPetrified = make("petrified");
 export const IconPoisoned = make("poisoned");
-export const IconProne = make("prone");
-export const IconRestrained = make("restrained");
-export const IconStunned = make("stunned");
-export const IconUnconscious = make("unconscious");
 export const IconConcentration = make("concentration");
 export const IconHex = make("hexed");
 
@@ -103,6 +115,8 @@ export const IconHex = make("hexed");
 export const IconSpeed = make("speed");
 export const IconAC = IconShield;
 export const IconHP = IconHeart;
+export const IconFocus = make("focus");
+export const IconMovement = make("movement");
 
 export const IconRest = make("rest");
 export const IconCompendium = make("compendium-alt");

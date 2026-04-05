@@ -1,10 +1,12 @@
 import React from "react";
 import { theme, withAlpha } from "@/theme/theme";
-import { IconPlayer, IconHeart, IconShield } from "@/icons";
-import { PlayerDeathSaves } from "./PlayerDeathSaves";
+import { IconPlayer, IconHeart, IconFocus, IconMovement, IconConditions } from "@/icons";
 import { PlayerConditions } from "./PlayerConditions";
+import { PlayerInjuries } from "./PlayerInjuries";
 import type { RowMenuItem } from "@/ui/RowMenu";
 import { RowMenu } from "@/ui/RowMenu";
+import { IconButton } from "@/ui/IconButton";
+import { useStore } from "@/store";
 
 export type PlayerVM = {
   id: string;
@@ -12,16 +14,17 @@ export type PlayerVM = {
   encounterId?: string;
   playerName?: string;
   characterName: string;
-  class: string;
-  species: string;
+  ancestry: string;
+  paths: string[];
   level: number;
-  ac: number;
   hpMax: number;
   hpCurrent: number;
   tempHp?: number;
-  acBonus?: number;
+  focusCurrent: number;
+  focusMax: number;
+  movement: number;
+  injuryCount?: number;
   conditions?: { key: string; casterId?: string | null }[];
-  deathSaves?: { success: number; fail: number };
   imageUrl?: string | null;
 };
 
@@ -39,6 +42,7 @@ export function PlayerRow(props: {
   onEdit?: () => void;
   variant?: "campaign" | "combatList";
 }) {
+  const { dispatch } = useStore();
   const p = props.p;
   const variant = props.variant ?? "campaign";
   const isCombatList = variant === "combatList";
@@ -47,10 +51,8 @@ export function PlayerRow(props: {
   const cur = Math.max(0, Number(p.hpCurrent) || 0);
   const pct = cur / max;
   const isDead = cur <= 0;
-  const showDeathSaves = isDead && Boolean(p.playerName);
 
   const tempHp = Math.max(0, Number((p as any).tempHp ?? 0) || 0);
-  const acTotal = Number(p.ac ?? 0) + (Number((p as any).acBonus ?? 0) || 0);
 
   const barColor = isDead
     ? theme.colors.red
@@ -70,8 +72,8 @@ export function PlayerRow(props: {
   const showMenu = !hasLegacyActions && Boolean(props.menuItems?.length);
 
   const metaLine = props.subtitle ?? (
-    p.level || p.species || p.class
-      ? <>{p.level ? `Lvl ${p.level} ` : ""}{p.species} {p.class}</>
+    p.level || p.ancestry || p.paths?.length
+      ? <>{p.level ? `Lvl ${p.level} · ` : ""}{p.ancestry}{p.paths?.length ? ` · ${p.paths.join(", ")}` : ""}</>
       : null
   );
 
@@ -118,16 +120,22 @@ export function PlayerRow(props: {
           ) : null}
         </div>
 
-        {/* AC + HP */}
+        {/* Movement · Focus · HP */}
         <div style={{ flex: "0 1 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginLeft: "auto" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <IconShield size={12} style={{ opacity: 0.55, color: theme.colors.muted }} />
+            <IconMovement size={14} style={{ opacity: 0.55, color: theme.colors.muted }} />
             <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
-              {acTotal}
+              {p.movement}ft
             </span>
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <IconHeart size={12} style={{ opacity: 0.55, color: theme.colors.muted }} />
+            <IconFocus size={20} style={{ opacity: 0.55, color: theme.colors.muted }} />
+            <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
+              {p.focusCurrent}/{p.focusMax}
+            </span>
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <IconHeart size={14} style={{ opacity: 0.55, color: theme.colors.muted }} />
             <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
               {cur}/{max}
               {tempHp ? <span style={{ color: theme.colors.accentHighlight, marginLeft: 3, fontSize: "var(--fs-small)" }}>+{tempHp}</span> : null}
@@ -140,6 +148,29 @@ export function PlayerRow(props: {
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }} onClick={(e) => e.stopPropagation()}>
             {hasLegacyActions ? props.actions : null}
             {!hasLegacyActions && props.primaryAction != null ? props.primaryAction : null}
+            <div style={{ position: "relative", display: "inline-flex" }}>
+              <IconButton
+                title="Conditions"
+                variant="ghost"
+                size="sm"
+                onClick={() => dispatch({ type: "openDrawer", drawer: { type: "playerConditions", playerId: p.id } })}
+              >
+                <IconConditions />
+              </IconButton>
+              {(p.conditions?.length ?? 0) > 0 && (
+                <span style={{
+                  position: "absolute", top: -4, right: -4,
+                  minWidth: 14, height: 14, borderRadius: 999,
+                  background: theme.colors.accentPrimary,
+                  color: "#fff",
+                  fontSize: 9, fontWeight: 900, lineHeight: "14px",
+                  textAlign: "center", padding: "0 3px",
+                  pointerEvents: "none",
+                }}>
+                  {p.conditions!.length}
+                </span>
+              )}
+            </div>
             {showMenu ? <RowMenu items={props.menuItems!} /> : null}
           </div>
         )}
@@ -147,34 +178,28 @@ export function PlayerRow(props: {
 
       {/* HP bar — full width, indented to align with name */}
       <div style={{ paddingLeft: 46 }}>
-        {showDeathSaves ? (
-          <PlayerDeathSaves
-            playerId={p.playerId}
-            encounterId={p.encounterId}
-            combatantId={p.id}
-            variant={variant}
-            persisted={p.deathSaves}
-            hpCurrent={cur}
-          />
-        ) : (
-          <div style={{ position: "relative", height: 6, borderRadius: 999, background: withAlpha(theme.colors.shadowColor, 0.4), overflow: "hidden" }}>
+        <div style={{ position: "relative", height: 6, borderRadius: 999, background: withAlpha(theme.colors.shadowColor, 0.4), overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", inset: 0,
+            width: `${Math.max(0, Math.min(1, pct)) * 100}%`,
+            background: barColor, borderRadius: 999,
+            transition: "width 150ms ease",
+          }} />
+          {tempHp > 0 && (
             <div style={{
-              position: "absolute", inset: 0,
-              width: `${Math.max(0, Math.min(1, pct)) * 100}%`,
-              background: barColor, borderRadius: 999,
-              transition: "width 150ms ease",
+              position: "absolute", top: 0, bottom: 0,
+              left: `${Math.min(1, pct) * 100}%`,
+              width: `${Math.min(1 - pct, tempHp / max) * 100}%`,
+              background: theme.colors.accentHighlight,
+              opacity: 0.8, borderRadius: 999,
             }} />
-            {tempHp > 0 && (
-              <div style={{
-                position: "absolute", top: 0, bottom: 0,
-                left: `${Math.min(1, pct) * 100}%`,
-                width: `${Math.min(1 - pct, tempHp / max) * 100}%`,
-                background: theme.colors.accentHighlight,
-                opacity: 0.8, borderRadius: 999,
-              }} />
-            )}
-          </div>
-        )}
+          )}
+        </div>
+      </div>
+
+      {/* Injuries */}
+      <div style={{ paddingLeft: 46 }}>
+        <PlayerInjuries playerId={p.id} injuryCount={p.injuryCount ?? 0} />
       </div>
 
       {/* Conditions */}

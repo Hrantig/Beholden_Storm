@@ -72,7 +72,7 @@ export function CombatantDrawer(props: {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
-            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>AC</div>
+            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Defense (Physical)</div>
             <Input value={ac} onChange={(e) => setAc(e.target.value)} placeholder="10" />
           </div>
           <div>

@@ -7,21 +7,52 @@ import { IconPencil, IconConditions } from "@/icons/index";
 import { CharacterSheetPanel, type CharacterSheetStats } from "@/components/CharacterSheet";
 import type { MonsterDetail } from "@/domain/types/compendium";
 import { MonsterActions } from "@/views/CombatView/components/MonsterActions";
-import { MonsterSpells } from "@/views/CombatView/components/MonsterSpells";
 import { MonsterTraits } from "@/views/CombatView/components/MonsterTraits";
 import type { Player } from "@/domain/types/domain";
 
 import { CombatantConditionsSection } from "@/views/CombatView/panels/CombatantDetailsPanel/components/CombatantConditionsSection";
 import { useCharacterSheetStats } from "@/views/CombatView/panels/CombatantDetailsPanel/hooks/useCharacterSheetStats";
-import { PlayerDeathSaves } from "@/views/CampaignView/components/PlayerDeathSaves";
+
+function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+      <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: theme.colors.muted, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    </div>
+  );
+}
+
+function PlayerStatBlock({ player }: { player: Player }) {
+  return (
+    <div style={{
+      display: "grid", gap: 6,
+      borderRadius: 12,
+      border: `1px solid ${theme.colors.panelBorder}`,
+      background: theme.colors.panelBg,
+      padding: "10px 14px",
+    }}>
+      <StatRow label="HP" value={`${player.hpCurrent} / ${player.hpMax}`} />
+      <StatRow label="Focus" value={`${player.focusCurrent} / ${player.focusMax}`} />
+      {(player.investitureMax ?? 0) > 0 && (
+        <StatRow label="Investiture" value={`${player.investitureCurrent ?? 0} / ${player.investitureMax}`} />
+      )}
+      <StatRow label="Def Physical" value={player.defensePhysical} />
+      <StatRow label="Def Cognitive" value={player.defenseCognitive} />
+      <StatRow label="Def Spiritual" value={player.defenseSpiritual} />
+      <StatRow label="Deflect" value={player.deflect} />
+      <StatRow label="Movement" value={`${player.movement} ft`} />
+      {player.injuryCount > 0 && (
+        <StatRow label="Injuries" value={<span style={{ color: theme.colors.red }}>{player.injuryCount}</span>} />
+      )}
+    </div>
+  );
+}
 
 export type CombatantDetailsCtx = {
   isNarrow: boolean;
   selectedMonster: MonsterDetail | null;
   playerName: string | null;
   player: Player | null;
-  spellNames: string[];
-  spellLevels: Record<string, number | null>;
   roster: Combatant[];
   activeForCaster: Combatant | null;
   currentRound: number;
@@ -30,7 +61,6 @@ export type CombatantDetailsCtx = {
   onUpdate: (patch: Record<string, unknown>) => void;
   onOpenOverrides: () => void;
   onOpenConditions: () => void;
-  onOpenSpell: (name: string) => void;
 };
 
 type Props = {
@@ -94,7 +124,6 @@ export function CombatantDetailsPanel(props: Props) {
   const sheetStats: CharacterSheetStats | null = useCharacterSheetStats({
     combatant: selected,
     selectedMonster: ctx.selectedMonster,
-    player: ctx.player
   });
 
   return (
@@ -145,29 +174,7 @@ export function CombatantDetailsPanel(props: Props) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {sheetStats ? <CharacterSheetPanel stats={sheetStats} /> : null}
-
-          {/* Death saves — only for player combatants at 0 HP */}
-          {isPlayer && (selected.hpCurrent ?? 1) <= 0 ? (
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 12,
-                background: theme.colors.panelBg,
-                border: `1px solid ${theme.colors.panelBorder}`,
-              }}
-            >
-              <div style={{ color: theme.colors.muted, fontSize: "var(--fs-medium)", fontWeight: 900, marginBottom: 10 }}>
-                Death Saves
-              </div>
-              <PlayerDeathSaves
-                encounterId={String(selected.encounterId)}
-                combatantId={String(selected.id)}
-                variant="combatList"
-                persisted={selected.deathSaves ?? undefined}
-                hpCurrent={selected.hpCurrent ?? 0}
-              />
-            </div>
-          ) : null}
+          {isPlayer && ctx.player ? <PlayerStatBlock player={ctx.player} /> : null}
 
           <CombatantConditionsSection
             selected={selected}
@@ -182,31 +189,12 @@ export function CombatantDetailsPanel(props: Props) {
               monster={ctx.selectedMonster}
               attackOverrides={combatant?.attackOverrides as Record<string, AttackOverride> | null | undefined}
               onChangeAttack={ctx.onChangeAttack}
-              usedLegendaryActions={combatant?.usedLegendaryActions ?? 0}
-              onChangeLegendaryUsed={(n) => ctx.onUpdate({ usedLegendaryActions: n })}
-            />
-          ) : null}
-
-          {ctx.selectedMonster ? (
-            <MonsterSpells
-              spellNames={ctx.spellNames}
-              spellLevels={ctx.spellLevels}
-              onOpenSpell={ctx.onOpenSpell}
-              slots={(ctx.selectedMonster as any).slots}
-              usedSpellSlots={combatant?.usedSpellSlots}
-              onChangeSpellSlots={(level, used) =>
-                ctx.onUpdate({
-                  usedSpellSlots: { ...(combatant?.usedSpellSlots ?? {}), [String(level)]: used },
-                })
-              }
             />
           ) : null}
 
           {ctx.selectedMonster ? (
             <MonsterTraits
               monster={ctx.selectedMonster}
-              usedLegendaryResistances={combatant?.usedLegendaryResistances ?? 0}
-              onChangeLegendaryResistancesUsed={(n) => ctx.onUpdate({ usedLegendaryResistances: n })}
             />
           ) : null}
         </div>

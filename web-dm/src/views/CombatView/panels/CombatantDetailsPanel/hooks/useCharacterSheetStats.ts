@@ -1,5 +1,5 @@
 import React from "react";
-import type { Combatant, Player } from "@/domain/types/domain";
+import type { Combatant } from "@/domain/types/domain";
 import type { MonsterDetail } from "@/domain/types/compendium";
 import type { CharacterSheetStats } from "@/components/CharacterSheet";
 import {
@@ -13,63 +13,49 @@ import {
 export function useCharacterSheetStats(args: {
   combatant: Combatant | null;
   selectedMonster: MonsterDetail | null;
-  player: Player | null;
 }) {
-  const { combatant, selectedMonster, player } = args;
+  const { combatant, selectedMonster } = args;
 
   return React.useMemo((): CharacterSheetStats | null => {
     if (!combatant) return null;
-    const overrides = combatant.overrides;
 
-    const acBonus = Number(overrides.acBonus ?? 0) || 0;
+    // Return null for players — player stats are displayed separately in CombatantDetailsPanel.
+    const isMonster = combatant.baseType === "monster" || combatant.baseType === "inpc";
+    if (!isMonster) return null;
+
+    const overrides = combatant.overrides;
     const hpMod = (() => {
-      const v = overrides.hpMaxBonus;
-      const n = Number(v);
+      const n = Number(overrides.hpMaxBonus);
       return Number.isFinite(n) ? n : 0;
     })();
 
     const hpMax = toFinite(Math.max(1, Number(combatant.hpMax ?? 1) + hpMod), 0);
     const hpCur = toFinite(combatant.hpCurrent ?? 0, 0);
     const tempHp = Math.max(0, Number(overrides.tempHp ?? 0) || 0);
-    const ac = Math.max(0, toFinite(combatant.ac ?? 10, 10) + acBonus);
-
-    const isMonster = combatant.baseType === "monster" || combatant.baseType === "inpc";
 
     // Fall back to selectedMonster itself if raw_json is absent —
     // mirrors MonsterStatblock's `m.raw_json ?? m` pattern.
     const detail = (selectedMonster?.raw_json ?? selectedMonster ?? {}) as Record<string, unknown>;
     const rawSpeed = detail["speed"] ?? selectedMonster?.speed;
 
-    const speed = isMonster
-      ? parseSpeedVal(rawSpeed)
-      : (() => { const n = Number(player?.speed); return Number.isFinite(n) && n > 0 ? n : 30; })();
+    const movement = parseSpeedVal(rawSpeed);
+    const speedDisplay = parseSpeedDisplay(rawSpeed);
 
-    const speedDisplay = isMonster
-      ? parseSpeedDisplay(rawSpeed)
-      : `${speed} ft.`;
+    const abilities = {
+      str: Number(selectedMonster?.str ?? detail["str"] ?? 10),
+      dex: Number(selectedMonster?.dex ?? detail["dex"] ?? 10),
+      con: Number(selectedMonster?.con ?? detail["con"] ?? 10),
+      int: Number(selectedMonster?.int ?? detail["int"] ?? 10),
+      wis: Number(selectedMonster?.wis ?? detail["wis"] ?? 10),
+      cha: Number(selectedMonster?.cha ?? detail["cha"] ?? 10),
+    } as const;
 
-    const abilities = isMonster
-      ? {
-          str: Number(selectedMonster?.str ?? detail["str"] ?? 10),
-          dex: Number(selectedMonster?.dex ?? detail["dex"] ?? 10),
-          con: Number(selectedMonster?.con ?? detail["con"] ?? 10),
-          int: Number(selectedMonster?.int ?? detail["int"] ?? 10),
-          wis: Number(selectedMonster?.wis ?? detail["wis"] ?? 10),
-          cha: Number(selectedMonster?.cha ?? detail["cha"] ?? 10),
-        } as const
-      : {
-          str: Number(player?.str ?? 10),
-          dex: Number(player?.dex ?? 10),
-          con: Number(player?.con ?? 10),
-          int: Number(player?.int ?? 10),
-          wis: Number(player?.wis ?? 10),
-          cha: Number(player?.cha ?? 10),
-        } as const;
+    const saves = parseSaves(detail["save"] ?? detail["saves"]);
+    const infoLines = buildMonsterInfoLines(detail);
 
-    const saves = isMonster ? parseSaves(detail["save"] ?? detail["saves"]) : undefined;
-    const infoLines = isMonster ? buildMonsterInfoLines(detail) : [];
+    const acRaw = Math.max(0, toFinite(combatant.ac ?? 10, 10));
 
-    return { ac, hpCur, hpMax, tempHp, speed, speedDisplay, abilities, saves, infoLines };
+    return { ac: acRaw, hpCur, hpMax, tempHp, speed: movement, speedDisplay, abilities, saves, infoLines };
   }, [
     combatant?.id,
     combatant?.hpCurrent,
@@ -77,6 +63,5 @@ export function useCharacterSheetStats(args: {
     combatant?.ac,
     combatant?.overrides,
     selectedMonster?.id,
-    player,
   ]);
 }

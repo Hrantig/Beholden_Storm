@@ -7,14 +7,17 @@ import { AbilityTable } from "@/components/CharacterSheet/AbilityTable";
 export type AbilityKey = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
 export type CharacterSheetStats = {
-  ac: number;
+  // Legacy D&D fields — optional. Used by the compendium monster picker (MonsterStatblock)
+  // and the combat panel monster display. Pending removal/redesign in Phase 3 compendium work.
+  ac?: number;
+  speed?: number | null;
+  speedDisplay?: string;
+  abilities?: Record<AbilityKey, number>;
+  saves?: Partial<Record<AbilityKey, number>>;
+  // Core fields used by all consumers
   hpCur: number;
   hpMax: number;
   tempHp?: number;
-  speed: number | null;
-  speedDisplay?: string;
-  abilities: Record<AbilityKey, number>;
-  saves?: Partial<Record<AbilityKey, number>>;
   infoLines?: Array<{ label: string; value: string }>;
 };
 
@@ -42,49 +45,55 @@ export function CharacterSheetPanel(props: {
   );
   const [infoOpen, setInfoOpen] = React.useState(true);
 
+  const showStatBar = s.ac != null || s.speed != null || s.speedDisplay != null;
+
   return (
     <div style={{ display: "grid", gap: 10 }}>
 
-      {/* ── Stat bar (AC / HP / Speed) ── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          borderRadius: 12,
-          border: `1px solid ${theme.colors.panelBorder}`,
-          background: theme.colors.panelBg,
-          overflow: "hidden",
-        }}
-      >
-        <StatBar icon={<IconAC size={14} />} label="Armor Class" value={Number.isFinite(s.ac) ? s.ac : "—"} />
-        <StatBar
-          icon={<IconHP size={14} />}
-          label="Hit Points"
-          value={
-            <>
-              {hpValue}
-              {tempHp > 0 && (
-                <span style={{ color: theme.colors.accentHighlight, fontSize: "var(--fs-small)", marginLeft: 4 }}>
-                  +{tempHp}t
-                </span>
-              )}
-            </>
-          }
-        />
-        <StatBar icon={<IconSpeed size={14} />} label="Speed" value={speedText} />
-      </div>
+      {/* ── Stat bar (AC / HP / Speed) — legacy D&D display, Phase 3 pending ── */}
+      {showStatBar ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            borderRadius: 12,
+            border: `1px solid ${theme.colors.panelBorder}`,
+            background: theme.colors.panelBg,
+            overflow: "hidden",
+          }}
+        >
+          {s.ac != null && <StatBar icon={<IconAC size={14} />} label="Armor Class" value={Number.isFinite(s.ac) ? s.ac : "—"} />}
+          <StatBar
+            icon={<IconHP size={14} />}
+            label="Hit Points"
+            value={
+              <>
+                {hpValue}
+                {tempHp > 0 && (
+                  <span style={{ color: theme.colors.accentHighlight, fontSize: "var(--fs-small)", marginLeft: 4 }}>
+                    +{tempHp}t
+                  </span>
+                )}
+              </>
+            }
+          />
+          {(s.speed != null || s.speedDisplay) && <StatBar icon={<IconSpeed size={14} />} label="Speed" value={speedText} />}
+        </div>
+      ) : null}
 
-      {/* ── Ability table ── */}
-      <div
-        style={{
-          borderRadius: 12,
-          border: `1px solid ${theme.colors.panelBorder}`,
-          background: theme.colors.panelBg,
-          padding: "8px 12px",
-        }}
-      >
-        <AbilityTable stats={s} />
-      </div>
+      {/* ── Ability table — legacy D&D display, Phase 3 pending ── */}
+      {s.abilities && (
+        <div
+          style={{
+            borderRadius: 12,
+            border: `1px solid ${theme.colors.panelBorder}`,
+            background: theme.colors.panelBg,
+            padding: "8px 12px",
+          }}
+        >
+          <AbilityTable stats={{ ...s, abilities: s.abilities! }} />
+        </div>
+      )}
 
       {/* ── Info lines (collapsible) ── */}
       {info.length > 0 && (

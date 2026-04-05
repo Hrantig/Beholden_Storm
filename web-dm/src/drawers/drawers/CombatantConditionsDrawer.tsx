@@ -6,17 +6,12 @@ import { useStore, type DrawerState } from "@/store";
 import type { DrawerContent } from "@/drawers/types";
 import { CONDITION_DEFS } from "@/domain/conditions";
 import { conditionIconByKey } from "@/icons/conditions";
-import { Select } from "@/ui/Select";
 
-type ConditionsDrawerState = Exclude<Extract<DrawerState, { type: "combatantConditions" }>, null>;
+type ConditionsDrawerState =
+  | Exclude<Extract<DrawerState, { type: "combatantConditions" }>, null>
+  | Exclude<Extract<DrawerState, { type: "playerConditions" }>, null>;
 
-type ConditionInstance = { key: string; casterId?: string | null; expiresAtRound?: number | null };
-
-// Only these conditions require a caster association.
-const NEEDS_CASTER_KEYS = new Set(["hexed", "marked"]);
-function needsCasterForKey(key: string) {
-  return NEEDS_CASTER_KEYS.has(String(key ?? "").trim().toLowerCase());
-}
+type ConditionInstance = { key: string; detail?: string | null; expiresAtRound?: number | null };
 
 /** Cycle the expiry round: null → cr+1 → cr+2 → cr+3 → cr+4 → null */
 function cycleExpiry(current: number | null | undefined, cr: number): number | null {
@@ -31,6 +26,7 @@ export function CombatantConditionsDrawer(props: {
   drawer: ConditionsDrawerState;
   close: () => void;
   refreshEncounter: (eid: string | null) => Promise<void>;
+  refreshCampaign: (cid: string) => Promise<void>;
 }): DrawerContent {
   const { state } = useStore();
   const [conds, setConds] = React.useState<ConditionInstance[]>([]);
@@ -42,36 +38,44 @@ export function CombatantConditionsDrawer(props: {
 
   const currentRound = props.drawer.currentRound ?? 0;
 
-  const combatant = React.useMemo(
-    () => state.combatants.find((x) => x.id === props.drawer.combatantId),
-    [props.drawer.combatantId, state.combatants]
-  );
+  const entity = React.useMemo(() => {
+    const d = props.drawer;
+    if (d.type === "playerConditions") {
+      return state.players.find((x) => x.id === d.playerId) ?? null;
+    }
+    return state.combatants.find((x) => x.id === d.combatantId) ?? null;
+  }, [props.drawer, state.combatants, state.players]);
 
   React.useEffect(() => {
-    if (!combatant) { setConds([]); return; }
-    const raw = Array.isArray(combatant.conditions) ? combatant.conditions : [];
+    if (!entity) { setConds([]); return; }
+    const raw = Array.isArray(entity.conditions) ? entity.conditions : [];
     skipNextCommitRef.current = true;
     setConds(raw.map((x) => ({
       key: String(x.key ?? ""),
-      casterId: x.casterId ?? null,
+      detail: typeof x.detail === "string" ? x.detail : null,
       expiresAtRound: x.expiresAtRound != null ? Number(x.expiresAtRound) : null,
     })));
-  }, [combatant]);
+  }, [entity]);
 
   const commit = React.useCallback(
     async (nextConds: ConditionInstance[]) => {
       const d = props.drawer;
       const next = nextConds.map((c) => ({
         key: c.key,
-        casterId: c.casterId ?? null,
+        detail: c.detail ?? null,
         expiresAtRound: c.expiresAtRound ?? null,
       }));
       try {
-        await api(`/api/encounters/${d.encounterId}/combatants/${d.combatantId}`, jsonInit("PUT", { conditions: next }));
-        await props.refreshEncounter(d.encounterId);
+        if (d.type === "playerConditions") {
+          await api(`/api/players/${d.playerId}`, jsonInit("PUT", { conditions: next }));
+          await props.refreshCampaign(state.selectedCampaignId);
+        } else {
+          await api(`/api/encounters/${d.encounterId}/combatants/${d.combatantId}`, jsonInit("PUT", { conditions: next }));
+          await props.refreshEncounter(d.encounterId);
+        }
       } catch { /* Non-blocking */ }
     },
-    [props.drawer, props.refreshEncounter]
+    [props.drawer, props.refreshEncounter, props.refreshCampaign, state.selectedCampaignId]
   );
 
   // Keep latest-value refs in sync (needed for the unmount flush).
@@ -100,12 +104,10 @@ export function CombatantConditionsDrawer(props: {
     };
   }, []); // intentionally empty — runs only on unmount
 
-  const allowedKeys = React.useMemo(() => {
-    if (props.drawer.role === "active") return new Set<string>(["concentration", "invisible"]);
-    const s = new Set(CONDITION_DEFS.map((c) => c.key));
-    s.delete("concentration");
-    return s;
-  }, [props.drawer.role]);
+  const allowedKeys = React.useMemo(
+    () => new Set(CONDITION_DEFS.map((c) => c.key)),
+    []
+  );
 
   const toggle = React.useCallback((key: string) => {
     setConds((prev) => {
@@ -115,13 +117,15 @@ export function CombatantConditionsDrawer(props: {
     });
   }, []);
 
-  const addCasterCondition = React.useCallback((key: string) => {
-    const defaultCaster = props.drawer.activeIdForCaster ?? null;
-    setConds((prev) => [...prev, { key, casterId: defaultCaster }]);
-  }, [props.drawer.activeIdForCaster]);
-
-  const setCasterForIndex = React.useCallback((idx: number, casterId: string | null) => {
-    setConds((prev) => { const next = [...prev]; next[idx] = { ...next[idx], casterId }; return next; });
+  const addDetailCondition = React.useCallback((key: string) => {
+    const prompt = key === "enhanced"
+      ? "Enter detail (e.g. STR+2)"
+      : key === "exhausted"
+      ? "Enter penalty (e.g. -1)"
+      : "Enter detail";
+    const detail = window.prompt(prompt);
+    if (detail === null) return; // cancelled
+    setConds((prev) => [...prev, { key, detail: detail.trim() || null }]);
   }, []);
 
   const setExpiryForIndex = React.useCallback((idx: number, expiresAtRound: number | null) => {
@@ -155,7 +159,7 @@ export function CombatantConditionsDrawer(props: {
               return (
                 <button
                   key={c.key}
-                  onClick={() => needsCasterForKey(c.key) && !on ? addCasterCondition(c.key) : toggle(c.key)}
+                  onClick={() => c.needsDetail ? addDetailCondition(c.key) : toggle(c.key)}
                   style={{
                     all: "unset",
                     cursor: "pointer",
@@ -194,9 +198,7 @@ export function CombatantConditionsDrawer(props: {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {conds.map((c, idx) => {
                 const def = CONDITION_DEFS.find((x) => x.key === c.key);
-                const needsCaster = needsCasterForKey(c.key);
                 const CondIcon = conditionIconByKey[c.key];
-                const caster = c.casterId ? state.combatants.find((x) => x.id === c.casterId) : undefined;
 
                 const hasTimer = c.expiresAtRound != null;
                 const isExpired = hasTimer && c.expiresAtRound! <= currentRound;
@@ -226,12 +228,10 @@ export function CombatantConditionsDrawer(props: {
                       fontWeight: 800,
                     }}>
                       {CondIcon ? <CondIcon size={15} /> : null}
-                      <span>{def?.name ?? c.key}</span>
-                      {needsCaster && caster && (
-                        <span style={{ color: theme.colors.muted, fontWeight: 600, fontSize: "var(--fs-tiny)" }}>
-                          · {caster.label ?? "Caster"}
-                        </span>
-                      )}
+                      <span>
+                        {def?.name ?? c.key}
+                        {c.detail ? <span style={{ fontWeight: 600, color: theme.colors.muted }}> [{c.detail}]</span> : null}
+                      </span>
 
                       {/* Timer cycle button */}
                       <button
@@ -290,20 +290,6 @@ export function CombatantConditionsDrawer(props: {
                         ✕
                       </button>
                     </div>
-
-                    {/* Caster selector — compact, only shown when needed */}
-                    {needsCaster && (
-                      <Select
-                        value={c.casterId ?? ""}
-                        onChange={(e) => setCasterForIndex(idx, (e.target as HTMLSelectElement).value || null)}
-                        style={{ fontSize: "var(--fs-tiny)", padding: "2px 6px", width: "100%", minWidth: 120 }}
-                      >
-                        <option value="">— caster —</option>
-                        {state.combatants.map((r) => (
-                          <option key={r.id} value={r.id}>{String(r.label || "Combatant")}</option>
-                        ))}
-                      </Select>
-                    )}
                   </div>
                 );
               })}

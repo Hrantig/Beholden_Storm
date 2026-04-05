@@ -42,7 +42,6 @@ export function useCombatantDetailsModel(args: {
   const sheetStats = useCharacterSheetStats({
     combatant: selected,
     selectedMonster: ctx.selectedMonster,
-    player: ctx.player,
   });
 
   const conditions = useCombatantConditions({

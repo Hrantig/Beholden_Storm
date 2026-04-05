@@ -116,7 +116,20 @@ export function getDrawerRegistration(
           CombatantConditionsDrawer({
             drawer: drawer,
             close,
-            refreshEncounter: props.refreshEncounter
+            refreshEncounter: props.refreshEncounter,
+            refreshCampaign: props.refreshCampaign
+          })
+      };
+
+    case "playerConditions":
+      return {
+        key: drawer.type + drawer.playerId,
+        getContent: () =>
+          CombatantConditionsDrawer({
+            drawer: drawer,
+            close,
+            refreshEncounter: props.refreshEncounter,
+            refreshCampaign: props.refreshCampaign
           })
       };
 

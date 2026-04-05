@@ -18,16 +18,15 @@ export function PlayersPanel(props: {
 }) {
   const players = React.useMemo(() => {
     return [...props.players].sort((a, b) => a.characterName.localeCompare(b.characterName)).map((p) => {
-      const acBonus = Number(p.overrides?.acBonus ?? 0) || 0;
       const hpMod = (() => {
-        const n = Number(p.overrides?.hpMaxBonus ?? 0);
+      const n = Number(p.overrides?.hpMaxBonus ?? 0);
         return Number.isFinite(n) ? n : 0;
       })();
+      const deflectBonus = Number(p.overrides?.deflectBonus ?? 0) || 0;
       return {
         ...p,
         playerId: p.id,
-        ac: Math.max(0, p.ac + acBonus),
-        acBonus: 0,
+        deflect: Math.max(0, p.deflect + deflectBonus),
         hpMax: Math.max(1, p.hpMax + hpMod),
         tempHp: Math.max(0, Number(p.overrides?.tempHp ?? 0) || 0),
         conditions: p.conditions ?? [],

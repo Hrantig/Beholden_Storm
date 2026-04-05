@@ -21,7 +21,7 @@ export function CombatantOverridesDrawer(props: {
   const [initiative, setInitiative] = React.useState("");
   const [color, setColor] = React.useState("");
   const [friendly, setFriendly] = React.useState(false);
-  const [acBonus, setAcBonus] = React.useState("0");
+  const [deflectBonus, setDeflectBonus] = React.useState("0");
   const [tempHp, setTempHp] = React.useState("0");
   const [hpMaxBonus, setHpMaxBonus] = React.useState("0");
 
@@ -36,7 +36,7 @@ if (!combatant) return;
   setColor(String(combatant.color ?? ""));
   setFriendly(Boolean(combatant.friendly));
   const o = combatant.overrides;
-  setAcBonus(String(o.acBonus ?? 0));
+  setDeflectBonus(String(o.deflectBonus ?? 0));
   setTempHp(String(o.tempHp ?? 0));
   setHpMaxBonus(String(o.hpMaxBonus ?? 0));
   }, [combatant]);
@@ -47,7 +47,7 @@ if (!combatant) return;
     const initVal = initiative.trim() === "" ? null : Number(initiative);
    const nextOverrides = {
     ...combatant.overrides,
-      acBonus: Number(acBonus) || 0,
+      deflectBonus: Number(deflectBonus) || 0,
       tempHp: Number(tempHp) || 0,
       hpMaxBonus: Number(hpMaxBonus) || 0
     };
@@ -62,7 +62,7 @@ if (!combatant) return;
     );
     await props.refreshEncounter(d.encounterId);
     props.close();
-  }, [acBonus, color, combatant, friendly, hpMaxBonus, initiative, props, tempHp]);
+  }, [deflectBonus, color, combatant, friendly, hpMaxBonus, initiative, props, tempHp]);
 
   const showMonsterFields = combatant?.baseType === "monster";
 
@@ -96,8 +96,8 @@ if (!combatant) return;
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
-            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>AC bonus</div>
-            <Input value={acBonus} onChange={(e) => setAcBonus(digitsOrEmpty(e.target.value))} placeholder="0" inputMode="numeric" />
+            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Deflect bonus</div>
+            <Input value={deflectBonus} onChange={(e) => setDeflectBonus(digitsOrEmpty(e.target.value))} placeholder="0" inputMode="numeric" />
           </div>
           <div>
             <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Temp HP</div>

@@ -1,4 +1,9 @@
-export type ConditionDef = { key: string; name: string; needsCaster?: boolean };
+export type ConditionDef = {
+  key: string;
+  name: string;
+  stackable?: boolean;
+  needsDetail?: boolean;
+};
 
 // Stored on combatants as `conditions?: ConditionInstance[]`.
 export type ConditionInstance = {
@@ -9,24 +14,20 @@ export type ConditionInstance = {
 };
 
 export const CONDITION_DEFS: ConditionDef[] = [
-  { key: "blinded", name: "Blinded" },
-  { key: "charmed", name: "Charmed" },
-  { key: "deafened", name: "Deafened" },
-  { key: "frightened", name: "Frightened" },
-  { key: "grappled", name: "Grappled" },
-  { key: "incapacitated", name: "Incapacitated" },
-  { key: "invisible", name: "Invisible" },
-  { key: "paralyzed", name: "Paralyzed" },
-  { key: "petrified", name: "Petrified" },
-  { key: "poisoned", name: "Poisoned" },
-  { key: "prone", name: "Prone" },
-  { key: "restrained", name: "Restrained" },
-  { key: "stunned", name: "Stunned" },
+  { key: "afflicted",   name: "Afflicted" },
+  { key: "determined",  name: "Determined" },
+  { key: "disoriented", name: "Disoriented" },
+  { key: "empowered",   name: "Empowered" },
+  { key: "enhanced",    name: "Enhanced",  stackable: true, needsDetail: true },
+  { key: "exhausted",   name: "Exhausted", stackable: true, needsDetail: true },
+  { key: "focused",     name: "Focused" },
+  { key: "immobilized", name: "Immobilized" },
+  { key: "prone",       name: "Prone" },
+  { key: "restrained",  name: "Restrained" },
+  { key: "slowed",      name: "Slowed" },
+  { key: "stunned",     name: "Stunned" },
+  { key: "surprised",   name: "Surprised" },
   { key: "unconscious", name: "Unconscious" },
-  { key: "concentration", name: "Concentration" },
-  { key: "disadvantage", name: "Disadvantage" },
-  { key: "hexed", name: "Hexed", needsCaster: true },
-  { key: "marked", name: "Marked", needsCaster: true },
 ];
 
 export function conditionLabel(key: string): string {

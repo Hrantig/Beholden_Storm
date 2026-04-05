@@ -187,6 +187,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     const deflect = p.deflect ?? existing.deflect;
     const conditions = p.conditions ?? existing.conditions ?? [];
     const overrides = p.overrides ?? existing.overrides ?? DEFAULT_OVERRIDES;
+    const injuryCount = p.injuryCount ?? existing.injuryCount ?? 0;
 
     db.prepare(`
       UPDATE players SET
@@ -194,13 +195,14 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
         hp_max=?, hp_current=?, focus_max=?, focus_current=?,
         investiture_max=?, investiture_current=?,
         movement=?, defense_physical=?, defense_cognitive=?, defense_spiritual=?, deflect=?,
-        overrides_json=?, conditions_json=?, updated_at=?
+        injury_count=?, overrides_json=?, conditions_json=?, updated_at=?
       WHERE id=?
     `).run(
       playerName, characterName, ancestry, JSON.stringify(paths), level,
       hpMax, hpCurrent, focusMax, focusCurrent,
       investitureMax, investitureCurrent,
       movement, defensePhysical, defenseCognitive, defenseSpiritual, deflect,
+      injuryCount,
       JSON.stringify(overrides),
       JSON.stringify(conditions),
       t,
