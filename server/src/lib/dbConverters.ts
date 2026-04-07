@@ -16,6 +16,7 @@ import type {
   StoredCombatantBaseType,
   StoredCharacter,
   StoredUserCharacter,
+  StoredAdversary
 } from "../server/userData.js";
 
 export function parseJson<T>(s: unknown, fallback: T): T {
@@ -196,6 +197,31 @@ export function rowToINpc(row: Record<string, unknown>): StoredINpc {
     ac: row.ac as number,
     acDetails: (row.ac_details as string | null) ?? null,
     ...(row.sort != null ? { sort: row.sort as number } : {}),
+    createdAt: row.created_at as number,
+    updatedAt: row.updated_at as number,
+  };
+}
+
+export function rowToAdversary(row: Record<string, unknown>): StoredAdversary {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    tier: (row.tier as number) ?? 0,
+    adversaryType: (row.adversary_type as string) ?? "",
+    size: (row.size as string) ?? "",
+    hpRangeMin: (row.hp_range_min as number) ?? 0,
+    hpRangeMax: (row.hp_range_max as number) ?? 0,
+    focusMax: (row.focus_max as number) ?? 0,
+    investitureMax: (row.investiture_max as number) ?? 0,
+    defensePhysical: (row.defense_physical as number) ?? 0,
+    defenseCognitive: (row.defense_cognitive as number) ?? 0,
+    defenseSpiritual: (row.defense_spiritual as number) ?? 0,
+    deflect: (row.deflect as number) ?? 0,
+    movement: (row.movement as number) ?? 0,
+    dualPhase: Boolean(row.dual_phase),
+    features: parseJson(row.features_json, null),
+    actions: parseJson(row.actions_json, []),
+    additionalFeatures: parseJson(row.additional_features_json, null),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };

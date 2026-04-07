@@ -341,6 +341,35 @@ CREATE TABLE IF NOT EXISTS party_inventory (
   updated_at INTEGER NOT NULL
 );
 
+-- compendium_adversaries must stay in sync with:
+-- server/src/lib/dbColumns.ts (ADVERSARY_COLS)
+-- server/src/lib/dbConverters.ts (rowToAdversary)
+-- server/src/server/userData.ts (StoredAdversary)
+-- web-dm/src/domain/types/domain.ts (Adversary)
+
+CREATE TABLE IF NOT EXISTS compendium_adversaries (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  tier INTEGER NOT NULL DEFAULT 0,
+  adversary_type TEXT NOT NULL DEFAULT '',
+  size TEXT NOT NULL DEFAULT '',
+  hp_range_min INTEGER NOT NULL DEFAULT 0,
+  hp_range_max INTEGER NOT NULL DEFAULT 0,
+  focus_max INTEGER NOT NULL DEFAULT 0,
+  investiture_max INTEGER NOT NULL DEFAULT 0,
+  defense_physical INTEGER NOT NULL DEFAULT 0,
+  defense_cognitive INTEGER NOT NULL DEFAULT 0,
+  defense_spiritual INTEGER NOT NULL DEFAULT 0,
+  deflect INTEGER NOT NULL DEFAULT 0,
+  movement INTEGER NOT NULL DEFAULT 0,
+  dual_phase INTEGER NOT NULL DEFAULT 0,
+  features_json TEXT,
+  actions_json TEXT NOT NULL DEFAULT '[]',
+  additional_features_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_adventures_campaign   ON adventures(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_encounters_adventure  ON encounters(adventure_id);
 CREATE INDEX IF NOT EXISTS idx_encounters_campaign   ON encounters(campaign_id);

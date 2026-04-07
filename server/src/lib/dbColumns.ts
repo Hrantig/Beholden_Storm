@@ -58,3 +58,15 @@ export const COMBATANT_COLS =
   "color, hp_current, hp_max, hp_details, ac, ac_details, sort, used_reaction, " +
   "phase, action_points_used, dual_phase, overrides_json, " +
   "conditions_json, attack_overrides_json, created_at, updated_at";
+
+// ADVERSARY_COLS must stay in sync with:
+//   - server/src/lib/db.ts (CREATE TABLE compendium_adversaries)
+//   - server/src/lib/dbConverters.ts (rowToAdversary)
+//   - server/src/server/userData.ts (StoredAdversary)
+//   - web-dm/src/domain/types/domain.ts (Adversary)
+export const ADVERSARY_COLS =
+  "id, name, tier, adversary_type, size, " +
+  "hp_range_min, hp_range_max, focus_max, investiture_max, " +
+  "defense_physical, defense_cognitive, defense_spiritual, deflect, movement, " +
+  "dual_phase, features_json, actions_json, additional_features_json, " +
+  "created_at, updated_at";

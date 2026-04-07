@@ -188,3 +188,42 @@ export interface AddMonsterOptions {
   /** Optional attack overrides to apply */
   attackOverrides?: Record<string, AttackOverride>;
 }
+
+export interface Adversary {
+  id: Id;
+  name: string;
+  tier: number;
+  adversaryType: string;
+  size: string;
+  hpRangeMin: number; // lower bound of HP range for encounter instance creation
+  hpRangeMax: number; // upper bound of HP range for encounter instance creation
+  focusMax: number;
+  investitureMax: number;
+  defensePhysical: number;
+  defenseCognitive: number;
+  defenseSpiritual: number;
+  deflect: number;
+  movement: number;
+  dualPhase: boolean;
+  features: AdversaryFeature[] | null;
+  actions: AdversaryAction[];
+  additionalFeatures: AdversaryAdditionalFeature[] | null;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface AdversaryFeature {
+  name: string;
+  description: string;
+}
+
+export interface AdversaryAction {
+  name: string;
+  cost: number;
+  description: string;
+}
+
+export interface AdversaryAdditionalFeature {
+  name: string;
+  description: string;
+}

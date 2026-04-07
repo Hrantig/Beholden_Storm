@@ -40,6 +40,7 @@ This is a **DM tool**, not a character sheet or rules engine. The guiding princi
 | `defenseCognitive` | number | manually entered by DM |
 | `defenseSpiritual` | number | manually entered by DM |
 | `deflect` | number | manually entered — derived from equipped gear |
+| `injuryCount` | number | simple counter, default 0, incremented/decremented manually |
 
 > **Note:** The six core attributes (Strength, Agility, Intellect, Willpower, Awareness, Presence) are intentionally excluded from the DM model. Defense scores are entered directly — attribute math belongs on the player's character sheet.
 
@@ -47,13 +48,13 @@ This is a **DM tool**, not a character sheet or rules engine. The guiding princi
 
 ## Combatant Overrides
 
-The override system from the original app is retained and extended. Overrides are temporary values applied during combat that sit on top of the base stat without permanently changing it.
+Overrides are temporary values applied during combat that sit on top of the base stat without permanently changing it.
 
 | Override | Type | Notes |
 |---|---|---|
 | `tempHp` | number | temporary HP on top of current HP pool |
 | `hpMaxBonus` | number | temporary bonus to max HP |
-| `deflectBonus` | number | temporary deflect value not tied to equipped armor or shield — replaces D&D's `acBonus` |
+| `deflectBonus` | number | temporary deflect value not tied to equipped armor or shield |
 
 ---
 
@@ -82,7 +83,7 @@ Each round is divided into **four phases**, executed in this fixed order:
 | Fast | 2 |
 | Slow | 3 |
 
-Individual actions cost 1 or more action points. The app does not enforce action costs — this is adjudicated at the table.
+Individual actions cost 0, 1, 2, or 3 action points. The app does not enforce action costs — this is adjudicated at the table.
 
 ### Dual-Phase Adversaries (Boss feature)
 
@@ -123,8 +124,13 @@ All conditions are applied and removed **manually by the DM**. The app tracks st
 
 ### Triggers
 - **Primary:** PC drops to 0 HP and becomes Unconscious — injury roll dialog appears automatically
-- **Secondary:** DM or PC manually triggers via an **Injury button** on any combatant at any time (for injuries caused by other means)
+- **Secondary:** DM manually triggers via an **Injury button** on any combatant at any time (for injuries caused by other means)
 - **Narrative override:** Any injury can be directly overwritten with a freeform entry when the injury is given for narrative/story reasons rather than mechanical ones
+
+### Injury Count Tracking
+A simple `injuryCount` counter is stored on the Player record, defaulting to 0. The DM increments and decrements it manually as injuries are applied or healed. This value is used as a reference when making subsequent injury rolls at the table. No automation — the counter is purely informational.
+
+> **Future:** When the player-side app is built, players will be able to manage this counter themselves via a dedicated route. The data model does not need to change for this.
 
 ### Injury Roll Dialog
 When triggered (automatically or manually), a dialog guides the DM through the process:
@@ -138,10 +144,6 @@ When triggered (automatically or manually), a dialog guides the DM through the p
 - Apply injury effects without DM confirmation
 - Track injury severity as a separate persistent field beyond the resulting condition
 
-### Injury count tracking
-A simple `injuryCount` counter is stored on the Player record, defaulting to 0. The DM increments and decrements it manually as injuries are applied or healed. This value is used as a reference when making subsequent injury rolls at the table. No automation — the counter is purely informational.
-
-> **Future:** When the player-side app is built, players will be able to manage this counter themselves via a dedicated route. The data model does not need to change for this.
 ---
 
 ## Adversary / NPC Compendium Entry
@@ -150,47 +152,75 @@ A simple `injuryCount` counter is stored on the Player record, defaulting to 0. 
 
 | Field | Type | Notes |
 |---|---|---|
+| `id` | string | unique identifier |
 | `name` | string | |
-| `hpMax` | number | |
-| `focusMax` | number | most adversaries have this — hide if 0 or null |
-| `investitureMax` | number \| null | hide if 0 or null |
-| `defensePhysical` | number | |
-| `defenseCognitive` | number | |
-| `defenseSpiritual` | number | |
-| `deflect` | number | |
-| `movement` | number | |
-| `dualPhase` | boolean | Boss feature — triggers dual-slot creation in encounters |
-| `features` | string | freeform text block — DM reads and adjudicates |
-| `actions` | Action[] | see below |
-| `opportunities` | string | freeform text — displayed in compendium entry |
-| `complications` | string | freeform text — displayed in compendium entry |
+| `tier` | number | adversary tier extracted from stat block (e.g. 1, 2, 3) — used for filtering |
+| `adversaryType` | string | e.g. "Minion", "Elite", "Boss" — used for filtering. Named `adversaryType` to avoid SQL/ORM reserved word conflicts |
+| `size` | string | size and creature type bundled (e.g. "Medium Humanoid") — used for filtering |
+| `hpMax` | number | upper end of the HP range — default 0 |
+| `hpMin` | number | lower end of the HP range — default 0. DM selects the appropriate value when creating a combat instance |
+| `focusMax` | number | default 0 |
+| `investitureMax` | number | default 0 — hide in UI if 0 |
+| `defensePhysical` | number | default 0 |
+| `defenseCognitive` | number | default 0 |
+| `defenseSpiritual` | number | default 0 |
+| `deflect` | number | default 0 — never inferred from illustrations, only from stat block text |
+| `movement` | number | default 0 |
+| `dualPhase` | boolean | set to true only when Boss feature explicitly states the adversary acts in both Fast and Slow NPC phases — never inferred from `adversaryType` alone |
+| `features` | AdversaryFeature[] \| null | list of named passive features, null if absent |
+| `actions` | AdversaryAction[] | list of actions, always present |
+| `additionalFeatures` | AdversaryAdditionalFeature[] \| null | opportunities, complications, story-gated actions, and other rare special features — null if absent |
 
-### Action entry
+### AdversaryFeature
+```json
+{ "name": "Feature Name", "description": "Feature description text." }
+```
 
-| Field | Type | Notes |
+### AdversaryAction
+
+```json
+{ "name": "Strike", "cost": 1, "actionType": "action", "description": "The adversary makes a melee attack." }
+```
+
+**`cost`** is the action point cost as an integer derived from the action symbol in the source:
+
+| Symbol | Meaning | Cost |
 |---|---|---|
-| `name` | string | |
-| `cost` | number | action point cost (1, 2 or 3) |
-| `description` | string | DM reads and adjudicates — no mechanical automation |
+| ▶ | Standard action | 1 |
+| ▶▶ | Two-action | 2 |
+| ▶▶▶ | Three-action | 3 |
+| ▷ | Free action | 0 |
+| ↺ | Reaction | 0 |
+
+**`actionType`** is either `"action"` or `"reaction"`. Reactions are marked with ↺ in the source. All other action types (including free actions) use `"action"`.
+
+### AdversaryAdditionalFeature
+```json
+{ "name": "Opportunity", "description": "When the adversary misses..." }
+```
+
+Used for:
+- **Opportunities** — name: `"Opportunity"`, one per adversary maximum
+- **Complications** — name: `"Complication"`, one per adversary maximum
+- **Story-gated or conditional actions** — actions only available under specific narrative conditions (e.g. swearing an Ideal). Full context and mechanical details preserved in the description. Named descriptively (e.g. `"Third Ideal: Action Name"`)
+- **Any other special situational features** not captured by features or actions
 
 ---
 
 ## Compendium Categories
 
-### Adversaries
-Full structured stat blocks. Primary encounter-use section.
+### Adversaries (Phase 3 — in progress)
+Full structured stat blocks as defined above. Primary encounter-use section. Built first.
 
-### Talents
-
+### Talents (Phase 3 — deferred)
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | |
 | `path` | string | which path this talent belongs to |
 | `description` | string | full reference text |
-| `tags` | string[] | for filtering (type, tier, prerequisites etc.) |
+| `tags` | string[] | for filtering |
 
-### Surges
-
+### Surges (Phase 3 — deferred)
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | |
@@ -198,17 +228,16 @@ Full structured stat blocks. Primary encounter-use section.
 | `description` | string | full reference text |
 | `tags` | string[] | for filtering |
 
-### Equipment
-
+### Equipment (Phase 3 — deferred)
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | |
 | `type` | string | weapon, armor, shield, other |
-| `deflectValue` | number \| null | for armor/shields — informs PC/NPC Deflect field |
+| `deflectValue` | number \| null | for armor/shields |
 | `description` | string | |
 | `tags` | string[] | |
 
-### Rules Reference
+### Rules Reference (Phase 3 — deferred)
 Static content sections — not database entries:
 - Basic actions (name + action point cost + description)
 - Conditions (full list with effect descriptions)
@@ -217,25 +246,60 @@ Static content sections — not database entries:
 
 ---
 
+## Database Schema — Key Tables
+
+### players
+```sql
+id, campaign_id, user_id, player_name, character_name, ancestry, paths_json,
+level, hp_max, hp_current, focus_max, focus_current, investiture_max, 
+investiture_current, movement, defense_physical, defense_cognitive, 
+defense_spiritual, deflect, injury_count, color, image_url, overrides_json,
+conditions_json, shared_notes, created_at, updated_at
+```
+
+### combatants
+```sql
+id, encounter_id, base_type, base_id, name, label, initiative, friendly,
+color, hp_current, hp_max, hp_details, ac, ac_details, sort, used_reaction,
+phase, action_points_used, dual_phase, overrides_json, conditions_json,
+attack_overrides_json, created_at, updated_at
+```
+
+### compendium_adversaries
+```sql
+id, name, tier, adversary_type, size, hp_max, hp_min, focus_max,
+investiture_max, defense_physical, defense_cognitive, defense_spiritual,
+deflect, movement, dual_phase, features_json, actions_json,
+additional_features_json, created_at, updated_at
+```
+
+---
+
 ## Development Phases
 
-### Phase 1 — Data model (do yourself, guided)
-1. Define TypeScript types in `web-dm/src/domain/types/domain.ts`
-2. Update database schema in `server/src/lib/db.ts`
-3. Update API routes to handle new fields
+### Phase 1 — Data model ✅ Complete
+- TypeScript types updated
+- Database schema updated
+- All routes, converters, schemas updated
+- Build clean, server running
 
-### Phase 2 — UI simplification (introduce Claude Code here)
-- Remove D&D-specific UI elements
-- Build Stormlight-specific interfaces
-- Implement four-phase combat tracker with Fast/Slow declaration dialog
-- Implement dual-phase combatant slots
-- Implement injury roll dialog
-- Implement deflect bonus override
+### Phase 2 — UI (in progress)
+- ✅ Player create/edit form
+- ✅ Player row display in Campaign view
+- ✅ Conditions system — Stormlight list, stackable conditions, player conditions from Campaign view
+- ✅ Player combat panel — Stormlight stats display
+- ✅ Overrides panel — deflectBonus replacing acBonus
+- ⬜ Four-phase combat tracker
+- ⬜ Injury roll dialog
+- ⬜ General D&D cleanup (remaining)
 
-### Phase 3 — Compendium
-- Build compendium data entry tools
-- Populate adversaries, talents, surges, equipment
-- Build rules reference sections including injury tables
+### Phase 3 — Compendium (in progress)
+- ✅ Adversary database table and API routes
+- ⬜ Adversary import tool
+- ⬜ Adversary browser UI
+- ⬜ Encounter integration (add adversary to encounter)
+- ⬜ Talents, Surges, Equipment (deferred)
+- ⬜ Rules Reference (deferred)
 
 ---
 
@@ -245,4 +309,4 @@ Static content sections — not database entries:
 - Attribute scores on DM side (if player app is built out)
 - Action point cost enforcement
 - Talent/Surge mechanical automation (add if repetition proves it worthwhile)
-
+- Player-side app (largely untouched, still D&D)

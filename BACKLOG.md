@@ -90,6 +90,13 @@
 - **Adversary stat block builder** — form for entering adversary data matching the 
   schema defined in DESIGN.md.
 
+- **HP range on encounter add** — adversary stat blocks give HP as a base value or 
+  range (e.g. 8–12). The compendium schema needs updating to store both `hpMin` and 
+  `hpMax`. When adding an adversary to an encounter, if hpMin < hpMax show a picker 
+  letting the DM choose the actual HP for that instance. If equal, use automatically. 
+  Do this schema change BEFORE building the encounter add UI. Hold off until the 
+  compendium data structure is fully reviewed after initial adversary entry pass.
+
 - **Injury tables in Rules Reference** — gravity table and effect table, referenced 
   by the injury roll dialog.
 
