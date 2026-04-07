@@ -1,15 +1,13 @@
 import React from "react";
 import { theme, withAlpha } from "@/theme/theme";
-import { IconCompendiumAlt, IconSpells, IconNotes, IconMonster, IconChest } from "@/icons";
+import { IconCompendiumAlt, IconNotes, IconMonster } from "@/icons";
 import type { CompendiumSection } from "@/views/CompendiumView/CompendiumView";
 import { useAuth } from "@/contexts/AuthContext";
 
 const NAV_ITEMS: { section: CompendiumSection; label: string; Icon: React.FC<{ size?: number }>; adminOnly?: boolean }[] = [
-  { section: "compendium", label: "Compendium",    Icon: IconCompendiumAlt, adminOnly: true },
-  { section: "items",      label: "Items",          Icon: IconChest },
-  { section: "monsters",   label: "Monsters",       Icon: IconMonster },
-  { section: "rules",      label: "Rules Reference",Icon: IconNotes },
-  { section: "spells",     label: "Spells",         Icon: IconSpells },
+  { section: "adversaries", label: "Adversaries",      Icon: IconMonster },
+  { section: "rules",       label: "Rules Reference",  Icon: IconNotes },
+  { section: "admin",       label: "Compendium",       Icon: IconCompendiumAlt, adminOnly: true },
 ];
 
 export function CompendiumNavMenu(props: {

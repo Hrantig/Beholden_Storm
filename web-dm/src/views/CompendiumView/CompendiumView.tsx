@@ -3,22 +3,18 @@ import { CompendiumLeftColumn } from "@/views/CompendiumView/components/Compendi
 import { CompendiumCenterColumn } from "@/views/CompendiumView/components/CompendiumCenterColumn";
 import { CompendiumRightColumn } from "@/views/CompendiumView/components/CompendiumRightColumn";
 
-export type CompendiumSection = "compendium" | "spells" | "rules" | "monsters" | "items";
+export type CompendiumSection = "adversaries" | "rules" | "admin";
 
 export function CompendiumView() {
-  const [activeSection, setActiveSection] = React.useState<CompendiumSection>("monsters");
-  const [selectedSpellId, setSelectedSpellId] = React.useState<string | null>(null);
-  const [selectedMonsterId, setSelectedMonsterId] = React.useState<string | null>(null);
-  const [selectedItemId, setSelectedItemId] = React.useState<string | null>(null);
+  const [activeSection, setActiveSection] = React.useState<CompendiumSection>("adversaries");
+  const [selectedAdversaryId, setSelectedAdversaryId] = React.useState<string | null>(null);
 
   const handleSetSection = React.useCallback((s: CompendiumSection) => {
     setActiveSection(s);
-    setSelectedSpellId(null);
-    setSelectedMonsterId(null);
-    setSelectedItemId(null);
+    setSelectedAdversaryId(null);
   }, []);
 
-  const hasRightColumn = activeSection !== "rules" && activeSection !== "compendium";
+  const hasRightColumn = activeSection === "adversaries";
 
   return (
     <div style={{ height: "100%", padding: 12, boxSizing: "border-box", overflow: "hidden" }}>
@@ -26,7 +22,7 @@ export function CompendiumView() {
         style={{
           height: "100%",
           display: "grid",
-          gridTemplateColumns: hasRightColumn ? "200px 1fr 420px" : "200px 1fr",
+          gridTemplateColumns: hasRightColumn ? "15% 35% 1fr" : "15% 1fr",
           gridTemplateRows: "1fr",
           gap: 14,
           alignItems: "stretch",
@@ -40,19 +36,13 @@ export function CompendiumView() {
         />
         <CompendiumCenterColumn
           activeSection={activeSection}
-          selectedSpellId={selectedSpellId}
-          onSelectSpell={setSelectedSpellId}
-          selectedMonsterId={selectedMonsterId}
-          onSelectMonster={setSelectedMonsterId}
-          selectedItemId={selectedItemId}
-          onSelectItem={setSelectedItemId}
+          selectedAdversaryId={selectedAdversaryId}
+          onSelectAdversary={setSelectedAdversaryId}
         />
         {hasRightColumn && (
           <CompendiumRightColumn
             activeSection={activeSection}
-            selectedSpellId={selectedSpellId}
-            selectedMonsterId={selectedMonsterId}
-            selectedItemId={selectedItemId}
+            selectedAdversaryId={selectedAdversaryId}
           />
         )}
       </div>
