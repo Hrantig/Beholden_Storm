@@ -31,6 +31,17 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
+function actionCostSymbol(cost: number, type?: string): string {
+  if (type === "reaction") return "↺";
+  switch (cost) {
+    case 0: return "▷";
+    case 1: return "▶";
+    case 2: return "▶▶";
+    case 3: return "▶▶▶";
+    default: return `${cost}`;
+  }
+}
+
 export function AdversaryDetailPanel(props: { adversaryId: string | null }) {
   const [adversary, setAdversary] = React.useState<Adversary | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -79,11 +90,11 @@ export function AdversaryDetailPanel(props: { adversaryId: string | null }) {
   return (
     <Panel
       title={a.name}
-      style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
+      style={{flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
       bodyStyle={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}
     >
       {/* Subtitle */}
-      <div style={{ fontSize: "var(--fs-small)", fontWeight: 600, color: theme.colors.muted, marginTop: -6 }}>
+      <div style={{ fontSize: "var(--fs-medium)", fontWeight: 600, color: theme.colors.muted, marginTop: -6, paddingTop: 8 }}>
         {subtitle}
       </div>
 
@@ -128,8 +139,12 @@ export function AdversaryDetailPanel(props: { adversaryId: string | null }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {a.features.map((f, i) => (
               <div key={i}>
-                <span style={{ fontWeight: 700, color: theme.colors.text, fontSize: "var(--fs-small)" }}>{f.name}. </span>
-                <span style={{ color: theme.colors.text, fontSize: "var(--fs-small)", lineHeight: 1.5 }}>{f.description}</span>
+                <span style={{ fontWeight: 700, color: theme.colors.text, fontSize: "var(--fs-medium)" }}>{f.name}. </span>
+                <span style={{ color: theme.colors.text, fontSize: "var(--fs-medium)", lineHeight: 1.5 }}>{f.description.split('\n\n').map((para, i) => (
+                  <p key={i} style={{ margin: "0 0 6px 0", lineHeight: 1.5 }}>
+                    {para.trim()}
+                  </p>
+                ))}</span>
               </div>
             ))}
           </div>
@@ -144,18 +159,25 @@ export function AdversaryDetailPanel(props: { adversaryId: string | null }) {
             {a.actions.map((act, i) => (
               <div key={i}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontWeight: 700, color: theme.colors.text, fontSize: "var(--fs-small)" }}>{act.name}</span>
                   <span style={{
-                    fontSize: "var(--fs-tiny)", fontWeight: 900,
+                    fontSize: "var(--fs-small)", fontWeight: 900,
                     padding: "2px 7px", borderRadius: 999,
                     background: withAlpha(theme.colors.accentPrimary, 0.15),
                     border: `1px solid ${withAlpha(theme.colors.accentPrimary, 0.4)}`,
                     color: theme.colors.accentPrimary,
                   }}>
-                    {act.cost} AP
+                    {/* {act.cost} AP */
+                    actionCostSymbol(act.cost, act.actionType)}
                   </span>
+
+                  <span style={{ fontWeight: 700, color: theme.colors.text, fontSize: "var(--fs-medium)" }}>{act.name}</span>
+                  
                 </div>
-                <div style={{ color: theme.colors.text, fontSize: "var(--fs-small)", lineHeight: 1.5 }}>{act.description}</div>
+                <div style={{ color: theme.colors.text, fontSize: "var(--fs-medium)", lineHeight: 1.5 }}>{act.description.split('\n\n').map((para, i) => (
+                  <p key={i} style={{ margin: "0 0 6px 0", lineHeight: 1.5 }}>
+                    {para.trim()}
+                  </p>
+                ))}</div>
               </div>
             ))}
           </div>
@@ -169,8 +191,12 @@ export function AdversaryDetailPanel(props: { adversaryId: string | null }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {a.additionalFeatures.map((f, i) => (
               <div key={i}>
-                <span style={{ fontWeight: 700, color: theme.colors.text, fontSize: "var(--fs-small)" }}>{f.name}. </span>
-                <span style={{ color: theme.colors.text, fontSize: "var(--fs-small)", lineHeight: 1.5 }}>{f.description}</span>
+                <span style={{ fontWeight: 700, color: theme.colors.text, fontSize: "var(--fs-medium)" }}>{f.name}. </span>
+                <span style={{ color: theme.colors.text, fontSize: "var(--fs-medium)", lineHeight: 1.5 }}>{f.description.split('\n\n').map((para, i) => (
+                  <p key={i} style={{ margin: "0 0 6px 0", lineHeight: 1.5 }}>
+                    {para.trim()}
+                  </p>
+                ))}</span>
               </div>
             ))}
           </div>

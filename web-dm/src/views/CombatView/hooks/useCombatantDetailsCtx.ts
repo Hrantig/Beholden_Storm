@@ -11,10 +11,6 @@ type Args = {
   selectedMonster: MonsterDetail | null;
   playersById: Record<string, Player>;
 
-  spellNames: string[];
-// spell levels are resolved async; unknown levels may be null until fetched
-spellLevels: Record<string, number | null>;
-
   roster: Combatant[];
   activeForCaster: Combatant | null;
   currentRound: number;
@@ -22,7 +18,6 @@ spellLevels: Record<string, number | null>;
   updateCombatant: (id: string, patch: Record<string, unknown>) => void;
   onOpenOverrides: (combatantId: string | null) => void;
   onOpenConditions: (combatantId: string | null, role: Role, casterId: string | null) => void;
-  openSpellByName: (name: string) => void;
 
   /** For target role only: caster id should be the active combatant id (if present). */
   casterIdForTarget?: string | null;
@@ -44,8 +39,6 @@ export function useCombatantDetailsCtx(args: Args) {
       player:
         args.combatant?.baseType === "player" ? (args.playersById[args.combatant.baseId] ?? null) : null,
 
-      spellNames: args.spellNames,
-      spellLevels: args.spellLevels,
       roster: args.roster,
       activeForCaster: args.activeForCaster,
       currentRound: args.currentRound,
@@ -64,8 +57,7 @@ export function useCombatantDetailsCtx(args: Args) {
           args.combatant?.id ?? null,
           args.role,
           args.role === "active" ? (args.combatant?.id ?? null) : (args.casterIdForTarget ?? null)
-        ),
-      onOpenSpell: (name: string) => args.openSpellByName(name)
+        )
     }),
     [
       args.isNarrow,
@@ -73,8 +65,6 @@ export function useCombatantDetailsCtx(args: Args) {
       args.combatant?.baseType,
       args.combatant?.baseId,
       args.playersById,
-      args.spellNames,
-      args.spellLevels,
       args.roster,
       args.activeForCaster,
       args.currentRound,
@@ -82,7 +72,6 @@ export function useCombatantDetailsCtx(args: Args) {
       args.updateCombatant,
       args.onOpenOverrides,
       args.onOpenConditions,
-      args.openSpellByName,
       args.combatant?.attackOverrides,
       args.role,
       args.casterIdForTarget

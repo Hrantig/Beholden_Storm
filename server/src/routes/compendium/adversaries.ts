@@ -10,6 +10,7 @@ import { now, uid } from "../../lib/runtime.js";
 const AdversaryActionSchema = z.object({
   name: z.string(),
   cost: z.number().int().min(0).max(3),
+  actionType: z.string().optional(),
   description: z.string(),
 });
 

@@ -32,32 +32,11 @@ export interface Helpers {
   uid: () => string;
   normalizeKey: (s: string) => string;
   parseLeadingInt: (s: unknown) => number | null;
-  /** Compendium-facing HP normalization (keeps raw text but cleans HTML/bad formats). */
-  normalizeHp: (hpVal: unknown) => unknown;
   /** Ensures a combat record exists for the encounter; creates it if missing. */
   ensureCombat: (encounterId: string) => void;
   nextLabelNumber: (encounterId: string, baseName: string) => number;
   createPlayerCombatant: (args: { encounterId: string; player: StoredPlayer; t?: number }) => StoredCombatant;
   seedDefaultConditions: (campaignId: string) => void;
-  importCompendiumXml: (args: { xml: string }) => {
-    imported: number;
-    total: number;
-    items?: number;
-    classes?: number;
-    races?: number;
-    backgrounds?: number;
-    feats?: number;
-  };
-  importCompendiumSqlite: (args: { buffer: Buffer }) => {
-    imported: number;
-    total: number;
-    spells: number;
-    items: number;
-    classes: number;
-    races: number;
-    backgrounds: number;
-    feats: number;
-  };
 }
 
 export interface ServerContext {

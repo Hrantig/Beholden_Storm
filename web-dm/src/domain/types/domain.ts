@@ -220,6 +220,7 @@ export interface AdversaryFeature {
 export interface AdversaryAction {
   name: string;
   cost: number;
+  actionType?: string;
   description: string;
 }
 

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { theme } from "@/theme/theme";
 import { Panel } from "@/ui/Panel";
 import { Button } from "@/ui/Button";
-import { IconNotes, IconSpells } from "@/icons";
+import { IconNotes } from "@/icons";
 import { useIsNarrow } from "@/views/CombatView/hooks/useIsNarrow";
 
 type Props = {
@@ -17,7 +17,6 @@ type Props = {
   onRollOrReset: () => void;
   onResetFight?: () => void;
   onEndCombat: () => void;
-  onOpenSpellBook: () => void;
   onOpenAdventureNotes: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -59,13 +58,6 @@ export function CombatantHeader(props: Props) {
               Reset Fight
             </Button>
           )}
-
-          <Button variant="ghost" onClick={props.onOpenSpellBook} title="Spell Book">
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconSpells size={18} title="Spell Book" />
-              {!isPhone && "Spell Book"}
-            </span>
-          </Button>
 
           <Button variant="ghost" onClick={props.onOpenAdventureNotes} title="Adventure Notes">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>

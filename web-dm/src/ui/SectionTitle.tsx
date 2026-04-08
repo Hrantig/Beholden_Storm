@@ -21,7 +21,7 @@ export function SectionTitle({
         display: "flex",
         alignItems: "center",
         gap: 8,
-        fontSize: "var(--fs-tiny)",
+        fontSize: "var(--fs-large)",
         fontWeight: 700,
         letterSpacing: "0.1em",
         textTransform: "uppercase",

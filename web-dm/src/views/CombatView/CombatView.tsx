@@ -7,7 +7,6 @@ import { theme } from "@/theme/theme";
 
 import { CombatantHeader } from "@/views/CombatView/components/CombatantHeader";
 import { CombatDeltaControls } from "@/views/CombatView/components/CombatDeltaControls";
-import { SpellDetailModal } from "@/views/CombatView/components/SpellDetailModal";
 import { HudFighterCard } from "@/views/CombatView/components/HudFighterCard";
 import { CombatantTypeIcon } from "@/views/CombatView/components/CombatantTypeIcon";
 import { TurnControls } from "@/views/CombatView/components/TurnControls";
@@ -17,7 +16,6 @@ import { CombatantDetailsPanel } from "@/views/CombatView/panels/CombatantDetail
 import { useIsNarrow } from "@/views/CombatView/hooks/useIsNarrow";
 import { useServerCombatState } from "@/views/CombatView/hooks/useServerCombatState";
 import { useMonsterDetailsCache } from "@/views/CombatView/hooks/useMonsterDetailsCache";
-import { useSpellModal } from "@/views/CombatView/hooks/useSpellModal";
 import { useCombatNavigation } from "@/views/CombatView/hooks/useCombatNavigation";
 import { useCombatActions } from "@/views/CombatView/hooks/useCombatActions";
 import { useCombatantDetailsCtx } from "@/views/CombatView/hooks/useCombatantDetailsCtx";
@@ -30,10 +28,6 @@ import { getSecondsInRound } from "@/views/CombatView/utils/roundTime";
 export function CombatView() {
   const { campaignId, encounterId } = useParams();
   const { state, dispatch } = useStore();
-
-  const openSpellBook = React.useCallback(() => {
-    dispatch({ type: "openDrawer", drawer: { type: "spellbook" } });
-  }, [dispatch]);
 
   const openAdventureNotes = React.useCallback(() => {
     dispatch({ type: "openDrawer", drawer: { type: "adventureNotes" } });
@@ -108,17 +102,6 @@ export function CombatView() {
   );
 
   const {
-    spellLevelCache,
-    spellDetail,
-    spellError,
-    spellLoading,
-    openSpellByName,
-    closeSpell,
-    sortedActiveSpellNames,
-    sortedTargetSpellNames
-  } = useSpellModal(activeMonster, targetMonster);
-
-  const {
     applyHpDelta,
     concentrationAlert,
     dismissConcentrationAlert,
@@ -183,15 +166,12 @@ export function CombatView() {
     combatant: (active as Combatant | null) ?? null,
     selectedMonster: applyMonsterAttackOverrides(activeMonster ?? null, active ?? null),
     playersById,
-    spellNames: sortedActiveSpellNames,
-    spellLevels: spellLevelCache,
     roster: orderedCombatants,
     activeForCaster: (active as Combatant | null) ?? null,
     currentRound: round,
     updateCombatant,
     onOpenOverrides,
     onOpenConditions,
-    openSpellByName
   });
 
   const targetCtx = useCombatantDetailsCtx({
@@ -200,15 +180,12 @@ export function CombatView() {
     combatant: (target as Combatant | null) ?? null,
     selectedMonster: applyMonsterAttackOverrides(targetMonster ?? null, target ?? null),
     playersById,
-    spellNames: sortedTargetSpellNames,
-    spellLevels: spellLevelCache,
     roster: orderedCombatants,
     activeForCaster: (active as Combatant | null) ?? null,
     currentRound: round,
     updateCombatant,
     onOpenOverrides,
     onOpenConditions,
-    openSpellByName,
     casterIdForTarget: active?.id ?? null
   });
 
@@ -242,7 +219,6 @@ export function CombatView() {
         rollLabel="Roll Monsters"
         onRollOrReset={rollInitiativeForMonsters}
         onResetFight={resetFight}
-        onOpenSpellBook={openSpellBook}
         onOpenAdventureNotes={openAdventureNotes}
         onEndCombat={endCombat}
         onPrev={prevTurn}
@@ -354,14 +330,6 @@ export function CombatView() {
         </div>
       </div>
 
-      <SpellDetailModal
-        isOpen={spellLoading || !!spellDetail || !!spellError}
-        title={<span>Spell</span>}
-        isLoading={spellLoading}
-        error={spellError}
-        spellDetail={spellDetail}
-        onClose={closeSpell}
-      />
     </div>
   );
 }

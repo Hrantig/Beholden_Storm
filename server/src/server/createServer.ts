@@ -16,13 +16,10 @@ import { getRuntimeConfig } from "../config/runtime.js";
 import { upload } from "../lib/upload.js";
 import { getPaths } from "../config/paths.js";
 import { openDb } from "../lib/db.js";
-import { importCompendiumXml } from "../services/compendium/importXml.js";
-import { importCompendiumSqlite } from "../services/compendium/importSqlite.js";
 import { ensureCombat, nextLabelNumber, createPlayerCombatant } from "../services/combat.js";
 import { seedDefaultConditions } from "../services/conditions.js";
 import { now, uid } from "../lib/runtime.js";
 import { normalizeKey, parseLeadingInt } from "../lib/text.js";
-import { normalizeHp } from "../services/compendium/normalizeHp.js";
 import { createWsServer, sendWsEvent } from "./ws.js";
 import type { ServerContext } from "./context.js";
 import type { BroadcastFn } from "./events.js";
@@ -107,13 +104,10 @@ export function createServer() {
       uid,
       normalizeKey,
       parseLeadingInt,
-      normalizeHp,
       ensureCombat: (encounterId) => ensureCombat(db, encounterId),
       nextLabelNumber: (encounterId, baseName) => nextLabelNumber(db, encounterId, baseName),
       createPlayerCombatant,
       seedDefaultConditions: (campaignId) => seedDefaultConditions(db, campaignId),
-      importCompendiumXml: ({ xml }) => importCompendiumXml({ xml, db }),
-      importCompendiumSqlite: ({ buffer }) => importCompendiumSqlite({ buffer, db }),
     },
   };
 
