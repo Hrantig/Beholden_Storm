@@ -1,7 +1,7 @@
 import React from "react";
 import { api, jsonInit } from "@/services/api";
-import type { AddMonsterOptions } from "@/domain/types/domain";
 import type { State } from "@/store/state";
+import type { AdversaryPickerOptions } from "@/views/CampaignView/adversaryPicker/types";
 import type { Action } from "@/store/actions";
 import type { ConfirmOptions } from "@/confirm/ConfirmContext";
 
@@ -93,21 +93,36 @@ export function useCampaignActions(
     );
   }, [state.selectedAdventureId, reorder, refreshAdventure]);
 
-  const addMonster = React.useCallback(async (monsterId: string, qty: number, opts?: AddMonsterOptions) => {
+  const addAdversary = React.useCallback(async (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => {
     if (!state.selectedEncounterId) return;
+    const encounterId = state.selectedEncounterId;
+    const labelBase = opts.label.trim() || undefined;
     try {
-      await api(`/api/encounters/${state.selectedEncounterId}/combatants/addMonster`, jsonInit("POST", {
-        monsterId,
-        qty,
-        friendly: Boolean(opts?.friendly ?? false),
-        labelBase: opts?.labelBase?.trim() || undefined,
-        ac: opts?.ac,
-        acDetail: opts?.acDetails ?? undefined,
-        hpMax: opts?.hpMax,
-        hpDetail: opts?.hpDetails ?? undefined,
-        attackOverrides: opts?.attackOverrides ?? null
-      }));
-      await refreshEncounter(state.selectedEncounterId);
+      if (opts.dualPhase) {
+        await api(`/api/encounters/${encounterId}/combatants/addMonster`, jsonInit("POST", {
+          monsterId: adversaryId,
+          qty,
+          friendly: Boolean(opts.friendly),
+          labelBase: labelBase ? `${opts.label.trim()} (Fast)` : "Fast",
+          hpMax: opts.hp,
+        }));
+        await api(`/api/encounters/${encounterId}/combatants/addMonster`, jsonInit("POST", {
+          monsterId: adversaryId,
+          qty,
+          friendly: Boolean(opts.friendly),
+          labelBase: labelBase ? `${opts.label.trim()} (Slow)` : "Slow",
+          hpMax: opts.hp,
+        }));
+      } else {
+        await api(`/api/encounters/${encounterId}/combatants/addMonster`, jsonInit("POST", {
+          monsterId: adversaryId,
+          qty,
+          friendly: Boolean(opts.friendly),
+          labelBase,
+          hpMax: opts.hp,
+        }));
+      }
+      await refreshEncounter(encounterId);
     } catch (e) { apiErr(e); }
   }, [state.selectedEncounterId, refreshEncounter]);
 
@@ -119,18 +134,15 @@ export function useCampaignActions(
     } catch (e) { apiErr(e); }
   }, [state.selectedEncounterId, refreshEncounter]);
 
-  const addINpcFromMonster = React.useCallback(async (monsterId: string, qty: number, opts?: AddMonsterOptions) => {
+  const addINpcFromAdversary = React.useCallback(async (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => {
     if (!state.selectedCampaignId) return;
     try {
       await api(`/api/campaigns/${state.selectedCampaignId}/inpcs`, jsonInit("POST", {
-        monsterId,
+        monsterId: adversaryId,
         qty,
-        name: opts?.labelBase ?? null,
-        friendly: Boolean(opts?.friendly ?? true),
-        ac: opts?.ac ?? null,
-        acDetails: opts?.acDetails ?? null,
-        hpMax: opts?.hpMax ?? null,
-        hpDetails: opts?.hpDetails ?? null
+        name: opts.label.trim() || null,
+        friendly: Boolean(opts.friendly),
+        hpMax: opts.hp || null,
       }));
       await refreshCampaign(state.selectedCampaignId);
     } catch (e) { apiErr(e); }
@@ -268,9 +280,9 @@ export function useCampaignActions(
     reorderEncounters,
     reorderCampaignNotes,
     reorderAdventureNotes,
-    addMonster,
+    addAdversary,
     removeCombatant,
-    addINpcFromMonster,
+    addINpcFromAdversary,
     deletePlayer,
     deleteINpc,
     exportAdventure,

@@ -46,7 +46,6 @@ export function CombatRosterView() {
     players: state.players,
   });
 
-  const [compQ, setCompQ] = React.useState("");
 
   // Encounter-scoped actions — keyed to the explicit route encounterId.
   const encounterActions = useEncounterActions(encounterId, refresh);
@@ -91,14 +90,12 @@ export function CombatRosterView() {
           inpcs={state.inpcs}
           selectedCampaignId={state.selectedCampaignId ?? ""}
           selectedEncounterId={encounterId ?? null}
-          compQ={compQ}
-          onChangeCompQ={setCompQ}
           onFullRest={campaignActions.fullRestPlayers}
           onCreatePlayer={() => dispatch({ type: "openDrawer", drawer: { type: "createPlayer", campaignId: state.selectedCampaignId } })}
           onEditPlayer={(playerId) => dispatch({ type: "openDrawer", drawer: { type: "editPlayer", playerId } })}
           onDeletePlayer={campaignActions.deletePlayer}
           onAddPlayerToEncounter={encounterActions.addPlayerToEncounter}
-          onAddINpcFromMonster={campaignActions.addINpcFromMonster}
+          onAddINpcFromAdversary={campaignActions.addINpcFromAdversary}
           onEditINpc={(inpcId) => dispatch({ type: "openDrawer", drawer: { type: "editINpc", inpcId } })}
           onDeleteINpc={campaignActions.deleteINpc}
           onAddINpcToEncounter={encounterActions.addINpcToEncounter}
@@ -109,10 +106,7 @@ export function CombatRosterView() {
           combatants={combatants}
           xpByCombatantId={xpByCombatantId}
           playersById={playersById}
-          compQ={compQ}
-          onChangeCompQ={setCompQ}
-          compRows={[]}
-          onAddMonster={encounterActions.addMonster}
+          onAddAdversary={encounterActions.addAdversary}
           onAddAllPlayers={encounterActions.addAllPlayers}
           onOpenCombat={() => encounterId && nav(campaignId ? `/campaign/${campaignId}/combat/${encounterId}` : `/combat/${encounterId}`)}
           onEditCombatant={(combatantId) =>

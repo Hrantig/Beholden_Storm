@@ -3,10 +3,10 @@ import { api, jsonInit } from "@/services/api";
 import { useStore } from "@/store";
 import { theme } from "@/theme/theme";
 import type { TreasureEntry } from "@/domain/types/domain";
-import { IconChest, IconPlus, IconTrash } from "@/icons";
+import { IconChest, IconTrash } from "@/icons";
 import { IconButton } from "@/ui/IconButton";
 import { Panel } from "@/ui/Panel";
-import { ItemPickerModal, type AddItemPayload } from "@/views/CampaignView/components/ItemPickerModal";
+
 
 function titleFromScope(opts: { selectedAdventureId: string | null; adventureName?: string | null }) {
   if (!opts.selectedAdventureId) return "Treasure (Campaign)";
@@ -22,7 +22,7 @@ function titleFromScope(opts: { selectedAdventureId: string | null; adventureNam
  */
 export function TreasurePanel(_props: { encounterId?: string } = {}) {
   const { state, dispatch } = useStore();
-  const [isOpen, setIsOpen] = React.useState(false);
+
 
   const scopeAdventureId = state.selectedAdventureId;
   const treasure = scopeAdventureId ? state.adventureTreasure : state.campaignTreasure;
@@ -50,22 +50,6 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.selectedCampaignId, scopeAdventureId]);
 
-  async function addItem(payload: AddItemPayload) {
-    if (!state.selectedCampaignId) return;
-    const endpoint = scopeAdventureId
-      ? `/api/adventures/${scopeAdventureId}/treasure`
-      : `/api/campaigns/${state.selectedCampaignId}/treasure`;
-
-    if (payload.source === "compendium") {
-      await api(endpoint, jsonInit("POST", { source: "compendium", itemId: payload.itemId, qty: payload.qty }));
-    } else {
-      await api(endpoint, jsonInit("POST", { source: "custom", custom: payload.custom, qty: payload.qty }));
-    }
-
-    setIsOpen(false);
-    await refreshTreasure();
-  }
-
   async function remove(id: string) {
     await api(`/api/treasure/${id}`, { method: "DELETE" });
     await refreshTreasure();
@@ -88,11 +72,7 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
             {titleFromScope({ selectedAdventureId: scopeAdventureId, adventureName: scopeAdventureName })}
           </span>
         }
-        actions={
-          <IconButton title="Add item" onClick={() => setIsOpen(true)} variant="accent">
-            <IconPlus />
-          </IconButton>
-        }
+        actions={null}
       >
         {treasure.length === 0 ? (
           <div style={{ color: theme.colors.muted }}>No treasure yet.</div>
@@ -179,7 +159,6 @@ export function TreasurePanel(_props: { encounterId?: string } = {}) {
         )}
       </Panel>
 
-      <ItemPickerModal isOpen={isOpen} onClose={() => setIsOpen(false)} onAdd={addItem} />
     </>
   );
 }

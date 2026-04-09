@@ -1,16 +1,13 @@
-import React from "react";
-import type { AddMonsterOptions } from "@/domain/types/domain";
+import type { AdversaryPickerOptions } from "@/views/CampaignView/adversaryPicker/types";
 import { PlayersPanel } from "@/views/CampaignView/panels/PlayersPanel";
 import { INpcsPanel } from "@/views/CampaignView/panels/INpcsPanel";
 import type { Combatant, Player, INpc } from "@/domain/types/domain";
-import type { CompendiumMonsterRow } from "@/views/CampaignView/monsterPicker/types";
 
 
 export function CampaignMainColumn(props: {
   players: Player[];
   combatants: Combatant[];
   inpcs: INpc[];
-  compRows: CompendiumMonsterRow[];
   selectedEncounterId: string | null;
   onFullRest: () => void;
   onCreatePlayer: () => void;
@@ -18,9 +15,7 @@ export function CampaignMainColumn(props: {
   onDeletePlayer: (playerId: string) => void;
   onAddPlayerToEncounter: (playerId: string) => void;
   selectedCampaignId: string | null;
-  compQ: string;
-  onChangeCompQ: (v: string) => void;
-  onAddINpcFromMonster: (monsterId: string, qty: number, opts?: AddMonsterOptions) => void;
+  onAddINpcFromAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
@@ -42,10 +37,7 @@ export function CampaignMainColumn(props: {
         inpcs={props.inpcs}
         selectedCampaignId={props.selectedCampaignId}
         selectedEncounterId={props.selectedEncounterId}
-        compQ={props.compQ}
-        onChangeCompQ={props.onChangeCompQ}
-        compRows={props.compRows}
-        onAddINpcFromMonster={props.onAddINpcFromMonster}
+        onAddINpcFromAdversary={props.onAddINpcFromAdversary}
         onEditINpc={props.onEditINpc}
         onDeleteINpc={props.onDeleteINpc}
         onAddINpcToEncounter={props.onAddINpcToEncounter}

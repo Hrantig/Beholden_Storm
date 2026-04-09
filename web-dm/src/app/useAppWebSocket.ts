@@ -1,7 +1,6 @@
 import { useWs } from "@/services/ws";
 import { api } from "@/services/api";
 import type { INpc, Note, Player, TreasureEntry } from "@/domain/types/domain";
-import type { CompendiumMonsterRow } from "@/views/CampaignView/monsterPicker/types";
 import type { Action } from "@/store/actions";
 import type React from "react";
 
@@ -16,7 +15,6 @@ type Deps = {
   refreshCampaign: (cid: string) => void;
   refreshAdventure: (adventureId: string | null) => void;
   refreshEncounter: (encounterId: string | null) => void;
-  setCompendiumIndex: (rows: CompendiumMonsterRow[]) => void;
 };
 
 export function useAppWebSocket({
@@ -28,7 +26,6 @@ export function useAppWebSocket({
   refreshCampaign,
   refreshAdventure,
   refreshEncounter,
-  setCompendiumIndex,
 }: Deps) {
   useWs((msg) => {
     if (msg.type === "campaigns:changed" || msg.type === "user:changed") { refreshAll(); return; }
@@ -68,10 +65,6 @@ export function useAppWebSocket({
     }
     if (msg.type === "encounter:combatantsChanged" && typeof encounterId === "string" && encounterId === selectedEncounterId) {
       refreshEncounter(selectedEncounterId); return;
-    }
-    if (msg.type === "compendium:changed") {
-      api<CompendiumMonsterRow[]>(`/api/compendium/monsters`).then(setCompendiumIndex);
-      return;
     }
   });
 }

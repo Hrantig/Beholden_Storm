@@ -1,8 +1,5 @@
 import type { Combatant } from "@/domain/types/domain";
-import type { CompendiumMonsterRow } from "@/views/CampaignView/monsterPicker/types";
-
-import type { AddMonsterOptions } from "@/domain/types/domain";
-
+import type { AdversaryPickerOptions } from "@/views/CampaignView/adversaryPicker/types";
 import { EncounterRosterPanel } from "@/views/CampaignView/panels/EncounterRosterPanel";
 
 type Props = {
@@ -10,10 +7,7 @@ type Props = {
   combatants: Combatant[];
   xpByCombatantId: Record<string, number>;
   playersById?: Record<string, { imageUrl?: string | null }>;
-  compQ: string;
-  onChangeCompQ: (q: string) => void;
-  compRows?: CompendiumMonsterRow[];
-  onAddMonster: (monsterId: string, qty: number, opts?: AddMonsterOptions) => Promise<void>;
+  onAddAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => Promise<void>;
   onAddAllPlayers: () => Promise<void>;
   onOpenCombat: () => void;
   onEditCombatant: (combatantId: string) => void;
@@ -28,11 +22,7 @@ export function CombatRosterCenterColumn(props: Props) {
         combatants={props.combatants}
         xpByCombatantId={props.xpByCombatantId}
         playersById={props.playersById}
-        compQ={props.compQ}
-        onChangeCompQ={props.onChangeCompQ}
-        // Let the MonsterPickerModal fetch its own index when needed.
-        compRows={props.compRows ?? []}
-        onAddMonster={props.onAddMonster}
+        onAddAdversary={props.onAddAdversary}
         onAddAllPlayers={props.onAddAllPlayers}
         onOpenCombat={props.onOpenCombat}
         onEditCombatant={props.onEditCombatant}

@@ -1,6 +1,6 @@
 import React from "react";
 import { api, jsonInit } from "@/services/api";
-import type { AddMonsterOptions } from "@/domain/types/domain";
+import type { AdversaryPickerOptions } from "@/views/CampaignView/adversaryPicker/types";
 
 function apiErr(e: unknown) {
   alert(e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -26,19 +26,19 @@ export function useEncounterActions(
     } catch (e) { apiErr(e); }
   }, [encounterId, refresh]);
 
-  const addMonster = React.useCallback(async (monsterId: string, qty: number, opts?: AddMonsterOptions) => {
+  const addAdversary = React.useCallback(async (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => {
     if (!encounterId) return;
+    const labelBase = opts.label.trim() || undefined;
     try {
       await api(`/api/encounters/${encounterId}/combatants/addMonster`, jsonInit("POST", {
-        monsterId,
+        monsterId: adversaryId,
         qty,
-        friendly: Boolean(opts?.friendly ?? false),
-        labelBase: opts?.labelBase?.trim() || undefined,
-        ac: opts?.ac,
-        acDetails: opts?.acDetails ?? undefined,
-        hpMax: opts?.hpMax,
-        hpDetails: opts?.hpDetails ?? undefined,
-        attackOverrides: opts?.attackOverrides ?? null,
+        friendly: Boolean(opts.friendly),
+        labelBase,
+        hpMax: opts.hp,
+        hpRangeMin: opts.hpRangeMin,
+        hpRangeMax: opts.hpRangeMax,
+        dualPhase: Boolean(opts.dualPhase),
       }));
       await refresh();
     } catch (e) { apiErr(e); }
@@ -60,5 +60,5 @@ export function useEncounterActions(
     } catch (e) { apiErr(e); }
   }, [encounterId, refresh]);
 
-  return { addAllPlayers, addPlayerToEncounter, addMonster, removeCombatant, addINpcToEncounter };
+  return { addAllPlayers, addPlayerToEncounter, addAdversary, removeCombatant, addINpcToEncounter };
 }

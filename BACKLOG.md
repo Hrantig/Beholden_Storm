@@ -113,6 +113,27 @@
 
 ---
 
+## Compendium Cleanup (do after compendium UI is complete)
+
+- **Remove D&D compendium panels** — once the Stormlight compendium UI is built and 
+  compiling cleanly, delete these files:
+  `MonsterBrowserPanel.tsx`, `MonsterDetailPanel.tsx`, `MonsterFormModal.tsx`,
+  `MonsterFormParts.tsx`, `SpellsPanel.tsx`, `SpellDetailPanel.tsx`,
+  `SpellFormModal.tsx`, `ItemsBrowserPanel.tsx`, `ItemDetailPanel.tsx`,
+  `ItemFormModal.tsx`, `SpellBrowserSplit.tsx`
+
+- **Remove D&D compendium utilities** — after panel cleanup, check and remove:
+  `web-dm/src/domain/compendium/` (D&D normalization utilities),
+  `web-dm/src/utils/compendiumFormat.ts` (D&D stat formatting),
+  hooks: `useSpellSearch.ts`, `useItemSearch.ts`
+  Verify nothing in the new UI references these before deleting.
+
+- **Remove D&D server routes** — `server/src/routes/compendium/spells.ts`,
+  `server/src/routes/compendium/items.ts`, `server/src/routes/compendium/lore.ts`
+  Check `createServer.ts` registration and remove those too.
+
+---
+
 ## General D&D Cleanup (remaining)
 
 - **web-player app** — largely untouched, still full D&D. Defer until DM side is 
@@ -129,4 +150,11 @@
 
 - **INpcDrawer.tsx** — still shows "AC" and "AC Details" labels. Update labels to 
   "Defense" and "Defense Details" during combat UI pass.
+
+- **iNPC schema update** — the `inpcs` table still uses D&D fields (`ac`, `ac_details`). 
+  Needs updating to Stormlight defense fields (`defense_physical`, `defense_cognitive`, 
+  `defense_spiritual`, `deflect`, `movement`, `focus_max`, `investiture_max`) to match 
+  the Player and Adversary schemas. Update table, INPC_COLS, rowToINpc, StoredINpc, 
+  INpc type, and INpcDrawer form. Do this as a dedicated pass before the player-side 
+  app is built.
 

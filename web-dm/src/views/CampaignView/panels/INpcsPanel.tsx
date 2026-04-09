@@ -4,21 +4,17 @@ import { IconButton } from "@/ui/IconButton";
 import { theme } from "@/theme/theme";
 import { IconINPC, IconPlus } from "@/icons";
 import { PlayerRow } from "@/views/CampaignView/components/PlayerRow";
-import { MonsterPickerModal } from "@/views/CampaignView/monsterPicker/MonsterPickerModal";
-import type { AddMonsterOptions, INpc } from "@/domain/types/domain";
+import { AdversaryPickerModal } from "@/views/CampaignView/adversaryPicker/AdversaryPickerModal";
+import type { AdversaryPickerOptions } from "@/views/CampaignView/adversaryPicker/types";
+import type { INpc } from "@/domain/types/domain";
 import { titleCase } from "@/lib/format/titleCase";
-import type { CompendiumMonsterRow } from "@/views/CampaignView/monsterPicker/types";
 
 type Props = {
   inpcs: INpc[];
   selectedCampaignId: string | null;
   selectedEncounterId: string | null;
 
-  compQ: string;
-  onChangeCompQ: (q: string) => void;
-  compRows?: CompendiumMonsterRow[];
-
-  onAddINpcFromMonster: (monsterId: string, qty: number, opts?: AddMonsterOptions) => void;
+  onAddINpcFromAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
@@ -74,12 +70,14 @@ export function INpcsPanel(props: Props) {
                 p={{
                   id: i.id,
                   characterName: i.name,
+                  ancestry: "",
+                  paths: [],
                   level: 0,
-                  class: "",
-                  species: "",
                   hpMax: i.hpMax,
                   hpCurrent: i.hpCurrent,
-                  ac: i.ac
+                  focusCurrent: 0,
+                  focusMax: 0,
+                  movement: 0,
                 }}
                 icon={
                   i.friendly
@@ -111,14 +109,11 @@ export function INpcsPanel(props: Props) {
         <div style={{ color: theme.colors.muted }}>No iNPCs yet.</div>
       )}
 
-      <MonsterPickerModal
+      <AdversaryPickerModal
         isOpen={isPickerOpen}
         onClose={() => setIsPickerOpen(false)}
-        compQ={props.compQ}
-        onChangeCompQ={props.onChangeCompQ}
-        compRows={(props.compRows ?? []) as any}
-        onAddMonster={(monsterId, qty, opts) => {
-          props.onAddINpcFromMonster(monsterId, qty, opts);
+        onAddAdversary={(adversaryId, qty, opts) => {
+          props.onAddINpcFromAdversary(adversaryId, qty, opts);
           setIsPickerOpen(false);
         }}
       />

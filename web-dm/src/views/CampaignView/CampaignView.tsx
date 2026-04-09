@@ -1,8 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "@/store";
-import type { AddMonsterOptions } from "@/domain/types/domain";
-import type { CompendiumMonsterRow } from "@/views/CampaignView/monsterPicker/types";
+import type { AdversaryPickerOptions } from "@/views/CampaignView/adversaryPicker/types";
 import { useOpenEncounterMetrics } from "@/views/CampaignView/hooks/useOpenEncounterMetrics";
 import { CampaignLeftSidebar } from "@/views/CampaignView/components/CampaignLeftSidebar";
 import { CampaignMainColumn } from "@/views/CampaignView/components/CampaignMainColumn";
@@ -31,7 +30,7 @@ export function CampaignView(props: {
   onDeletePlayer: (playerId: string) => void;
   onAddPlayerToEncounter: (playerId: string) => void;
 
-  onAddINpcFromMonster: (monsterId: string, qty: number, opts?: AddMonsterOptions) => void;
+  onAddINpcFromAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
@@ -41,10 +40,6 @@ export function CampaignView(props: {
   onImportAdventure: () => void;
   onReorderCampaignNotes: (ids: string[]) => void;
   onReorderAdventureNotes: (ids: string[]) => void;
-
-  compQ: string;
-  setCompQ: (v: string) => void;
-  compRows: CompendiumMonsterRow[];
 }) {
   const { state, dispatch } = useStore();
   const nav = useNavigate();
@@ -128,10 +123,7 @@ export function CampaignView(props: {
         onAddPlayerToEncounter={props.onAddPlayerToEncounter}
         inpcs={inpcs}
         selectedCampaignId={state.selectedCampaignId}
-        compQ={props.compQ}
-        onChangeCompQ={props.setCompQ}
-        compRows={props.compRows}
-        onAddINpcFromMonster={props.onAddINpcFromMonster}
+        onAddINpcFromAdversary={props.onAddINpcFromAdversary}
         onEditINpc={props.onEditINpc}
         onDeleteINpc={props.onDeleteINpc}
         onAddINpcToEncounter={props.onAddINpcToEncounter}

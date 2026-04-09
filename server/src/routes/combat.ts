@@ -5,7 +5,7 @@ import type { StoredCombatant, StoredCombatState, StoredConditionInstance, Store
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
-import { rowToPlayer, rowToCombatant, parseJson, PLAYER_COLS, COMBATANT_COLS } from "../lib/db.js";
+import { rowToPlayer, rowToCombatant, rowToAdversary, parseJson, PLAYER_COLS, COMBATANT_COLS, ADVERSARY_COLS} from "../lib/db.js";
 import { extractLeadingNumber, extractDetails } from "../lib/text.js";
 import {
   ensureCombat,
@@ -36,11 +36,10 @@ const AddMonsterBody = z.object({
   qty: z.number().int().min(1).max(20).default(1),
   friendly: z.boolean().default(false),
   labelBase: z.string().optional(),
-  ac: z.number().optional(),
-  acDetails: z.string().nullable().optional(),
   hpMax: z.number().optional(),
-  hpDetails: z.string().nullable().optional(),
-  attackOverrides: AttackOverrideSchema.optional(),
+  hpRangeMin: z.number().optional(),
+  hpRangeMax: z.number().optional(),
+  dualPhase: z.boolean().default(false),
 });
 
 const AddInpcBody = z.object({
@@ -238,47 +237,38 @@ const merged = rows.map((row) => {
     const body = parseBody(AddMonsterBody, req);
     const { monsterId, qty = 1, friendly = false } = body;
     const labelBase = body.labelBase?.trim() ?? "";
-    const acOverride = body.ac != null && Number.isFinite(body.ac) ? body.ac : null;
-    const acDetails = body.acDetails ?? null;
     const hpMaxOverride = body.hpMax != null && Number.isFinite(body.hpMax) ? body.hpMax : null;
-    const hpDetails = body.hpDetails ?? null;
-    const attackOverrides = body.attackOverrides ?? null;
+    const dualPhase = body.dualPhase ?? false;
 
-    const monRow = db
-      .prepare("SELECT data_json FROM compendium_monsters WHERE id = ?")
-      .get(monsterId) as { data_json: string } | undefined;
-    if (!monRow)
-      return res.status(404).json({ ok: false, message: "Monster not found in compendium" });
+    const advRow = db
+      .prepare(`SELECT ${ADVERSARY_COLS} FROM compendium_adversaries WHERE id = ?`)
+      .get(monsterId) as Record<string, unknown> | undefined;
+    if (!advRow)
+      return res.status(404).json({ ok: false, message: "Adversary not found in compendium" });
 
-    const m = JSON.parse(monRow.data_json);
-
-    const mHp = m?.hp as any;
-    const mAc = m?.ac as any;
-    const defaultAc = extractLeadingNumber(mAc);
-    const defaultHp = extractLeadingNumber(mHp?.average ?? mHp);
-    const defaultAcDetails = extractDetails(mAc);
-    const defaultHpDetails = mHp?.formula ?? mHp?.roll ?? null;
+    const adversary = rowToAdversary(advRow);
 
     ensureCombat(db, encounterId);
     const t = now();
 
-    const baseName = m.name;
+    const baseName = adversary.name;
     const effectiveLabelBase = labelBase || baseName;
     let n: number = nextLabelNumber(db, encounterId, effectiveLabelBase);
 
     const created: StoredCombatant[] = [];
+  
+      
     db.transaction(() => {
       for (let i = 0; i < qty; i++) {
-        const label =
-          qty === 1 ? effectiveLabelBase : `${effectiveLabelBase} ${n++}`;
-        const hpMax =
-          hpMaxOverride != null && Number.isFinite(hpMaxOverride)
-            ? hpMaxOverride
-            : (defaultHp ?? null);
-        const ac =
-          acOverride != null && Number.isFinite(acOverride)
-            ? acOverride
-            : (defaultAc ?? null);
+        const label = qty === 1 ? effectiveLabelBase : `${effectiveLabelBase} ${n++}`;
+        // Use random HP per instance when adding multiples and range is available
+        const hpMax = (() => {
+          if (qty > 1 && body.hpRangeMin != null && body.hpRangeMax != null && body.hpRangeMin !== body.hpRangeMax) {
+            return Math.floor(Math.random() * (body.hpRangeMax - body.hpRangeMin + 1)) + body.hpRangeMin;
+          }
+          return hpMaxOverride ?? adversary.hpRangeMax;
+        })();
+
 
         const c: StoredCombatant = {
           id: uid(),
@@ -293,21 +283,14 @@ const merged = rows.map((row) => {
           overrides: { ...DEFAULT_OVERRIDES },
           hpCurrent: hpMax,
           hpMax,
-          hpDetails:
-            hpDetails != null
-              ? hpDetails
-              : defaultHpDetails != null
-              ? String(defaultHpDetails)
-              : null,
-          ac,
-          acDetails:
-            acDetails != null
-              ? acDetails
-              : defaultAcDetails != null
-              ? String(defaultAcDetails)
-              : null,
-          attackOverrides: attackOverrides ?? null,
+          hpDetails: null,
+          ac: adversary.defensePhysical,
+          acDetails: null,
+          attackOverrides: null,
           conditions: [],
+          dualPhase,
+          phase: null,
+          actionPointsUsed: 0,
           createdAt: t,
           updatedAt: t,
         };
@@ -332,7 +315,7 @@ const merged = rows.map((row) => {
 
     const { inpcId } = parseBody(AddInpcBody, req);
     const iRow = db
-      .prepare("SELECT id, name, label, friendly, hp_max, hp_current, hp_details, ac, ac_details FROM inpcs WHERE id = ?")
+      .prepare("SELECT id, name, label, friendly, hp_max, hp_current, hp_details, defense_physical FROM inpcs WHERE id = ?")
       .get(inpcId) as Record<string, unknown> | undefined;
     if (!iRow)
       return res.status(404).json({ ok: false, message: "iNPC not found" });
@@ -360,6 +343,9 @@ const merged = rows.map((row) => {
       acDetails: (iRow.ac_details as string | null) ?? null,
       attackOverrides: null,
       conditions: [],
+      phase: null,
+      actionPointsUsed: 0,
+      dualPhase: false,
       createdAt: t,
       updatedAt: t,
     };

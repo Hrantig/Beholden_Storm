@@ -7,7 +7,7 @@ import { StoreProvider, useStore } from "@/store";
 import { api } from "@/services/api";
 import type { Adventure, Campaign, Combatant, Encounter, INpc, Meta, Note, Player, TreasureEntry } from "@/domain/types/domain";
 import { useAppWebSocket } from "@/app/useAppWebSocket";
-import type { CompendiumMonsterRow } from "@/views/CampaignView/monsterPicker/types";
+
 import { HomeView } from "@/views/HomeView";
 import { DrawerHost } from "@/drawers/DrawerHost";
 import { ConfirmProvider, useConfirm } from "@/confirm/ConfirmContext";
@@ -30,9 +30,6 @@ function AppInner() {
   const { state, dispatch } = useStore();
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const [compQ, setCompQ] = useState("");
-  const [compendiumIndex, setCompendiumIndex] = useState<CompendiumMonsterRow[]>([]);
-  const [compRows, setCompRows] = useState<CompendiumMonsterRow[]>([]);
   const importAdventureFileRef = useRef<HTMLInputElement>(null);
 
   const refreshAll = useCallback(async () => {
@@ -98,23 +95,6 @@ function AppInner() {
     dispatch({ type: "selectCampaign", campaignId: routeCampaignId });
   }, [routeCampaignId, state.selectedCampaignId, dispatch]);
 
-  // Load the full compendium index once, then filter client-side.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const rows = await api<CompendiumMonsterRow[]>(`/api/compendium/monsters`);
-      if (!alive) return;
-      setCompendiumIndex(rows);
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
-    const q = compQ.trim().toLowerCase();
-    if (!q) { setCompRows(compendiumIndex); return; }
-    setCompRows(compendiumIndex.filter((m) => String(m?.name ?? "").toLowerCase().includes(q)));
-  }, [compQ, compendiumIndex]);
-
   useAppWebSocket({
     selectedCampaignId: state.selectedCampaignId,
     selectedAdventureId: state.selectedAdventureId,
@@ -124,7 +104,6 @@ function AppInner() {
     refreshCampaign,
     refreshAdventure,
     refreshEncounter,
-    setCompendiumIndex,
   });
 
   const {
@@ -134,9 +113,8 @@ function AppInner() {
     reorderEncounters,
     reorderCampaignNotes,
     reorderAdventureNotes,
-    addMonster,
     removeCombatant,
-    addINpcFromMonster,
+    addINpcFromAdversary,
     deletePlayer,
     deleteINpc,
     exportAdventure,
@@ -215,7 +193,7 @@ function AppInner() {
                 onEditPlayer={(playerId) => dispatch({ type: "openDrawer", drawer: { type: "editPlayer", playerId } })}
                 onDeletePlayer={deletePlayer}
                 onAddPlayerToEncounter={addPlayerToEncounter}
-                onAddINpcFromMonster={addINpcFromMonster}
+                onAddINpcFromAdversary={addINpcFromAdversary}
                 onEditINpc={(inpcId) => dispatch({ type: "openDrawer", drawer: { type: "editINpc", inpcId } })}
                 onDeleteINpc={deleteINpc}
                 onAddINpcToEncounter={addINpcToEncounter}
@@ -225,9 +203,6 @@ function AppInner() {
                 onReorderEncounters={reorderEncounters}
                 onReorderCampaignNotes={reorderCampaignNotes}
                 onReorderAdventureNotes={reorderAdventureNotes}
-                compQ={compQ}
-                setCompQ={setCompQ}
-                compRows={compRows}
               />
   )}
           />
