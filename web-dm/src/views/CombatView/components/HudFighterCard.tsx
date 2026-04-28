@@ -19,6 +19,7 @@ type Props = {
   onOpenConditions: (combatantId: string, role: Role, casterId: string | null) => void;
   onUpdateCombatant?: (id: string, patch: Record<string, unknown>) => void;
   onUpdateResource?: (id: string, patch: { focusCurrent?: number; investitureCurrent?: number }) => void;
+  onOpenInjury?: () => void;
   currentPhase?: CombatPhase;
   adversary?: Adversary | null;
 };
@@ -308,12 +309,50 @@ export function HudFighterCard(props: Props) {
         </div>
       </div>
 
-      <HudConditionsStrip
-        conditions={rawConditions}
-        onClick={openHudConditions}
-        maxShown={6}
-        iconColor={theme.colors.text}
-      />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <HudConditionsStrip
+          conditions={rawConditions}
+          onClick={openHudConditions}
+          maxShown={6}
+          iconColor={theme.colors.text}
+        />
+
+        {props.role === "target" && c && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+            {/* Active injury dots */}
+            {(() => {
+              const player = c.baseType === "player" ? props.playersById[c.baseId] : null;
+              const injuryCount = player?.injuryCount ?? 0;
+              if (injuryCount === 0) return null;
+              return (
+                <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
+                  {Array.from({ length: Math.min(injuryCount, 5) }).map((_, i) => (
+                    <span key={i} style={{ fontSize: "var(--fs-medium)", color: theme.colors.red }}>●</span>
+                  ))}
+                  {injuryCount > 5 && (
+                    <span style={{ fontSize: "var(--fs-medium)", color: theme.colors.red, fontWeight: 700 }}>
+                      +{injuryCount - 5}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Injury button */}
+            <button
+              onClick={props.onOpenInjury}
+              title="Trigger injury roll"
+              style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                color: theme.colors.red, fontSize: "var(--fs-medium)",
+                fontWeight: 700, padding: "0 4px",
+              }}
+            >
+              ⚔
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

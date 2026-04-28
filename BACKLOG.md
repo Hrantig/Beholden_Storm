@@ -17,6 +17,13 @@
   interactive since we removed the handler. Either wire up a Stormlight-equivalent 
   mechanic or remove the dots entirely when tackling the compendium phase.
 
+- **Condition descriptions in detail panel** — when conditions are displayed in 
+  `CombatantConditionsSection` inside `CombatantDetailsPanel`, show the condition 
+  description text from `CONDITION_DEFS` below each active condition name. 
+  Alternatively show on hover over condition chips in the HUD card. 
+  Use `CONDITION_DEFS` from `@/domain/conditions.ts` as the data source.
+  Do during UI polish phase.
+
 ---
 
 ## Architecture / Tech Debt

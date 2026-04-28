@@ -11,6 +11,7 @@ import { HudFighterCard } from "@/views/CombatView/components/HudFighterCard";
 import { CombatantTypeIcon } from "@/views/CombatView/components/CombatantTypeIcon";
 import { PhaseOrderPanel } from "@/views/CombatView/panels/PhaseOrderPanel";
 import { CombatantDetailsPanel } from "@/views/CombatView/panels/CombatantDetailsPanel/CombatantDetailsPanel";
+import { InjuryDialog } from "@/views/CombatView/components/InjuryDialog";
 
 import { useIsNarrow } from "@/views/CombatView/hooks/useIsNarrow";
 import { useServerCombatState } from "@/views/CombatView/hooks/useServerCombatState";
@@ -66,6 +67,15 @@ export function CombatView() {
 
   const [delta, setDelta] = React.useState<string>("");
   const isNarrow = useIsNarrow();
+  const [injuryDialogOpen, setInjuryDialogOpen] = React.useState(false);
+
+  const handleInjuryTriggered = React.useCallback(
+    (combatantId: string) => {
+      setTargetId(combatantId);
+      setInjuryDialogOpen(true);
+    },
+    []
+  );
 
   const {
     bulkMode,
@@ -112,6 +122,7 @@ export function CombatView() {
     target: (target as Combatant | null) ?? null,
     refresh,
     dispatch,
+    onInjuryTriggered: handleInjuryTriggered,
   });
 
   const handleToggleReaction = React.useCallback(
@@ -143,6 +154,29 @@ export function CombatView() {
     },
     [combatants, updateCombatant, refresh]
   );
+
+  const handleApplyInjuryCondition = React.useCallback(
+    (conditionKey: string, detail?: string) => {
+      if (!target?.id) return;
+      const existing = target.conditions ?? [];
+      const newCondition = { key: conditionKey, ...(detail ? { detail } : {}) };
+      void updateCombatant(target.id, { conditions: [...existing, newCondition] });
+      setInjuryDialogOpen(false);
+    },
+    [target, updateCombatant]
+  );
+
+  const handleIncrementInjuryCount = React.useCallback(async () => {
+    if (!target || target.baseType !== "player") return;
+    const player = playersById[target.baseId];
+    if (!player) return;
+    await api(`/api/players/${target.baseId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ injuryCount: (player.injuryCount ?? 0) + 1 }),
+    });
+    await refresh();
+  }, [target, playersById, refresh]);
 
   // Reset reaction for the incoming active combatant each time it changes.
   const prevActiveIdRef = React.useRef<string | null>(null);
@@ -201,6 +235,7 @@ export function CombatView() {
   void started;
   void canNavigate;
   void monsterCrById;
+  void targetMonster;
 
   return (
     <div style={{ padding: "var(--space-page)" }}>
@@ -270,6 +305,7 @@ export function CombatView() {
               targetId={target?.id ?? null}
               onOpenConditions={onOpenConditions}
               onUpdateResource={updateResource}
+              onOpenInjury={() => setInjuryDialogOpen(true)}
               currentPhase={currentPhase}
             />
           </div>
@@ -317,6 +353,15 @@ export function CombatView() {
           <CombatantDetailsPanel roleTitle="Target" role="target" combatant={target ?? null} ctx={targetCtx} />
         </div>
       </div>
+
+      <InjuryDialog
+        isOpen={injuryDialogOpen}
+        combatant={(target as Combatant | null) ?? null}
+        player={target?.baseType === "player" ? (playersById[target.baseId] ?? null) : null}
+        onClose={() => setInjuryDialogOpen(false)}
+        onApplyCondition={handleApplyInjuryCondition}
+        onIncrementInjuryCount={handleIncrementInjuryCount}
+      />
     </div>
   );
 }

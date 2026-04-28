@@ -21,6 +21,7 @@ type Args = {
   target: Combatant | null;
   refresh: () => Promise<void>;
   dispatch: StoreDispatch;
+  onInjuryTriggered?: (combatantId: string) => void;
 };
 
 // Convenience aggregator for combat actions.
@@ -39,8 +40,9 @@ export function useCombatActions({
   target,
   refresh,
   dispatch,
+  onInjuryTriggered,
 }: Args) {
-  const { applyHpDelta } = useCombatHpActions({ encounterId, delta, setDelta, target, refresh });
+  const { applyHpDelta } = useCombatHpActions({ encounterId, delta, setDelta, target, refresh, onInjuryTriggered });
   const { updateCombatant } = useCombatantPatchActions({ encounterId, refresh });
   const { resetFight, endCombat } = useCombatFightActions({
     campaignId,

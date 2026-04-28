@@ -139,12 +139,12 @@ function AdversaryStatBlock({ adversary }: { adversary: Adversary }) {
       {/* Additional features */}
       {adversary.additionalFeatures && adversary.additionalFeatures.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: "var(--fs-small)", fontWeight: 900, color: theme.colors.muted, letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: theme.colors.muted, letterSpacing: "0.08em" }}>
             SPECIAL
           </div>
           {adversary.additionalFeatures.map((f, i) => (
             <div key={i}>
-              <span style={{ fontWeight: 700, color: theme.colors.text }}>{f.name}. </span>
+              <span style={{ fontSize: "var(--fs-medium)", fontWeight: 700, color: theme.colors.text }}>{f.name}. </span>
               <span style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
                 {f.description.split('\n\n').map((para, j) => (
                   <p key={j} style={{ margin: "0 0 4px 0" }}>{para.trim()}</p>

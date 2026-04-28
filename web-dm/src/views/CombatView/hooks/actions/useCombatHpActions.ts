@@ -39,9 +39,10 @@ type Args = {
   setDelta: (v: string) => void;
   target: Combatant | null;
   refresh: () => Promise<void>;
+  onInjuryTriggered?: (combatantId: string) => void;
 };
 
-export function useCombatHpActions({ encounterId, delta, setDelta, target, refresh }: Args) {
+export function useCombatHpActions({ encounterId, delta, setDelta, target, refresh, onInjuryTriggered }: Args) {
   const [concentrationAlert, setConcentrationAlert] = React.useState<{ name: string; dc: number } | null>(null);
 
   const applyHpDelta = React.useCallback(
@@ -88,13 +89,18 @@ export function useCombatHpActions({ encounterId, delta, setDelta, target, refre
       await refresh();
       setDelta("");
 
+      // Auto-trigger injury dialog when a player drops to 0 HP.
+      if (kind === "damage" && nextHp <= 0 && target.baseType === "player") {
+        onInjuryTriggered?.(target.id);
+      }
+
       // Concentration check: if damage was dealt to a concentrating combatant, fire a reminder.
       if (kind === "damage" && amount > 0 && target.conditions?.some(c => c.key === "concentration")) {
         const dc = Math.max(10, Math.floor(amount / 2));
         setConcentrationAlert({ name: target.label || target.name, dc });
       }
     },
-    [encounterId, target, delta, refresh, setDelta]
+    [encounterId, target, delta, refresh, setDelta, onInjuryTriggered]
   );
 
   return {

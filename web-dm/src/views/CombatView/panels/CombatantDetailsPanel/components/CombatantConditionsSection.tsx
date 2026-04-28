@@ -56,7 +56,7 @@ export function CombatantConditionsSection(props: {
         <div style={{ flex: 1, height: 1, background: theme.colors.panelBorder }} />
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {selectedConditions.length ? (
           selectedConditions.map((c, idx) => {
             const needsCaster = c.key === "hexed" || c.key === "marked";
@@ -75,65 +75,77 @@ export function CombatantConditionsSection(props: {
               ? "rgba(255, 140, 66, 0.08)"
               : pillStyle.background;
 
+            const def = CONDITION_DEFS.find(d => d.key === c.key);
+            
             return (
               <span
                 key={`${c.key}:${c.casterId ?? ""}:${idx}`}
-                style={{ ...pillStyle, border: chipBorder, background: chipBg }}
+                style={{ 
+                  ...pillStyle, 
+                  border: chipBorder, 
+                  background: chipBg,
+                  borderRadius: 12,
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  padding: "8px 10px",
+                }}
               >
-                {(() => {
-                  const CondIcon = conditionIconByKey[c.key as keyof typeof conditionIconByKey];
-                  return CondIcon ? (
-                    <CondIcon size={14} title={conditionLabel(c.key)} style={{ opacity: 0.9 }} />
-                  ) : null;
-                })()}
-                {conditionLabel(c.key)}
-                {needsCaster && casterLabel ? (
-                  <span style={{ color: theme.colors.muted, fontWeight: 900 }}>({casterLabel})</span>
-                ) : null}
+                {/* Left: icon + content */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
+                  {/* Top row: icon + name + timer */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {(() => {
+                      const CondIcon = conditionIconByKey[c.key as keyof typeof conditionIconByKey];
+                      return CondIcon ? (
+                        <CondIcon size={14} title={conditionLabel(c.key)} style={{ opacity: 0.9, flexShrink: 0 }} />
+                      ) : null;
+                    })()}
+                    <span style={{ fontSize: "var(--fs-medium)", fontWeight: 900 }}>{conditionLabel(c.key)}</span>
+                    {needsCaster && casterLabel ? (
+                      <span style={{ color: theme.colors.muted, fontWeight: 900 }}>({casterLabel})</span>
+                    ) : null}
+                    {hasTimer && (
+                      <span
+                        title={isExpired ? "Expired" : `Expires in ${remaining} round${remaining === 1 ? "" : "s"}`}
+                        style={{
+                          fontSize: "var(--fs-tiny)", fontWeight: 900, padding: "1px 5px",
+                          borderRadius: 999,
+                          background: isExpired ? theme.colors.accentWarning : "rgba(255,255,255,0.08)",
+                          color: isExpired ? "#000" : theme.colors.accentWarning,
+                          border: isExpired ? "none" : `1px solid ${theme.colors.accentWarning}`,
+                          lineHeight: 1.4, flexShrink: 0,
+                        }}
+                      >
+                        {isExpired ? "exp" : `${remaining}R`}
+                      </span>
+                    )}
+                  </div>
 
-                {/* Expiry badge */}
-                {hasTimer && (
-                  <span
-                    title={isExpired ? "Expired" : `Expires in ${remaining} round${remaining === 1 ? "" : "s"}`}
-                    style={{
-                      fontSize: "var(--fs-tiny)",
-                      fontWeight: 900,
-                      padding: "1px 5px",
-                      borderRadius: 999,
-                      background: isExpired ? theme.colors.accentWarning : "rgba(255,255,255,0.08)",
-                      color: isExpired ? "#000" : theme.colors.accentWarning,
-                      border: isExpired ? "none" : `1px solid ${theme.colors.accentWarning}`,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {isExpired ? "exp" : `${remaining}R`}
-                  </span>
-                )}
+                  {/* Description */}
+                  {def?.description && (
+                    <div style={{
+                      fontSize: "var(--fs-small)", color: theme.colors.muted,
+                      fontStyle: "italic", lineHeight: 1.4,
+                    }}>
+                      {def.description}
+                    </div>
+                  )}
+                </div>
 
+                {/* Right: X button */}
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    removeConditionAt(idx);
-                  }}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeConditionAt(idx); }}
                   title="Remove"
                   style={{
-                    border: `1px solid ${theme.colors.panelBorder}`,
-                    background: "transparent",
-                    color: theme.colors.text,
-                    fontWeight: 900,
-                    borderRadius: 999,
-                    width: 20,
-                    height: 20,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer"
+                    border: `1px solid ${theme.colors.panelBorder}`, background: "transparent",
+                    color: theme.colors.text, fontWeight: 900, borderRadius: 999,
+                    width: 20, height: 20, display: "inline-flex", alignItems: "center",
+                    justifyContent: "center", cursor: "pointer", flexShrink: 0,
                   }}
-                >
-                  ×
-                </button>
+                >×</button>
               </span>
             );
           })
