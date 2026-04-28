@@ -47,6 +47,10 @@ export function createPlayerCombatant({
     hpCurrent: player.hpCurrent,
     hpMax: player.hpMax,
     hpDetails: null,
+    focusCurrent: null,
+    focusMax: null,
+    investitureCurrent: null,
+    investitureMax: null,
     ac: player.defensePhysical,
     acDetails: null,
     attackOverrides: null,
@@ -62,35 +66,42 @@ export function createPlayerCombatant({
 /** Insert a StoredCombatant into the combatants table. */
 export function insertCombatant(db: Database.Database, c: StoredCombatant): void {
   db.prepare(
-    `INSERT INTO combatants
-       (id, encounter_id, base_type, base_id, name, label, initiative, friendly, color,
-      hp_current, hp_max, hp_details, ac, ac_details, sort,
+  `INSERT INTO combatants
+     (id, encounter_id, base_type, base_id, name, label, initiative, friendly, color,
+      hp_current, hp_max, hp_details, focus_current, focus_max, 
+      investiture_current, investiture_max,
+      ac, ac_details, sort,
       overrides_json, conditions_json, attack_overrides_json,
       phase, action_points_used, dual_phase, used_reaction,
       created_at, updated_at)
-     VALUES
-       (?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?)`
-  ).run(
-    c.id, c.encounterId, c.baseType, c.baseId, c.name, c.label,
-    c.initiative,
-    c.friendly ? 1 : 0,
-    c.color,
-    c.hpCurrent, c.hpMax, c.hpDetails, c.ac, c.acDetails,
-    c.sort ?? null,
-    JSON.stringify(c.overrides ?? DEFAULT_OVERRIDES),
-    JSON.stringify(c.conditions ?? []),
-    c.attackOverrides != null ? JSON.stringify(c.attackOverrides) : null,
-    c.phase ?? null,
-    c.actionPointsUsed ?? 0,
-    c.dualPhase ? 1 : 0,
-    c.usedReaction ? 1 : 0,
-    c.createdAt,
-    c.updatedAt,
-  );
+   VALUES
+     (?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?,
+      ?, ?,
+      ?, ?, ?,
+      ?, ?, ?,
+      ?, ?, ?, ?,
+      ?, ?)`
+).run(
+  c.id, c.encounterId, c.baseType, c.baseId, c.name, c.label,
+  c.initiative,
+  c.friendly ? 1 : 0,
+  c.color,
+  c.hpCurrent, c.hpMax, c.hpDetails,
+  c.focusCurrent ?? null, c.focusMax ?? null,
+  c.investitureCurrent ?? null, c.investitureMax ?? null,
+  c.ac, c.acDetails,
+  c.sort ?? null,
+  JSON.stringify(c.overrides ?? DEFAULT_OVERRIDES),
+  JSON.stringify(c.conditions ?? []),
+  c.attackOverrides != null ? JSON.stringify(c.attackOverrides) : null,
+  c.phase ?? null,
+  c.actionPointsUsed ?? 0,
+  c.dualPhase ? 1 : 0,
+  c.usedReaction ? 1 : 0,
+  c.createdAt,
+  c.updatedAt,
+);
 }
 
 /**

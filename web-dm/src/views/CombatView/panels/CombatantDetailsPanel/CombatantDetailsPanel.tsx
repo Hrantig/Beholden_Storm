@@ -1,17 +1,10 @@
 import React from "react";
-import type { AttackOverride, Combatant } from "@/domain/types/domain";
+import type {Adversary, Combatant, Player } from "@/domain/types/domain";
 import { theme } from "@/theme/theme";
 import { Panel } from "@/ui/Panel";
 import { IconButton } from "@/ui/IconButton";
 import { IconPencil, IconConditions } from "@/icons/index";
-import { CharacterSheetPanel, type CharacterSheetStats } from "@/components/CharacterSheet";
-import type { MonsterDetail } from "@/domain/types/compendium";
-import { MonsterActions } from "@/views/CombatView/components/MonsterActions";
-import { MonsterTraits } from "@/views/CombatView/components/MonsterTraits";
-import type { Player } from "@/domain/types/domain";
-
 import { CombatantConditionsSection } from "@/views/CombatView/panels/CombatantDetailsPanel/components/CombatantConditionsSection";
-import { useCharacterSheetStats } from "@/views/CombatView/panels/CombatantDetailsPanel/hooks/useCharacterSheetStats";
 
 function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -22,15 +15,22 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function PlayerStatBlock({ player }: { player: Player }) {
+function StatBlock({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      display: "grid", gap: 6,
-      borderRadius: 12,
+      display: "grid", gap: 6, borderRadius: 12,
       border: `1px solid ${theme.colors.panelBorder}`,
       background: theme.colors.panelBg,
       padding: "10px 14px",
     }}>
+      {children}
+    </div>
+  );
+}
+
+function PlayerStatBlock({ player }: { player: Player }) {
+  return (
+    <StatBlock>
       <StatRow label="HP" value={`${player.hpCurrent} / ${player.hpMax}`} />
       <StatRow label="Focus" value={`${player.focusCurrent} / ${player.focusMax}`} />
       {(player.investitureMax ?? 0) > 0 && (
@@ -44,20 +44,129 @@ function PlayerStatBlock({ player }: { player: Player }) {
       {player.injuryCount > 0 && (
         <StatRow label="Injuries" value={<span style={{ color: theme.colors.red }}>{player.injuryCount}</span>} />
       )}
+    </StatBlock>
+  );
+}
+
+function actionCostSymbol(cost: number, actionType?: string): string {
+  if (actionType === "reaction") return "↺";
+  switch (cost) {
+    case 0: return "▷";
+    case 1: return "▶";
+    case 2: return "▶▶";
+    case 3: return "▶▶▶";
+    default: return `${cost}`;
+  }
+}
+
+function AdversaryStatBlock({ adversary }: { adversary: Adversary }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Subtitle */}
+      <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", fontWeight: 600 }}>
+        Tier {adversary.tier} · {adversary.adversaryType} · {adversary.size}
+        {adversary.dualPhase && (
+          <span style={{
+            marginLeft: 8, padding: "1px 6px", borderRadius: 4, fontSize: 10,
+            background: "rgba(245,158,11,0.15)", border: "1px solid #f59e0b", color: "#f59e0b",
+          }}>
+            Boss · Dual Phase
+          </span>
+        )}
+      </div>
+
+      {/* Core stats */}
+      <StatBlock>
+        <StatRow label="HP" value={`${adversary.hpRangeMin}–${adversary.hpRangeMax}`} />
+        {adversary.focusMax > 0 && <StatRow label="Focus" value={adversary.focusMax} />}
+        {(adversary.investitureMax ?? 0) > 0 && <StatRow label="Investiture" value={adversary.investitureMax} />}
+        <StatRow label="Def Physical" value={adversary.defensePhysical} />
+        <StatRow label="Def Cognitive" value={adversary.defenseCognitive} />
+        <StatRow label="Def Spiritual" value={adversary.defenseSpiritual} />
+        <StatRow label="Deflect" value={adversary.deflect} />
+        <StatRow label="Movement" value={adversary.movement} />
+      </StatBlock>
+
+      {/* Features */}
+      {adversary.features && adversary.features.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: theme.colors.muted, letterSpacing: "0.08em" }}>
+            FEATURES
+          </div>
+          {adversary.features.map((f, i) => (
+            <div key={i}>
+              <span style={{fontSize: "var(--fs-medium)", fontWeight: 700, color: theme.colors.text }}>{f.name}. </span>
+              <span style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
+                {f.description.split('\n\n').map((para, j) => (
+                  <p key={j} style={{ margin: "0 0 4px 0" }}>{para.trim()}</p>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      {adversary.actions && adversary.actions.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: theme.colors.muted, letterSpacing: "0.08em" }}>
+            ACTIONS
+          </div>
+          {[...adversary.actions]
+            // .sort((a, b) => {
+            //   const order = (x: typeof a) =>
+            //     x.actionType === "reaction" ? 0 : x.cost === 0 ? 1 : x.cost + 2;
+            //   return order(a) - order(b);
+            // })
+            .map((action, i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: "var(--fs-medium)", fontWeight: 900, color: theme.colors.accentPrimary }}>
+                    {actionCostSymbol(action.cost, action.actionType)}
+                  </span>
+                  <span style={{fontSize: "var(--fs-medium)", fontWeight: 700, color: theme.colors.text }}>{action.name}</span>
+                </div>
+                <div style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", paddingLeft: 20 }}>
+                  {action.description.split('\n\n').map((para, j) => (
+                    <p key={j} style={{ margin: "0 0 4px 0" }}>{para.trim()}</p>
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* Additional features */}
+      {adversary.additionalFeatures && adversary.additionalFeatures.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: "var(--fs-small)", fontWeight: 900, color: theme.colors.muted, letterSpacing: "0.08em" }}>
+            SPECIAL
+          </div>
+          {adversary.additionalFeatures.map((f, i) => (
+            <div key={i}>
+              <span style={{ fontWeight: 700, color: theme.colors.text }}>{f.name}. </span>
+              <span style={{ color: theme.colors.muted, fontSize: "var(--fs-small)" }}>
+                {f.description.split('\n\n').map((para, j) => (
+                  <p key={j} style={{ margin: "0 0 4px 0" }}>{para.trim()}</p>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export type CombatantDetailsCtx = {
   isNarrow: boolean;
-  selectedMonster: MonsterDetail | null;
+  selectedMonster: Adversary | null;
   playerName: string | null;
   player: Player | null;
   roster: Combatant[];
   activeForCaster: Combatant | null;
   currentRound: number;
   showHpActions: boolean;
-  onChangeAttack: (actionName: string, patch: AttackOverride) => void;
   onUpdate: (patch: Record<string, unknown>) => void;
   onOpenOverrides: () => void;
   onOpenConditions: () => void;
@@ -70,61 +179,13 @@ type Props = {
   ctx: CombatantDetailsCtx;
 };
 
-function buildCreatureTypeLine(monster: MonsterDetail | null): string | null {
-  if (!monster) return null;
-  const raw = (monster.raw_json ?? monster) as Record<string, unknown>;
-
-  const sizeMap: Record<string, string> = {
-    T: "Tiny", S: "Small", M: "Medium", L: "Large", H: "Huge", G: "Gargantuan",
-  };
-  const sizeRaw = String(raw.size ?? "").trim();
-  const size = sizeMap[sizeRaw] ?? sizeRaw;
-
-  const type = (() => {
-    const t = raw.typeFull ?? raw.type ?? raw.typeKey;
-    if (!t) return "";
-    if (typeof t === "string") return t;
-    if (typeof t === "object" && t !== null) {
-      const o = t as Record<string, unknown>;
-      const base = typeof o.type === "string" ? o.type : "";
-      const tags = Array.isArray(o.tags) ? (o.tags as unknown[]).map(String).join(", ") : "";
-      return tags ? `${base} (${tags})` : base;
-    }
-    return "";
-  })();
-
-  const align = (() => {
-    const alignMap: Record<string, string> = {
-      L: "lawful", N: "neutral", C: "chaotic", G: "good", E: "evil", U: "unaligned", A: "any",
-    };
-    const a = raw.alignment;
-    if (!a) return "";
-    if (typeof a === "string") return a;
-    if (Array.isArray(a)) return a.map((x: unknown) => alignMap[String(x)] ?? String(x).toLowerCase()).join(" ");
-    return "";
-  })();
-
-  const creature = [size, type].filter(Boolean).join(" ");
-  return [creature, align].filter(Boolean).join(", ") || null;
-}
-
 export function CombatantDetailsPanel(props: Props) {
   const { roleTitle, role, combatant, ctx } = props;
 
   const selected = combatant ?? null;
-  const isMonster = selected?.baseType === "monster" || (selected?.baseType === "inpc" && !!ctx.selectedMonster);
+  const isMonster = selected?.baseType === "monster" || selected?.baseType === "inpc";
   const isPlayer = selected?.baseType === "player";
   const titleMain = selected ? (selected.label || selected.name || "(Unnamed)") : "No selection";
-  const monsterBaseName = isMonster ? selected!.name.trim() : "";
-  const showMonsterBaseName = isMonster && monsterBaseName &&
-    monsterBaseName.toLowerCase() !== titleMain.toLowerCase();
-
-  const creatureTypeLine = isMonster ? buildCreatureTypeLine(ctx.selectedMonster) : null;
-
-  const sheetStats: CharacterSheetStats | null = useCharacterSheetStats({
-    combatant: selected,
-    selectedMonster: ctx.selectedMonster,
-  });
 
   return (
     <Panel
@@ -136,23 +197,12 @@ export function CombatantDetailsPanel(props: Props) {
               {roleTitle ? <span style={{ color: theme.colors.accentPrimary }}>{roleTitle}: </span> : null}
               {titleMain}
             </span>
-            {selected ? (
-              isMonster ? (
-                showMonsterBaseName ? (
-                  <span style={{ color: theme.colors.muted, fontSize: "var(--fs-medium)", fontWeight: 900, flexShrink: 0 }}>({monsterBaseName})</span>
-                ) : null
-              ) : isPlayer ? (
-                <span style={{ color: theme.colors.muted, fontSize: "var(--fs-medium)", fontWeight: 900, flexShrink: 0 }}>
-                  ({ctx.playerName || "Player"})
-                </span>
-              ) : null
-            ) : null}
+            {isPlayer && ctx.playerName && (
+              <span style={{ color: theme.colors.muted, fontSize: "var(--fs-medium)", fontWeight: 900, flexShrink: 0 }}>
+                ({ctx.playerName})
+              </span>
+            )}
           </div>
-          {creatureTypeLine ? (
-            <span style={{ color: theme.colors.muted, fontSize: "var(--fs-small)", fontWeight: 600, letterSpacing: 0.2 }}>
-              {creatureTypeLine}
-            </span>
-          ) : null}
         </div>
       }
       actions={
@@ -161,7 +211,6 @@ export function CombatantDetailsPanel(props: Props) {
             <IconButton title="Conditions" onClick={ctx.onOpenConditions}>
               <IconConditions size={18} title="Conditions" />
             </IconButton>
-
             <IconButton title="Overrides" onClick={ctx.onOpenOverrides}>
               <IconPencil size={18} title="Overrides" />
             </IconButton>
@@ -173,8 +222,8 @@ export function CombatantDetailsPanel(props: Props) {
         <div style={{ color: theme.colors.muted }}>Select a combatant.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {sheetStats ? <CharacterSheetPanel stats={sheetStats} /> : null}
-          {isPlayer && ctx.player ? <PlayerStatBlock player={ctx.player} /> : null}
+          {isPlayer && ctx.player && <PlayerStatBlock player={ctx.player} />}
+          {isMonster && ctx.selectedMonster && <AdversaryStatBlock adversary={ctx.selectedMonster} />}
 
           <CombatantConditionsSection
             selected={selected}
@@ -183,20 +232,6 @@ export function CombatantDetailsPanel(props: Props) {
             currentRound={ctx.currentRound}
             onCommit={(next) => ctx.onUpdate({ conditions: next })}
           />
-
-          {ctx.selectedMonster ? (
-            <MonsterActions
-              monster={ctx.selectedMonster}
-              attackOverrides={combatant?.attackOverrides as Record<string, AttackOverride> | null | undefined}
-              onChangeAttack={ctx.onChangeAttack}
-            />
-          ) : null}
-
-          {ctx.selectedMonster ? (
-            <MonsterTraits
-              monster={ctx.selectedMonster}
-            />
-          ) : null}
         </div>
       )}
     </Panel>

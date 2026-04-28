@@ -7,6 +7,7 @@ import type {
   StoredCampaign,
   StoredAdventure,
   StoredEncounter,
+  CombatPhase,
   StoredPlayer,
   StoredINpc,
   StoredNote,
@@ -113,8 +114,17 @@ export function rowToEncounter(row: Record<string, unknown>): StoredEncounter {
     status: row.status as string,
     ...(row.sort != null ? { sort: row.sort as number } : {}),
     ...(row.combat_round != null
-      ? { combat: { round: row.combat_round as number, activeCombatantId: (row.combat_active_combatant_id as string | null) ?? null } }
-      : {}),
+  ? { 
+      combat: { 
+        round: row.combat_round as number, 
+        activeCombatantId: (row.combat_active_combatant_id as string | null) ?? null,
+        currentPhase: (row.combat_phase as string ?? "fast-pc") as CombatPhase,
+        declarationsLocked: Boolean(row.declarations_locked),
+      } 
+    }
+  : {}),
+    currentPhase: (row.combat_phase as string ?? "fast-pc") as CombatPhase,
+    declarationsLocked: Boolean(row.declarations_locked),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
@@ -288,6 +298,10 @@ export function rowToCombatant(row: Record<string, unknown>): StoredCombatant {
     hpCurrent: (row.hp_current as number | null) ?? null,
     hpMax: (row.hp_max as number | null) ?? null,
     hpDetails: (row.hp_details as string | null) ?? null,
+    focusCurrent: (row.focus_current as number | null) ?? null,
+    focusMax: (row.focus_max as number | null) ?? null,
+    investitureCurrent: (row.investiture_current as number | null) ?? null,
+    investitureMax: (row.investiture_max as number | null) ?? null,
     ac: (row.ac as number | null) ?? null,
     acDetails: (row.ac_details as string | null) ?? null,
     ...(row.sort != null ? { sort: row.sort as number } : {}),

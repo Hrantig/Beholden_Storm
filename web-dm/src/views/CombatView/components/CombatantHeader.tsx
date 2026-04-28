@@ -10,27 +10,16 @@ type Props = {
   backTo: string;
   backTitle?: string;
   title: string;
-  round: number;
-  seconds?: number | null;
-  canNavigate: boolean;
-  rollLabel: string;
-  onRollOrReset: () => void;
   onResetFight?: () => void;
   onEndCombat: () => void;
   onOpenAdventureNotes: () => void;
-  onPrev: () => void;
-  onNext: () => void;
 };
 
 /**
  * Top-of-screen combat header.
- *
- * NOTE: This file intentionally owns the name `CombatantHeader` because the
- * route-level view imports it. (It used to be a small "combatant label" widget,
- * which caused a runtime crash when the CombatView passed header props.)
  */
 export function CombatantHeader(props: Props) {
-  const { title, rollLabel } = props;
+  const { title } = props;
   const navigate = useNavigate();
   const isPhone = useIsNarrow("(max-width: 640px)");
 
@@ -49,10 +38,6 @@ export function CombatantHeader(props: Props) {
       }
       actions={
         <div style={{ display: "flex", gap: isPhone ? 4 : 8, alignItems: "center" }}>
-          <Button variant="primary" onClick={props.onRollOrReset}>
-            {rollLabel}
-          </Button>
-
           {props.onResetFight && !isPhone && (
             <Button variant="ghost" onClick={props.onResetFight} title="Reset monsters HP and conditions to full">
               Reset Fight

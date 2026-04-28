@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/services/api";
-import type { Combatant } from "@/domain/types/domain";
+import type { Combatant, CombatPhase } from "@/domain/types/domain";
 
 type Args = {
   campaignId?: string;
@@ -12,7 +12,12 @@ type Args = {
   setRound: (n: number | ((prev: number) => number)) => void;
   setActiveId: (id: string | null) => void;
   setTargetId: (id: string | null) => void;
-  persistCombatState: (next: { round: number; activeId: string | null }) => Promise<void>;
+  persistCombatState: (next: {
+    round: number;
+    activeId: string | null;
+    currentPhase?: CombatPhase;
+    declarationsLocked?: boolean;
+  }) => Promise<void>;
 };
 
 function normalizeHpMaxBonus(v: unknown): number | null {
@@ -41,16 +46,16 @@ export function useCombatFightActions({
       // conditions, death saves, or overrides — those belong to the Player record
       // and are only modified by in-combat HP actions, conditions drawers, or Full Rest.
       if (c.baseType === "player") {
-        // Only clear initiative so they re-roll for the next fight.
+        // Only clear phase declaration so they re-declare for the next fight.
         await api(`/api/encounters/${encounterId}/combatants/${c.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initiative: null }),
+          body: JSON.stringify({ phase: null }),
         });
         continue;
       }
 
-      // Non-player combatants (monsters, iNPCs): restore HP to max and clear conditions/initiative.
+      // Non-player combatants (monsters, iNPCs): restore HP to max and clear conditions/phase.
       const overrides = c.overrides ?? null;
       const hpBonus = normalizeHpMaxBonus(overrides?.hpMaxBonus) ?? 0;
       const max = Math.max(1, Number(c.hpMax) + hpBonus);
@@ -59,7 +64,7 @@ export function useCombatFightActions({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          initiative: null,
+          phase: null,
           conditions: [],
           hpCurrent: Number.isFinite(max) ? max : Number(c.hpCurrent ?? 0),
         }),
@@ -81,7 +86,12 @@ export function useCombatFightActions({
     setActiveId(null);
     setTargetId(null);
     try {
-      await persistCombatState({ round: 1, activeId: null });
+      await persistCombatState({
+        round: 1,
+        activeId: null,
+        currentPhase: "fast-pc",
+        declarationsLocked: false,
+      });
     } catch {
       // ignore
     }
@@ -100,7 +110,12 @@ export function useCombatFightActions({
     }
 
     try {
-      await persistCombatState({ round: 1, activeId: null });
+      await persistCombatState({
+        round: 1,
+        activeId: null,
+        currentPhase: "fast-pc",
+        declarationsLocked: false,
+      });
     } catch {
       // ignore
     }

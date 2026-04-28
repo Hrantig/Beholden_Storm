@@ -28,6 +28,8 @@ export interface Adventure {
 
 export type EncounterStatus = "open" | "closed";
 
+export type CombatPhase = "fast-pc" | "fast-npc" | "slow-pc" | "slow-npc";
+
 export interface Encounter {
   id: Id;
   campaignId: Id;
@@ -35,6 +37,8 @@ export interface Encounter {
   name: string;
   status: EncounterStatus;
   order: number;
+  currentPhase: CombatPhase;
+  declarationsLocked: boolean;
 }
 
 export interface Player {
@@ -111,6 +115,10 @@ export interface Combatant {
   hpDetails: string | null;
   ac: number | null;
   acDetails: string | null;
+  focusCurrent?: number | null;
+  focusMax?: number | null;
+  investitureCurrent?: number | null;
+  investitureMax?: number | null;
   attackOverrides: unknown | null;
   conditions: ConditionInstance[];
   usedReaction?: boolean;

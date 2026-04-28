@@ -3,7 +3,7 @@ import * as React from "react";
 import { theme } from "@/theme/theme";
 import { HudConditionsStrip } from "@/views/CombatView/components/HudConditionsStrip";
 import { clamp01, getHudHp, getHudHpFill, getHudNames } from "@/views/CombatView/utils/hud";
-import type { Combatant, Player } from "@/domain/types/domain";
+import type { Adversary, Combatant, Player, CombatPhase } from "@/domain/types/domain";
 
 import "@/views/CombatView/combatView.css";
 
@@ -17,6 +17,10 @@ type Props = {
   activeId: string | null;
   targetId: string | null;
   onOpenConditions: (combatantId: string, role: Role, casterId: string | null) => void;
+  onUpdateCombatant?: (id: string, patch: Record<string, unknown>) => void;
+  onUpdateResource?: (id: string, patch: { focusCurrent?: number; investitureCurrent?: number }) => void;
+  currentPhase?: CombatPhase;
+  adversary?: Adversary | null;
 };
 
 /**
@@ -64,6 +68,22 @@ export function HudFighterCard(props: Props) {
     props.onOpenConditions(id, props.role, casterId);
   }, [c, props.role, props.activeId, props.onOpenConditions]);
 
+  const maxAp = React.useMemo(() => {
+    if (!c) return 2;
+    if (c.dualPhase) {
+      // In fast-npc phase or PC phases before fast-npc → show 2
+      // In slow-npc phase or PC phases before slow-npc → show 3
+      return (props.currentPhase === "fast-npc" || props.currentPhase === "fast-pc") ? 2 : 3;
+    }
+    return c.phase === "fast" ? 2 : 3;
+  }, [c, props.currentPhase]);
+  const remaining = Math.max(0, maxAp - (c?.actionPointsUsed ?? 0));
+
+  const focusCur = c?.focusCurrent ?? (props.adversary?.focusMax ?? null);
+  const focusMax = c?.focusMax ?? (props.adversary?.focusMax ?? null);
+  const investitureCur = c?.investitureCurrent ?? (props.adversary?.investitureMax ?? null);
+  const investitureMax = c?.investitureMax ?? (props.adversary?.investitureMax ?? null);
+
   return (
     <div
       className="cvHudCard"
@@ -103,7 +123,6 @@ export function HudFighterCard(props: Props) {
               strokeLinejoin="round"
             />
           </svg>
-
           <div className="cvHudPortraitIcon">
             {props.renderCombatantIcon(c)}
           </div>
@@ -118,7 +137,6 @@ export function HudFighterCard(props: Props) {
               {roleLabel}
             </span>
           </div>
-
           <div
             title={names.primary}
             className="cvHudPrimaryName"
@@ -134,6 +152,140 @@ export function HudFighterCard(props: Props) {
             ) : null}
           </div>
         </div>
+
+        {/* Resource panel — top right */}
+        {c && (
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 4,
+            marginLeft: "auto", flexShrink: 0, alignItems: "flex-end",
+          }}>
+            {props.role === "active" && c && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          // marginTop: 6, paddingTop: 6,
+          //borderTop: `1px solid ${theme.colors.panelBorder}`,
+           paddingBottom: 6,
+        }}>
+          {/* Action points */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            Actions :
+            <button
+              onClick={() => {
+                const used = Math.min((c.actionPointsUsed ?? 0) + 1, maxAp);
+                props.onUpdateCombatant?.(c.id, { actionPointsUsed: used });
+              }}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}
+            >−</button>
+            <div style={{ display: "flex", gap: 3 }}>
+              {Array.from({ length: maxAp }).map((_, i) => (
+                <span
+                  key={i}
+                  onClick={() => {
+                    const next = i < remaining ? i : i + 1;
+                    props.onUpdateCombatant?.(c.id, { actionPointsUsed: maxAp - Math.max(0, Math.min(next, maxAp)) });
+                  }}
+                  title={i < remaining ? "Click to spend" : "Click to restore"}
+                  style={{
+                    fontSize: "var(--fs-large)", cursor: "pointer",
+                    color: i < remaining ? theme.colors.accentPrimary : theme.colors.muted,
+                    opacity: i < remaining ? 1 : 0.5,
+                  }}
+                >▶</span>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                const used = Math.max((c.actionPointsUsed ?? 0) - 1, 0);
+                props.onUpdateCombatant?.(c.id, { actionPointsUsed: used });
+              }}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}
+            >+</button>
+          </div>
+
+          {/* Reaction */}
+          <button
+            onClick={() => props.onUpdateCombatant?.(c.id, { usedReaction: !c.usedReaction })}
+            title={c.usedReaction ? "Reaction spent" : "Reaction available"}
+            style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              fontSize: "var(--fs-large)", padding: "0 4px",
+              color: c.usedReaction ? theme.colors.muted : theme.colors.accentPrimary,
+              opacity: c.usedReaction ? 0.5 : 1,
+            }}
+          >↺</button>
+        </div>
+      )}
+            {/* Focus */}
+            {focusMax != null && focusMax > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              Focus :
+              <button
+                onClick={() => props.onUpdateResource?.(c.id, { focusCurrent: Math.max(0, (focusCur ?? 0) - 1) })}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}
+              >−</button>
+              <div style={{ display: "flex", gap: 2 }}>
+                {Array.from({ length: focusMax }).map((_, i) => (
+                  <span
+                    key={i}
+                    onClick={() => {
+                      const cur = focusCur ?? 0;
+                      const next = i < cur ? i : i + 1;
+                      props.onUpdateResource?.(c.id, { focusCurrent: Math.max(0, Math.min(next, focusMax)) });
+                    }}
+                    title={i < (focusCur ?? 0) ? `Set focus to ${i}` : `Set focus to ${i + 1}`}
+                    style={{
+                      fontSize: "var(--fs-large)", cursor: "pointer",
+                      color: i < (focusCur ?? 0) ? theme.colors.accentPrimary : theme.colors.panelBorder,
+                      opacity: i < (focusCur ?? 0) ? 1 : 0.3,
+                    }}
+                  >
+                    {i < (focusCur ?? 0) ? "◉" : "○"}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={() => props.onUpdateResource?.(c.id, { focusCurrent: Math.min((focusCur ?? 0) + 1, focusMax) })}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}
+              >+</button>
+            </div>
+          )}
+
+            {/* Investiture */}
+            {investitureMax != null && investitureMax > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              Investiture :
+              <button
+                onClick={() => props.onUpdateResource?.(c.id, { investitureCurrent: Math.max(0, (investitureCur ?? 0) - 1) })}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}
+              >−</button>
+              <div style={{ display: "flex", gap: 2 }}>
+                {Array.from({ length: investitureMax }).map((_, i) => (
+                  <span
+                    key={i}
+                    onClick={() => {
+                      const cur = investitureCur ?? 0;
+                      const next = i < cur ? i : i + 1;
+                      props.onUpdateResource?.(c.id, { investitureCurrent: Math.max(0, Math.min(next, investitureMax)) });
+                    }}
+                    title={i < (investitureCur ?? 0) ? `Set investiture to ${i}` : `Set investiture to ${i + 1}`}
+                    style={{
+                      fontSize: "var(--fs-large)", cursor: "pointer",
+                      color: i < (investitureCur ?? 0) ? "#f59e0b" : theme.colors.panelBorder,
+                      opacity: i < (investitureCur ?? 0) ? 1 : 0.3,
+                    }}
+                  >
+                    {i < (investitureCur ?? 0) ? "✦" : "✧"}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={() => props.onUpdateResource?.(c.id, { investitureCurrent: Math.min((investitureCur ?? 0) + 1, investitureMax) })}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.colors.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}
+              >+</button>
+            </div>
+          )}
+          </div>
+        )}
       </div>
 
       <div className="cvHudHpRow">
@@ -145,24 +297,7 @@ export function HudFighterCard(props: Props) {
           ) : null}
         </div>
 
-        <div className="cvHudHpText" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* AC chip */}
-          {c ? (
-            <span
-              title="Armor Class"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 3,
-                fontWeight: 900,
-                color: theme.colors.muted,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              <span style={{ opacity: 0.7, fontSize: "var(--fs-small)" }}>🛡</span>
-              {Math.max(0, Number(c.ac ?? 0) + Number(c.overrides?.acBonus ?? 0))}
-            </span>
-          ) : null}
+       <div className="cvHudHpText" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* HP */}
           <span style={{ fontVariantNumeric: "tabular-nums" }}>
             {Math.max(0, Math.floor(hpCurrent))} / {Math.max(1, Math.floor(hpMax))}

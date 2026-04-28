@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Express } from "express";
 import type { ServerContext } from "../server/context.js";
-import type { StoredCombatant, StoredCombatState, StoredConditionInstance, StoredOverrides } from "../server/userData.js";
+import type { StoredCombatant, StoredCombatState, StoredConditionInstance, StoredOverrides, CombatPhase } from "../server/userData.js";
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
@@ -25,6 +25,8 @@ import { DEFAULT_OVERRIDES } from "../lib/defaults.js";
 const CombatStateBody = z.object({
   round: z.number().int().min(1).optional(),
   activeCombatantId: z.string().nullable().optional(),
+  currentPhase: z.enum(["fast-pc", "fast-npc", "slow-pc", "slow-npc"]).optional(),
+  declarationsLocked: z.boolean().optional(),
 });
 
 const AddPlayerBody = z.object({
@@ -54,6 +56,8 @@ const CombatantUpdateBody = z.object({
   hpCurrent: z.number().optional(),
   hpMax: z.number().optional(),
   hpDetails: z.string().nullable().optional(),
+  focusCurrent: z.number().int().nullable().optional(),
+  investitureCurrent: z.number().int().nullable().optional(),
   ac: z.number().optional(),
   acDetails: z.string().nullable().optional(),
   attackOverrides: AttackOverrideSchema.optional(),
@@ -76,19 +80,23 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
     ensureCombat(db, encounterId);
 
     const rows = db.prepare(`
-  SELECT c.*,
-    p.character_name  AS p_character_name,
-    p.player_name     AS p_player_name,
-    p.hp_current      AS p_hp_current,
-    p.hp_max          AS p_hp_max,
-    p.defense_physical AS p_defense_physical,
-    p.conditions_json AS p_conditions_json,
-    p.overrides_json  AS p_overrides_json
-  FROM combatants c
-  LEFT JOIN players p ON c.base_type = 'player' AND p.id = c.base_id
-  WHERE c.encounter_id = ?
-  ORDER BY COALESCE(c.sort, 9999), c.created_at
-`).all(encounterId) as Record<string, unknown>[];
+      SELECT c.*,
+        p.character_name    AS p_character_name,
+        p.player_name       AS p_player_name,
+        p.hp_current        AS p_hp_current,
+        p.hp_max            AS p_hp_max,
+        p.defense_physical  AS p_defense_physical,
+        p.focus_current       AS p_focus_current,
+        p.focus_max           AS p_focus_max,
+        p.investiture_current AS p_investiture_current,
+        p.investiture_max     AS p_investiture_max,
+        p.conditions_json   AS p_conditions_json,
+        p.overrides_json    AS p_overrides_json
+      FROM combatants c
+      LEFT JOIN players p ON c.base_type = 'player' AND p.id = c.base_id
+      WHERE c.encounter_id = ?
+      ORDER BY COALESCE(c.sort, 9999), c.created_at
+    `).all(encounterId) as Record<string, unknown>[];
 
 const merged = rows.map((row) => {
   const c = rowToCombatant(row);
@@ -101,6 +109,10 @@ const merged = rows.map((row) => {
     hpCurrent: row.p_hp_current as number,
     hpMax: row.p_hp_max as number,
     ac: row.p_defense_physical as number,
+    focusCurrent: row.p_focus_current as number,
+    focusMax: row.p_focus_max as number,
+    investitureCurrent: row.p_investiture_current as number | null,
+    investitureMax: row.p_investiture_max as number | null,
     conditions: parseJson(row.p_conditions_json, [] as unknown[]),
     overrides: parseJson(row.p_overrides_json, DEFAULT_OVERRIDES),
   };
@@ -108,49 +120,121 @@ const merged = rows.map((row) => {
 
     res.json(merged);
   });
+// ── Persisted combat state (round + active combatant + phase) ─────────────
+app.get("/api/encounters/:encounterId/combatState", memberOrAdmin(db), (req, res) => {
+  const encounterId = requireParam(req, res, "encounterId");
+  if (!encounterId) return;
+  ensureCombat(db, encounterId);
 
-  // ── Persisted combat state (round + active combatant) ─────────────────────
-  app.get("/api/encounters/:encounterId/combatState", memberOrAdmin(db), (req, res) => {
-    const encounterId = requireParam(req, res, "encounterId");
-    if (!encounterId) return;
-    ensureCombat(db, encounterId);
+  const encRow = db
+    .prepare(`SELECT combat_round, combat_active_combatant_id, 
+              combat_phase, declarations_locked FROM encounters WHERE id = ?`)
+    .get(encounterId) as { 
+      combat_round: number | null; 
+      combat_active_combatant_id: string | null;
+      combat_phase: string | null;
+      declarations_locked: number | null;
+    } | undefined;
 
-    const encRow = db
-      .prepare("SELECT combat_round, combat_active_combatant_id FROM encounters WHERE id = ?")
-      .get(encounterId) as { combat_round: number | null; combat_active_combatant_id: string | null } | undefined;
+  const roundVal = Number(encRow?.combat_round);
+  const state = {
+    round: Number.isFinite(roundVal) && roundVal >= 1 ? roundVal : 1,
+    activeCombatantId: (encRow?.combat_active_combatant_id ?? null) as string | null,
+    currentPhase: (encRow?.combat_phase ?? "fast-pc") as CombatPhase,
+    declarationsLocked: Boolean(encRow?.declarations_locked),
+  };
 
-    const roundVal = Number(encRow?.combat_round);
-    const state: StoredCombatState = {
-      round: Number.isFinite(roundVal) && roundVal >= 1 ? roundVal : 1,
-      activeCombatantId: (encRow?.combat_active_combatant_id ?? null) as string | null,
+  res.json(state);
+});
+
+app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) => {
+  const encounterId = requireParam(req, res, "encounterId");
+  if (!encounterId) return;
+  ensureCombat(db, encounterId);
+
+  const body = parseBody(CombatStateBody, req);
+  const t = now();
+
+  // Calculate next phase if advancing
+  const PHASE_ORDER: CombatPhase[] = ["fast-pc", "fast-npc", "slow-pc", "slow-npc"];
+
+  // Get current state to compute next phase and round
+  const current = db
+    .prepare(`SELECT combat_round, combat_phase, declarations_locked 
+              FROM encounters WHERE id = ?`)
+    .get(encounterId) as { 
+      combat_round: number; 
+      combat_phase: string;
+      declarations_locked: number;
     };
 
-    res.json(state);
-  });
+  let nextPhase = body.currentPhase ?? (current.combat_phase as CombatPhase) ?? "fast-pc";
+  let nextRound = body.round ?? current.combat_round ?? 1;
+  let nextLocked = body.declarationsLocked !== undefined 
+    ? (body.declarationsLocked ? 1 : 0) 
+    : current.declarations_locked;
 
-  app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) => {
-    const encounterId = requireParam(req, res, "encounterId");
-    if (!encounterId) return;
-    ensureCombat(db, encounterId);
+  // Auto-advance logic when phase is explicitly set
+  if (body.currentPhase !== undefined) {
+    const currentIdx = PHASE_ORDER.indexOf(current.combat_phase as CombatPhase);
+    const nextIdx = PHASE_ORDER.indexOf(body.currentPhase);
 
-    const body = parseBody(CombatStateBody, req);
-    const t = now();
+    // Advancing from fast-pc to fast-npc — lock declarations
+    if (current.combat_phase === "fast-pc" && body.currentPhase === "fast-npc") {
+      nextLocked = 1;
+    }
 
-    db.prepare(
-      "UPDATE encounters SET combat_round=COALESCE(?,combat_round), combat_active_combatant_id=?, updated_at=? WHERE id=?"
-    ).run(body.round ?? null, body.activeCombatantId ?? null, t, encounterId);
+    // Cycling from slow-npc back to fast-pc — new round, unlock declarations
+    if (current.combat_phase === "slow-npc" && body.currentPhase === "fast-pc") {
+      nextRound = current.combat_round + 1;
+      nextLocked = 0;
+    }
+        
+    // Reset all combatants for the new round
+    db.prepare(`
+      UPDATE combatants 
+      SET action_points_used = 0, used_reaction = 0, updated_at = ?
+      WHERE encounter_id = ?
+    `).run(t, encounterId);
+  }
 
-    ctx.broadcast("encounter:combatStateChanged", { encounterId });
+  db.prepare(`
+    UPDATE encounters SET 
+      combat_round=?, 
+      combat_active_combatant_id=COALESCE(?, combat_active_combatant_id),
+      combat_phase=?,
+      declarations_locked=?,
+      updated_at=? 
+    WHERE id=?
+  `).run(
+    nextRound,
+    body.activeCombatantId ?? null,
+    nextPhase,
+    nextLocked,
+    t,
+    encounterId
+  );
 
-    const updated = db
-      .prepare("SELECT combat_round, combat_active_combatant_id FROM encounters WHERE id = ?")
-      .get(encounterId) as { combat_round: number; combat_active_combatant_id: string | null };
-    const state: StoredCombatState = {
-      round: updated.combat_round,
-      activeCombatantId: updated.combat_active_combatant_id,
+  ctx.broadcast("encounter:combatStateChanged", { encounterId });
+
+  const updated = db
+    .prepare(`SELECT combat_round, combat_active_combatant_id, 
+              combat_phase, declarations_locked FROM encounters WHERE id = ?`)
+    .get(encounterId) as { 
+      combat_round: number; 
+      combat_active_combatant_id: string | null;
+      combat_phase: string;
+      declarations_locked: number;
     };
-    res.json({ ok: true, ...state });
+
+  res.json({ 
+    ok: true, 
+    round: updated.combat_round,
+    activeCombatantId: updated.combat_active_combatant_id,
+    currentPhase: updated.combat_phase as CombatPhase,
+    declarationsLocked: Boolean(updated.declarations_locked),
   });
+});
 
   // ── Add all campaign players ──────────────────────────────────────────────
   app.post("/api/encounters/:encounterId/combatants/addPlayers", dmOrAdmin(db), (req, res) => {
@@ -284,6 +368,10 @@ const merged = rows.map((row) => {
           hpCurrent: hpMax,
           hpMax,
           hpDetails: null,
+          focusCurrent: adversary.focusMax,
+          focusMax: adversary.focusMax,
+          investitureCurrent: adversary.investitureMax || null,
+          investitureMax: adversary.investitureMax || null,
           ac: adversary.defensePhysical,
           acDetails: null,
           attackOverrides: null,
@@ -339,8 +427,12 @@ const merged = rows.map((row) => {
       hpCurrent: Number(iRow.hp_current ?? iRow.hp_max ?? 1),
       hpMax: Number(iRow.hp_max ?? 1),
       hpDetails: (iRow.hp_details as string | null) ?? null,
-      ac: Number(iRow.ac ?? 10),
-      acDetails: (iRow.ac_details as string | null) ?? null,
+      focusCurrent: null,
+      focusMax: null,
+      investitureCurrent: null,
+      investitureMax: null,
+      ac: Number(iRow.defense_physical ?? 0),
+      acDetails: null,
       attackOverrides: null,
       conditions: [],
       phase: null,
@@ -384,6 +476,10 @@ const merged = rows.map((row) => {
   hpCurrent: body.hpCurrent ?? existing.hpCurrent,
   hpMax: body.hpMax ?? existing.hpMax,
   hpDetails: body.hpDetails !== undefined ? body.hpDetails : existing.hpDetails,
+  focusCurrent: body.focusCurrent !== undefined ? body.focusCurrent : existing.focusCurrent ?? null,
+  focusMax: existing.focusMax ?? null,
+  investitureCurrent: body.investitureCurrent !== undefined ? body.investitureCurrent : existing.investitureCurrent ?? null,
+  investitureMax: existing.investitureMax ?? null,
   ac: body.ac ?? existing.ac,
   acDetails: body.acDetails !== undefined ? body.acDetails : existing.acDetails,
   attackOverrides: body.attackOverrides !== undefined ? (body.attackOverrides as unknown | null) : existing.attackOverrides,
@@ -399,7 +495,9 @@ const merged = rows.map((row) => {
       db.prepare(`
   UPDATE combatants SET
     label=?, initiative=?, friendly=?, color=?,
-    hp_current=?, hp_max=?, hp_details=?, ac=?, ac_details=?,
+    hp_current=?, hp_max=?, hp_details=?, 
+    focus_current=?, investiture_current=?,
+    ac=?, ac_details=?,
     attack_overrides_json=?, overrides_json=?, conditions_json=?,
     used_reaction=?, phase=?, action_points_used=?, dual_phase=?,
     updated_at=?
@@ -412,6 +510,8 @@ const merged = rows.map((row) => {
   next.hpCurrent,
   next.hpMax,
   next.hpDetails,
+  next.focusCurrent ?? null,
+  next.investitureCurrent ?? null,
   next.ac,
   next.acDetails,
   next.attackOverrides != null ? JSON.stringify(next.attackOverrides) : null,

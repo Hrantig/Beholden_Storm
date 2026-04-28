@@ -1,6 +1,5 @@
 import * as React from "react";
-import type { AttackOverride, Combatant, Player } from "@/domain/types/domain";
-import type { MonsterDetail } from "@/domain/types/compendium";
+import type { AttackOverride, Adversary, Combatant, Player } from "@/domain/types/domain";
 
 type Role = "active" | "target";
 
@@ -8,18 +7,14 @@ type Args = {
   isNarrow: boolean;
   role: Role;
   combatant: Combatant | null;
-  selectedMonster: MonsterDetail | null;
+  selectedMonster: Adversary | null;  // ← changed
   playersById: Record<string, Player>;
-
   roster: Combatant[];
   activeForCaster: Combatant | null;
   currentRound: number;
-
   updateCombatant: (id: string, patch: Record<string, unknown>) => void;
   onOpenOverrides: (combatantId: string | null) => void;
   onOpenConditions: (combatantId: string | null, role: Role, casterId: string | null) => void;
-
-  /** For target role only: caster id should be the active combatant id (if present). */
   casterIdForTarget?: string | null;
 };
 
@@ -45,12 +40,7 @@ export function useCombatantDetailsCtx(args: Args) {
       showHpActions: false,
 
       onUpdate: (patch: Record<string, unknown>) => (args.combatant?.id ? args.updateCombatant(args.combatant.id, patch) : void 0),
-      onChangeAttack: (actionName: string, patch: AttackOverride) => {
-        if (!args.combatant?.id) return;
-        const existing = (args.combatant.attackOverrides as Record<string, AttackOverride> | null) ?? {};
-        const next = { ...existing, [actionName]: { ...(existing[actionName] ?? {}), ...patch } };
-        args.updateCombatant(args.combatant.id, { attackOverrides: next });
-      },
+
       onOpenOverrides: () => args.onOpenOverrides(args.combatant?.id ?? null),
       onOpenConditions: () =>
         args.onOpenConditions(

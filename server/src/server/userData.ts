@@ -86,7 +86,11 @@ export interface StoredAdventure extends Timestamps {
 export interface StoredCombatState {
   round: number;
   activeCombatantId: string | null;
+  currentPhase: CombatPhase;
+  declarationsLocked: boolean;
 }
+
+export type CombatPhase = "fast-pc" | "fast-npc" | "slow-pc" | "slow-npc";
 
 export interface StoredEncounter extends Timestamps {
   id: Id;
@@ -95,8 +99,9 @@ export interface StoredEncounter extends Timestamps {
   name: string;
   status: string;
   sort?: number;
-  /** Active combat state for this encounter. Absent when no combat has started. */
   combat?: StoredCombatState;
+  currentPhase: CombatPhase;
+  declarationsLocked: boolean;
 }
 
 export interface StoredNote extends Timestamps {
@@ -265,6 +270,10 @@ export interface StoredCombatant extends Timestamps {
   hpCurrent: number | null;
   hpMax: number | null;
   hpDetails: string | null;
+  focusCurrent: number | null;
+  focusMax: number | null;
+  investitureCurrent: number | null;
+  investitureMax: number | null;
   ac: number | null;
   acDetails: string | null;
   attackOverrides: unknown | null;

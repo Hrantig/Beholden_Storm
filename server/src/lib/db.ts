@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS encounters (
   sort INTEGER,
   combat_round INTEGER,
   combat_active_combatant_id TEXT,
+  combat_phase TEXT NOT NULL DEFAULT 'fast-pc',
+  declarations_locked INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -158,6 +160,10 @@ CREATE TABLE IF NOT EXISTS combatants (
   hp_current INTEGER,
   hp_max INTEGER,
   hp_details TEXT,
+  focus_current INTEGER,
+  focus_max INTEGER,
+  investiture_current INTEGER,
+  investiture_max INTEGER,
   ac INTEGER,
   ac_details TEXT,
   sort INTEGER,

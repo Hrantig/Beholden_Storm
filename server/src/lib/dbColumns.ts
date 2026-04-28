@@ -8,7 +8,7 @@ export const ADVENTURE_COLS =
 
 export const ENCOUNTER_COLS =
   "id, campaign_id, adventure_id, name, status, sort, " +
-  "combat_round, combat_active_combatant_id, created_at, updated_at";
+  "combat_round, combat_active_combatant_id, combat_phase, declarations_locked, created_at, updated_at";
   
 // PLAYER_COLS must stay in sync with:
 //   - server/src/lib/db.ts (CREATE TABLE players)
@@ -55,7 +55,9 @@ export const CHARACTER_COLS =
 
 export const COMBATANT_COLS =
   "id, encounter_id, base_type, base_id, name, label, initiative, friendly, " +
-  "color, hp_current, hp_max, hp_details, ac, ac_details, sort, used_reaction, " +
+  "color, hp_current, hp_max, hp_details, " +
+  "focus_current, focus_max, investiture_current, investiture_max, " +
+  "ac, ac_details, sort, used_reaction, " +
   "phase, action_points_used, dual_phase, overrides_json, " +
   "conditions_json, attack_overrides_json, created_at, updated_at";
 
