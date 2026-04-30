@@ -58,10 +58,7 @@ export function CombatOrderRow(props: {
   combatant: Combatant;
   section: "upcoming" | "wrapped";
   playersById: Record<string, {
-    playerName: string; characterName: string; class: string;
-    species: string; level: number; ac: number;
-    hpMax: number; hpCurrent: number;
-    deathSaves?: { success: number; fail: number };
+    playerName: string; characterName: string; level: number;
     imageUrl?: string | null;
   }>;
   activeId: string | null;
@@ -81,13 +78,11 @@ export function CombatOrderRow(props: {
 
   const hpCurrent = Number(c.hpCurrent ?? 0);
   const rawHpMax = Number(c.hpMax ?? 1);
-  const acBonus = Number(c.overrides?.acBonus ?? 0) || 0;
   const hpMod = (() => {
     const n = Number(c.overrides?.hpMaxBonus ?? 0);
     return Number.isFinite(n) ? n : 0;
   })();
   const hpMax = Math.max(1, (rawHpMax || 1) + hpMod);
-  const ac = Math.max(0, Number(c.ac ?? 0) + acBonus);
   const displayName = (c.label || "(Unnamed)").trim();
   const friendly = Boolean(c.friendly);
   const isDead = hpCurrent <= 0;
@@ -194,12 +189,8 @@ export function CombatOrderRow(props: {
             <div style={{ marginTop: 2 }}>{initDisplay}</div>
           </div>
 
-          {/* AC + HP — --fs-body for readability */}
+          {/* HP */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{ opacity: 0.5, fontSize: "var(--fs-small)" }}>🛡</span>
-              <span style={{ fontWeight: 900, fontSize: "var(--fs-body)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>{ac}</span>
-            </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span style={{ opacity: 0.5, fontSize: "var(--fs-small)" }}>♥</span>
               <span style={{ fontWeight: 900, fontSize: "var(--fs-body)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>{hpCurrent}/{hpMax}</span>

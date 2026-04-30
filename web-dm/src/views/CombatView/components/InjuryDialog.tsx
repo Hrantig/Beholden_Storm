@@ -12,6 +12,7 @@ type Props = {
   onClose: () => void;
   onApplyCondition: (conditionKey: string, detail?: string) => void;
   onIncrementInjuryCount?: () => void;
+  onApplyNarrativeInjury?: () => void;
 };
 
 const TH_STYLE: React.CSSProperties = {
@@ -23,7 +24,7 @@ const TH_STYLE: React.CSSProperties = {
   fontWeight: 700,
 };
 
-export function InjuryDialog({ isOpen, combatant, player, onClose, onApplyCondition, onIncrementInjuryCount }: Props) {
+export function InjuryDialog({ isOpen, combatant, player, onClose, onApplyCondition, onIncrementInjuryCount, onApplyNarrativeInjury }: Props) {
   const [selectedEffect, setSelectedEffect] = React.useState<EffectRow | null>(null);
 
   React.useEffect(() => {
@@ -305,14 +306,24 @@ export function InjuryDialog({ isOpen, combatant, player, onClose, onApplyCondit
                     Apply {selectedEffect.effect} condition
                   </Button>
                 ) : (
-                  <div
-                    style={{
-                      fontSize: "var(--fs-small)",
-                      color: theme.colors.muted,
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Narrative effect — track on character sheet
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                    <div style={{ 
+                      color: theme.colors.muted, fontSize: "var(--fs-small)", fontStyle: "italic" 
+                    }}>
+                      Narrative effect — track on character sheet
+                    </div>
+                    <button
+                      onClick={() => onApplyNarrativeInjury?.()}
+                      style={{
+                        padding: "6px 14px", borderRadius: 8, cursor: "pointer",
+                        background: "transparent",
+                        border: `1px solid ${theme.colors.red}`,
+                        color: theme.colors.red, fontWeight: 700,
+                        fontSize: "var(--fs-small)",
+                      }}
+                    >
+                      Record Injury (increment count)
+                    </button>
                   </div>
                 )}
               </div>

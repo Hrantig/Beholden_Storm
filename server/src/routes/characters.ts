@@ -54,7 +54,7 @@ const UnassignBody = z.object({
 
 const OverridesBody = z.object({
   tempHp: z.number().int(),
-  acBonus: z.number().int(),
+  deflectBonus: z.number().int(),
   hpMaxBonus: z.number().int(),
 });
 
@@ -218,30 +218,19 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
       t, charId, userId
     );
 
-    // Sync all assigned campaign players rows with updated stats
+    // Sync limited fields to assigned campaign players rows (Stormlight schema only).
     for (const { player_id, campaign_id } of getAssignedPlayers(db, charId)) {
       db.prepare(`
         UPDATE players SET
-          character_name=?, class=?, species=?, level=?,
-          hp_max=?, hp_current=?, ac=?, speed=?,
-          str=?, dex=?, con=?, int=?, wis=?, cha=?,
+          character_name=?, level=?,
+          hp_max=?, hp_current=?,
           color=?, updated_at=?
         WHERE id=?
       `).run(
         p.name ?? ex.name,
-        p.className ?? ex.className,
-        p.species ?? ex.species,
         p.level ?? ex.level,
         p.hpMax ?? ex.hpMax,
         p.hpCurrent ?? ex.hpCurrent,
-        p.ac ?? ex.ac,
-        p.speed ?? ex.speed,
-        p.strScore !== undefined ? p.strScore : ex.strScore,
-        p.dexScore !== undefined ? p.dexScore : ex.dexScore,
-        p.conScore !== undefined ? p.conScore : ex.conScore,
-        p.intScore !== undefined ? p.intScore : ex.intScore,
-        p.wisScore !== undefined ? p.wisScore : ex.wisScore,
-        p.chaScore !== undefined ? p.chaScore : ex.chaScore,
         p.color !== undefined ? p.color : ex.color,
         t, player_id
       );
@@ -314,7 +303,7 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
     const parsed = parseBody(OverridesBody, req);
     const overrides = {
       tempHp: Math.max(0, Math.floor(Number(parsed.tempHp) || 0)),
-      acBonus: Math.floor(Number(parsed.acBonus) || 0),
+      deflectBonus: Math.floor(Number(parsed.deflectBonus) || 0),
       hpMaxBonus: Math.floor(Number(parsed.hpMaxBonus) || 0),
     };
     const t = now();
@@ -424,19 +413,16 @@ export function registerCharacterRoutes(app: Express, ctx: ServerContext) {
         .get(charId, campaignId) as { id: string; player_id: string | null } | undefined;
 
       if (existing_link?.player_id) {
-        // Already assigned — sync stats instead
+        // Already assigned — sync limited fields (Stormlight schema only).
         db.prepare(`
           UPDATE players SET
-            character_name=?, class=?, species=?, level=?,
-            hp_max=?, hp_current=?, ac=?, speed=?,
-            str=?, dex=?, con=?, int=?, wis=?, cha=?,
+            character_name=?, level=?,
+            hp_max=?, hp_current=?,
             color=?, user_id=?, updated_at=?
           WHERE id=?
         `).run(
-          char.name, char.className, char.species, char.level,
-          char.hpMax, char.hpCurrent, char.ac, char.speed,
-          char.strScore, char.dexScore, char.conScore,
-          char.intScore, char.wisScore, char.chaScore,
+          char.name, char.level,
+          char.hpMax, char.hpCurrent,
           char.color, userId, t, existing_link.player_id
         );
         ctx.broadcast("players:changed", { campaignId });

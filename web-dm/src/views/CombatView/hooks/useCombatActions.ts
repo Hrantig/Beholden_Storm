@@ -1,5 +1,4 @@
 import type { Combatant } from "@/domain/types/domain";
-import type { MonsterDetail } from "@/domain/types/compendium";
 
 import { useCombatHpActions } from "@/views/CombatView/hooks/actions/useCombatHpActions";
 import { useCombatantPatchActions } from "@/views/CombatView/hooks/actions/useCombatantPatchActions";

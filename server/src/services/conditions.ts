@@ -4,23 +4,20 @@ import { normalizeKey } from "../lib/text.js";
 
 export function seedDefaultConditions(db: Database.Database, campaignId: string): void {
   const defaults: string[] = [
-    "Blinded",
-    "Charmed",
-    "Deafened",
-    "Frightened",
-    "Grappled",
-    "Incapacitated",
-    "Invisible",
-    "Paralyzed",
-    "Petrified",
-    "Poisoned",
+    "Afflicted",
+    "Determined",
+    "Disoriented",
+    "Empowered",
+    "Enhanced",
+    "Exhausted",
+    "Focused",
+    "Immobilized",
     "Prone",
     "Restrained",
+    "Slowed",
     "Stunned",
+    "Surprised",
     "Unconscious",
-    "Hex",
-    "Concentrating",
-    "Marked",
   ];
   const t = now();
   const stmt = db.prepare(

@@ -165,3 +165,16 @@
   INpc type, and INpcDrawer form. Do this as a dedicated pass before the player-side 
   app is built.
 
+## Deployment / Data Management
+
+- **Campaign export/import** — build a proper campaign backup and restore tool 
+  accessible from the admin panel. Should export all campaign data (players, 
+  encounters, combatants, conditions, notes, treasure) as a single JSON file and 
+  allow re-importing. Useful for backup, sharing campaigns between DMs, and 
+  migrating between server instances. Consider versioning the export format for 
+  forward compatibility.
+
+- **Database migration system** — as the schema evolves, we need a structured way 
+  to apply schema changes to existing databases without losing data. Consider a 
+  simple migration runner (e.g. sequential SQL files numbered by version) that runs 
+  on server startup and tracks which migrations have been applied.

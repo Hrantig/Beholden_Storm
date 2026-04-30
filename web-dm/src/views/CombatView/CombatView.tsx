@@ -135,12 +135,15 @@ export function CombatView() {
   );
 
   const updateResource = React.useCallback(
-    async (combatantId: string, patch: { focusCurrent?: number; investitureCurrent?: number }) => {
+    async (combatantId: string, patch: { 
+      focusCurrent?: number; 
+      investitureCurrent?: number;
+      injuryCount?: number;
+    }) => {
       const c = combatants.find(x => x.id === combatantId);
       if (!c) return;
       
       if (c.baseType === "player") {
-        // Update the player record directly
         await api(`/api/players/${c.baseId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -148,7 +151,6 @@ export function CombatView() {
         });
         await refresh();
       } else {
-        // Update the combatant instance
         await updateCombatant(combatantId, patch);
       }
     },
@@ -177,6 +179,14 @@ export function CombatView() {
     });
     await refresh();
   }, [target, playersById, refresh]);
+
+  const handleApplyNarrativeInjury = React.useCallback(() => {
+  if (!target?.id || target.baseType !== "player") return;
+  const player = playersById[target.baseId];
+  if (!player) return;
+  void updateResource(target.id, { injuryCount: (player.injuryCount ?? 0) + 1 });
+  setInjuryDialogOpen(false);
+}, [target, playersById, updateResource]);
 
   // Reset reaction for the incoming active combatant each time it changes.
   const prevActiveIdRef = React.useRef<string | null>(null);
@@ -361,6 +371,7 @@ export function CombatView() {
         onClose={() => setInjuryDialogOpen(false)}
         onApplyCondition={handleApplyInjuryCondition}
         onIncrementInjuryCount={handleIncrementInjuryCount}
+        onApplyNarrativeInjury={handleApplyNarrativeInjury}
       />
     </div>
   );

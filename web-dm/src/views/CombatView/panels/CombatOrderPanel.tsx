@@ -14,13 +14,8 @@ export function CombatOrderPanel(props: {
     {
       playerName: string;
       characterName: string;
-      class: string;
-      species: string;
       level: number;
-      ac: number;
-      hpMax: number;
-      hpCurrent: number;
-      deathSaves?: { success: number; fail: number };
+      imageUrl?: string | null;
     }
   >;
   monsterCrById: Record<string, number | null | undefined>;

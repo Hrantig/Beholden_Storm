@@ -4,9 +4,7 @@ import { theme, withAlpha } from "@/theme/theme";
 export function HPBar(props: {
   cur: number;
   max: number;
-  ac: number;
   tempHp?: number;
-  acBonus?: number;
   variant?: "default" | "compact";
   showText?: boolean;
 }) {
@@ -14,8 +12,6 @@ export function HPBar(props: {
   const curHP = Math.max(0, Number(props.cur) || 0);
   const tempHp = Math.max(0, Number(props.tempHp ?? 0) || 0);
   const pct = Math.max(0, Math.min(1, curHP / max));
-  const acBonus = Number(props.acBonus ?? 0) || 0;
-  const ac = Number(props.ac) + acBonus;
   const isDead = curHP <= 0;
   const isBloody = ((curHP / max <= 0.5) && (curHP / max > 0.25));
   const isQuarter = curHP / max <= 0.25;
@@ -68,7 +64,7 @@ export function HPBar(props: {
 
       {showText ? (
         <div style={{ fontSize: textSize, color: theme.colors.text, opacity: 0.85, whiteSpace: "nowrap" }}>
-          AC {ac}{acBonus ? ` (+${acBonus})` : ""} • HP {curHP}/{max}{tempHp ? ` • THP ${tempHp}` : ""}
+          HP {curHP}/{max}{tempHp ? ` • THP ${tempHp}` : ""}
           {isDead ? " (Dead)" : isBloody ? " (Bloody)" : isQuarter ? " (Bloody)" : ""}
         </div>
       ) : null}

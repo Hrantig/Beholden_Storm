@@ -18,7 +18,11 @@ type Props = {
   targetId: string | null;
   onOpenConditions: (combatantId: string, role: Role, casterId: string | null) => void;
   onUpdateCombatant?: (id: string, patch: Record<string, unknown>) => void;
-  onUpdateResource?: (id: string, patch: { focusCurrent?: number; investitureCurrent?: number }) => void;
+  onUpdateResource?: (id: string, patch: { 
+    focusCurrent?: number; 
+    investitureCurrent?: number;
+    injuryCount?: number;
+  }) => void;
   onOpenInjury?: () => void;
   currentPhase?: CombatPhase;
   adversary?: Adversary | null;
@@ -84,6 +88,9 @@ export function HudFighterCard(props: Props) {
   const focusMax = c?.focusMax ?? (props.adversary?.focusMax ?? null);
   const investitureCur = c?.investitureCurrent ?? (props.adversary?.investitureMax ?? null);
   const investitureMax = c?.investitureMax ?? (props.adversary?.investitureMax ?? null);
+
+  const player = c?.baseType === "player" ? props.playersById[c.baseId] : null;
+  const injuryCount = player?.injuryCount ?? 0;
 
   return (
     <div
@@ -320,23 +327,24 @@ export function HudFighterCard(props: Props) {
         {props.role === "target" && c && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
             {/* Active injury dots */}
-            {(() => {
-              const player = c.baseType === "player" ? props.playersById[c.baseId] : null;
-              const injuryCount = player?.injuryCount ?? 0;
-              if (injuryCount === 0) return null;
-              return (
-                <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-                  {Array.from({ length: Math.min(injuryCount, 5) }).map((_, i) => (
-                    <span key={i} style={{ fontSize: "var(--fs-medium)", color: theme.colors.red }}>●</span>
-                  ))}
-                  {injuryCount > 5 && (
-                    <span style={{ fontSize: "var(--fs-medium)", color: theme.colors.red, fontWeight: 700 }}>
-                      +{injuryCount - 5}
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
+            {Array.from({ length: Math.min(injuryCount, 6) }).map((_, i) => (
+            <span
+              key={i}
+              onClick={() => {
+                const player = c.baseType === "player" ? props.playersById[c.baseId] : null;
+                if (!player) return;
+                // Clicking dot i removes injuries down to i
+                const next = i;
+                props.onUpdateResource?.(c.id, { injuryCount: next } as any);
+              }}
+              title={`Click to reduce injuries to ${i}`}
+              style={{
+                fontSize: "var(--fs-medium)",
+                color: theme.colors.red,
+                cursor: "pointer",
+              }}
+            >●</span>
+          ))}
 
             {/* Injury button */}
             <button
