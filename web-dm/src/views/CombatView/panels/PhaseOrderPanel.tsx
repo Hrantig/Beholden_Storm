@@ -256,7 +256,8 @@ function PhaseSection({
   bulkSelectedIds,
   onToggleBulkSelect,
   onToggleReaction,
-  sectionKey
+  sectionKey,
+  isCompleted
 }: {
   title: string;
   isFast: boolean;
@@ -273,6 +274,7 @@ function PhaseSection({
   onToggleBulkSelect: (id: string) => void;
   onToggleReaction: (id: string) => void;
   sectionKey: keyof PhaseGroups
+  isCompleted: boolean;
 }) {
   return (
     <div>
@@ -280,8 +282,10 @@ function PhaseSection({
         fontSize: "var(--fs-small)", fontWeight: 900, letterSpacing: "0.08em",
         padding: "4px 10px 4px",
         color: isActive ? theme.colors.accentPrimary : theme.colors.muted,
+        opacity: isCompleted ? 0.35 : 1, transition: "opacity 200ms" ,
         borderBottom: `1px solid ${isActive ? theme.colors.accentPrimary : theme.colors.panelBorder}`,
         marginBottom: 4,
+        
       }}>
         {isFast ? "⚡ " : ""}{title}
         {isActive && (
@@ -294,33 +298,33 @@ function PhaseSection({
             ACTIVE
           </span>
         )}
-      </div>
 
-      {combatants.length === 0 ? (
-        <div style={{ padding: "4px 10px 8px", color: theme.colors.muted, fontSize: "var(--fs-small)", fontStyle: "italic" }}>
-          —
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {combatants.map((c) => (
-            <CombatantRow
-            key={c.id}
-            combatant={c}
-            isSpotlight={c.id === activeId}
-            isTarget={c.id === targetId}
-            declarationsLocked={declarationsLocked}
-            onSelectSpotlight={onSelectSpotlight}
-            onSelectTarget={onSelectTarget}
-            onTogglePhase={onTogglePhase}
-            bulkMode={bulkMode}
-            bulkSelectedIds={bulkSelectedIds}
-            onToggleBulkSelect={onToggleBulkSelect}
-            onToggleReaction={onToggleReaction}
-            sectionKey={sectionKey}
-          />
-          ))}
-        </div>
-      )}
+        {combatants.length === 0 ? (
+          <div style={{ padding: "4px 10px 8px", color: theme.colors.muted, fontSize: "var(--fs-small)", fontStyle: "italic" }}>
+            —
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {combatants.map((c) => (
+              <CombatantRow
+              key={c.id}
+              combatant={c}
+              isSpotlight={c.id === activeId}
+              isTarget={c.id === targetId}
+              declarationsLocked={declarationsLocked}
+              onSelectSpotlight={onSelectSpotlight}
+              onSelectTarget={onSelectTarget}
+              onTogglePhase={onTogglePhase}
+              bulkMode={bulkMode}
+              bulkSelectedIds={bulkSelectedIds}
+              onToggleBulkSelect={onToggleBulkSelect}
+              onToggleReaction={onToggleReaction}
+              sectionKey={sectionKey}
+            />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -343,6 +347,8 @@ export function PhaseOrderPanel({
 }: Props) {
   const activeSectionKey = PHASE_SECTION_KEY[currentPhase];
 
+  const PHASE_ORDER: CombatPhase[] = ["fast-pc", "fast-npc", "slow-pc", "slow-npc"];
+  
   return (
     <Panel
       storageKey="phase-order"
@@ -364,11 +370,14 @@ export function PhaseOrderPanel({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {(["fastPcs", "fastNpcs", "slowPcs", "slowNpcs"] as const).map((key) => {
           const phaseKey = Object.entries(PHASE_SECTION_KEY).find(([, v]) => v === key)?.[0] as CombatPhase;
+          const currentPhaseIndex = PHASE_ORDER.indexOf(currentPhase);
           const isFast = key.startsWith("fast");
           const titles: Record<string, string> = {
             fastPcs: "Fast PCs", fastNpcs: "Fast NPCs",
             slowPcs: "Slow PCs", slowNpcs: "Slow NPCs",
-          };
+          }
+          const phaseIndex = PHASE_ORDER.indexOf(phaseKey);
+          if (phaseGroups[key].length === 0 && activeSectionKey !== key) return null;
           return (
             <PhaseSection
               key={key}
@@ -387,6 +396,7 @@ export function PhaseOrderPanel({
               onToggleBulkSelect={onToggleBulkSelect}
               onToggleReaction={onToggleReaction}
               sectionKey={key}
+              isCompleted={phaseIndex < currentPhaseIndex}
             />
           );
         })}

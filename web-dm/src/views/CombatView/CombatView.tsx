@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useParams } from "react-router-dom";
 import { useStore } from "@/store";
-import type { Combatant } from "@/domain/types/domain";
+import type { Combatant, CombatPhase } from "@/domain/types/domain";
 import type { State } from "@/store/state";
 import { api } from "@/services/api";
 
@@ -240,6 +240,35 @@ export function CombatView() {
 
   const { togglePhase } = usePhaseDeclarations(encounterId, refresh);
 
+  const advancePhaseSkippingEmpty = React.useCallback(async () => {
+    const PHASE_ORDER: CombatPhase[] = ["fast-pc", "fast-npc", "slow-pc", "slow-npc"];
+    const PHASE_KEYS: Record<CombatPhase, keyof typeof phaseGroups> = {
+      "fast-pc": "fastPcs", "fast-npc": "fastNpcs",
+      "slow-pc": "slowPcs", "slow-npc": "slowNpcs",
+    };
+    const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+    
+    // Find the next non-empty phase, wrapping around
+    let targetPhase = PHASE_ORDER[(currentIdx + 1) % PHASE_ORDER.length];
+    for (let i = 1; i < PHASE_ORDER.length; i++) {
+    const candidate = PHASE_ORDER[(currentIdx + i) % PHASE_ORDER.length];
+    if (candidate === "fast-pc" || phaseGroups[PHASE_KEYS[candidate]].length > 0) {
+      targetPhase = candidate;
+      break;
+    }
+  }
+
+    const nextRound = targetPhase === "fast-pc" ? round + 1 : round;
+    const nextLocked = targetPhase !== "fast-pc";
+
+    await persistCombatState({
+      round: nextRound,
+      activeId,
+      currentPhase: targetPhase,
+      declarationsLocked: nextLocked,
+    });
+  }, [currentPhase, phaseGroups, round, activeId, persistCombatState]);
+
   // Suppress unused-variable warnings for values kept for future use.
   void loaded;
   void started;
@@ -350,12 +379,13 @@ export function CombatView() {
             targetId={target?.id ?? null}
             onSelectSpotlight={handleSelectTarget}
             onSelectTarget={(id) => setTargetId(id)}
-            onAdvancePhase={advancePhase}
+            onAdvancePhase={advancePhaseSkippingEmpty}
             onTogglePhase={togglePhase}
             bulkMode={bulkMode}
             bulkSelectedIds={bulkSelectedIds}
             onToggleBulkSelect={handleToggleBulkSelect}
-            onToggleReaction={handleToggleReaction} 
+            onToggleReaction={handleToggleReaction}
+            
           />
         </div>
 
