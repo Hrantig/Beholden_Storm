@@ -119,20 +119,27 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
 
     // Reset all players to full HP, clear conditions + overrides.
     const playersResult = db.prepare(
-      `UPDATE players SET hp_current = hp_max, overrides_json = ?, conditions_json = '[]', updated_at = ?
-       WHERE campaign_id = ?`
+      `UPDATE players SET 
+        hp_current = hp_max, 
+        focus_current = focus_max,
+        overrides_json = ?, 
+        conditions_json = '[]', 
+        updated_at = ?
+      WHERE campaign_id = ?`
     ).run(emptyOverrides, t, campaignId);
 
     // Reset all player combatants across every encounter in the campaign.
     db.prepare(
       `UPDATE combatants SET
-         hp_current      = (SELECT p.hp_max FROM players p WHERE p.id = combatants.base_id),
-         hp_max          = (SELECT p.hp_max FROM players p WHERE p.id = combatants.base_id),
-         conditions_json = '[]',
-         overrides_json  = ?,
-         updated_at      = ?
-       WHERE base_type = 'player'
-         AND encounter_id IN (SELECT id FROM encounters WHERE campaign_id = ?)`
+        hp_current      = (SELECT p.hp_max FROM players p WHERE p.id = combatants.base_id),
+        hp_max          = (SELECT p.hp_max FROM players p WHERE p.id = combatants.base_id),
+        focus_current   = (SELECT p.focus_max FROM players p WHERE p.id = combatants.base_id),
+        focus_max       = (SELECT p.focus_max FROM players p WHERE p.id = combatants.base_id),
+        conditions_json = '[]',
+        overrides_json  = ?,
+        updated_at      = ?
+      WHERE base_type = 'player'
+        AND encounter_id IN (SELECT id FROM encounters WHERE campaign_id = ?)`
     ).run(emptyOverrides, t, campaignId);
 
     const updatedEncounterIds = (
