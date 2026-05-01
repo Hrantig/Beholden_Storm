@@ -29,11 +29,26 @@ export function INpcsPanel(props: Props) {
     [props.inpcs]
   );
 
-  const getMonsterKeyLabel = React.useCallback((monsterId?: string | null) => {
-    if (!monsterId) return "";
-    const key = monsterId.startsWith("m_") ? monsterId.slice(2) : monsterId;
-    return titleCase(key.replace(/[_-]+/g, " ").trim());
-  }, []);
+  const [adversaryNames, setAdversaryNames] = React.useState<Record<string, string>>({});
+    React.useEffect(() => {
+      if (!props.inpcs.length) return;
+      const token = localStorage.getItem('beholden_token');
+      fetch('/api/compendium/adversaries', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(r => r.json())
+        .then((adversaries: { id: string; name: string }[]) => {
+          const map: Record<string, string> = {};
+          for (const a of adversaries) map[a.id] = a.name;
+          setAdversaryNames(map);
+        })
+        .catch(() => {});
+    }, [props.inpcs.length]);
+
+  const getAdversaryName = React.useCallback((monsterId?: string | null) => {
+  if (!monsterId) return "";
+  return adversaryNames[monsterId] ?? "";
+}, [adversaryNames]);
 
   const useTwoColumn = Boolean(props.selectedEncounterId) && sorted.length > 4;
 
@@ -60,11 +75,8 @@ export function INpcsPanel(props: Props) {
           }}
         >
           {sorted.map((i) => {
-            const monsterKeyLabel = getMonsterKeyLabel(i.monsterId);
-            const subtitle = monsterKeyLabel
-              ? <span style={{ opacity: 0.7 }}>{monsterKeyLabel}</span>
-              : undefined;
-
+            const adversaryName = getAdversaryName(i.monsterId);
+            
             return (
               <PlayerRow
                 key={i.id}
@@ -76,16 +88,19 @@ export function INpcsPanel(props: Props) {
                   level: 0,
                   hpMax: i.hpMax,
                   hpCurrent: i.hpCurrent,
-                  focusCurrent: 0,
-                  focusMax: 0,
-                  movement: 0,
+                  focusCurrent: i.focusMax,
+                  focusMax: i.focusMax,
+                  movement: i.movement,
                 }}
                 icon={
                   i.friendly
                     ? <span style={{ color: theme.colors.green }}><IconINPC /></span>
                     : <span style={{ color: theme.colors.red }}><IconINPC /></span>
                 }
-                subtitle={subtitle}
+                subtitle={adversaryName
+                  ? <span style={{ opacity: 0.7 }}>{adversaryName}</span>
+                  : undefined
+                }
                 primaryAction={
                   props.selectedEncounterId ? (
                     <IconButton
