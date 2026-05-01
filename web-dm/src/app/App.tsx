@@ -115,6 +115,7 @@ function AppInner() {
     reorderAdventureNotes,
     removeCombatant,
     addINpcFromAdversary,
+    addINpcFromAdversaryCustom,
     deletePlayer,
     deleteINpc,
     exportAdventure,
@@ -194,6 +195,7 @@ function AppInner() {
                 onDeletePlayer={deletePlayer}
                 onAddPlayerToEncounter={addPlayerToEncounter}
                 onAddINpcFromAdversary={addINpcFromAdversary}
+                onAddINpcFromAdversaryCustom={addINpcFromAdversaryCustom}
                 onEditINpc={(inpcId) => dispatch({ type: "openDrawer", drawer: { type: "editINpc", inpcId } })}
                 onDeleteINpc={deleteINpc}
                 onAddINpcToEncounter={addINpcToEncounter}

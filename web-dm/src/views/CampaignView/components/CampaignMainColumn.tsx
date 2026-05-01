@@ -19,6 +19,7 @@ export function CampaignMainColumn(props: {
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
+  onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
 }) {
   return (
     <div className="campaignCol campaignColMain">
@@ -41,6 +42,7 @@ export function CampaignMainColumn(props: {
         onEditINpc={props.onEditINpc}
         onDeleteINpc={props.onDeleteINpc}
         onAddINpcToEncounter={props.onAddINpcToEncounter}
+        onAddINpcFromAdversaryCustom={props.onAddINpcFromAdversaryCustom}
       />
     </div>
   );

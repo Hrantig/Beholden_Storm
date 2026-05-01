@@ -31,6 +31,7 @@ export function CampaignView(props: {
   onAddPlayerToEncounter: (playerId: string) => void;
 
   onAddINpcFromAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
+  onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
@@ -127,6 +128,7 @@ export function CampaignView(props: {
         onEditINpc={props.onEditINpc}
         onDeleteINpc={props.onDeleteINpc}
         onAddINpcToEncounter={props.onAddINpcToEncounter}
+        onAddINpcFromAdversaryCustom={props.onAddINpcFromAdversaryCustom}
       />
 
       {/* RIGHT SIDEBAR */}

@@ -36,6 +36,8 @@ export function AdversaryPickerDetailPane(props: {
   onChangeLabel: (v: string) => void;
   onChangeFriendly: (v: boolean) => void;
   onAdd: () => void;
+  onAddCustom?: () => void;
+  
 }) {
   const a = props.selectedAdversary;
 
@@ -54,7 +56,7 @@ export function AdversaryPickerDetailPane(props: {
   function handleAdd() {
     props.onAdd(/* existing args */);
     setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 500);
+    setTimeout(() => setJustAdded(false), 600);
   }
 
   return (
@@ -240,14 +242,26 @@ export function AdversaryPickerDetailPane(props: {
       </div>
 
       {/* ── Add button ── */}
-      <div style={{ paddingTop: 10, borderTop: `1px solid ${theme.colors.panelBorder}` }}>
-        
+      <div style={{ display: "flex", gap: 8 }}>
         <Button
-          variant="primary"
-          style={{ width: "100%" }}
           onClick={handleAdd}
+          disabled={!a}
+          style={{ 
+            flex: 1,
+            ...(justAdded ? { background: "#22c55e", borderColor: "#22c55e", color: "white" } : {})
+          }}
         >
-          {justAdded ? "✓ Added!" : "Add to encounter"}
+          {justAdded ? "✓ Added!" : "Add"}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            console.log("Add Custom clicked, onAddCustom:", props.onAddCustom);
+            props.onAddCustom?.();
+          }}
+          disabled={!a}
+        >
+          Add Custom
         </Button>
       </div>
     </div>

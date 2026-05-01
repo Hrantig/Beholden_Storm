@@ -147,6 +147,26 @@ export function useCampaignActions(
       await refreshCampaign(state.selectedCampaignId);
     } catch (e) { apiErr(e); }
   }, [state.selectedCampaignId, refreshCampaign]);
+  
+  const addINpcFromAdversaryCustom = React.useCallback(async (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => {
+  if (!state.selectedCampaignId) return;
+  try {
+    const result = await api<{ id: string } | { ok: true; created: { id: string }[] }>(
+      `/api/campaigns/${state.selectedCampaignId}/inpcs`,
+      jsonInit("POST", {
+        monsterId: adversaryId,
+        qty: 1, // always create one at a time for custom
+        name: opts.label.trim() || null,
+        friendly: Boolean(opts.friendly),
+        hpMax: opts.hp || null,
+      })
+    );
+    await refreshCampaign(state.selectedCampaignId);
+    if (result && 'id' in result) {
+      dispatch({ type: "openDrawer", drawer: { type: "editINpc", inpcId: result.id } });
+    }
+  } catch (e) { apiErr(e); }
+}, [state.selectedCampaignId, refreshCampaign, dispatch]);
 
   const deletePlayer = React.useCallback(async (playerId: string) => {
     if (!state.selectedCampaignId) return;
@@ -288,6 +308,7 @@ export function useCampaignActions(
     exportAdventure,
     handleImportAdventureFile,
     addINpcToEncounter,
+    addINpcFromAdversaryCustom,
     deleteCampaign,
     deleteAdventure,
     duplicateEncounter,

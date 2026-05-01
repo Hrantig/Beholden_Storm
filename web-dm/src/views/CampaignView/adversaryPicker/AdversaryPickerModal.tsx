@@ -9,6 +9,7 @@ export function AdversaryPickerModal(props: {
   isOpen: boolean;
   onClose: () => void;
   onAddAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
+  onAddAdversaryCustom?: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
 }) {
   const s = useAdversaryPickerState({
     isOpen: props.isOpen,
@@ -61,6 +62,22 @@ export function AdversaryPickerModal(props: {
             onChangeLabel={(v) => { if (id) s.setLabelForId(id, v); }}
             onChangeFriendly={(v) => { if (id) s.setFriendlyForId(id, v); }}
             onAdd={() => { if (id) s.handleAddAdversary(id); }}
+            onAddCustom={props.onAddAdversaryCustom && id
+              ? () => {
+                  const adversary = s.selectedAdversary;
+                  if (!adversary || !id) return;
+                  props.onAddAdversaryCustom!(id, qty, {
+                    hp: Number(hp) || adversary.hpRangeMax,
+                    hpRangeMin: adversary.hpRangeMin,
+                    hpRangeMax: adversary.hpRangeMax,
+                    qty,
+                    friendly,
+                    label,
+                    dualPhase: adversary.dualPhase,
+                  });
+                }
+              : undefined
+            }
           />
 
         </div>

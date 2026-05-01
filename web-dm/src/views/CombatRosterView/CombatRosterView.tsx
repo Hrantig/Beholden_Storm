@@ -80,7 +80,6 @@ export function CombatRosterView() {
         backTo={encounter ? `/campaign/${encounter.campaignId}` : "/"}
         title={encounter ? `Combat Roster: ${encounter.name}` : "Combat Roster"}
         totalXp={totalXp}
-        difficulty={difficulty}
       />
 
       <div className="campaignGrid">
@@ -96,6 +95,7 @@ export function CombatRosterView() {
           onDeletePlayer={campaignActions.deletePlayer}
           onAddPlayerToEncounter={encounterActions.addPlayerToEncounter}
           onAddINpcFromAdversary={campaignActions.addINpcFromAdversary}
+          onAddINpcFromAdversaryCustom={campaignActions.addINpcFromAdversaryCustom}
           onEditINpc={(inpcId) => dispatch({ type: "openDrawer", drawer: { type: "editINpc", inpcId } })}
           onDeleteINpc={campaignActions.deleteINpc}
           onAddINpcToEncounter={encounterActions.addINpcToEncounter}

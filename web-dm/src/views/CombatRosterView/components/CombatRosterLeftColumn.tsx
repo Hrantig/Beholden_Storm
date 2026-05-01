@@ -15,6 +15,7 @@ type Props = {
   onDeletePlayer: (playerId: string) => void;
   onAddPlayerToEncounter: (playerId: string) => Promise<void>;
   onAddINpcFromAdversary: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => Promise<void>;
+  onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => Promise<void>;
@@ -39,6 +40,7 @@ export function CombatRosterLeftColumn(props: Props) {
         selectedCampaignId={props.selectedCampaignId}
         selectedEncounterId={props.selectedEncounterId}
         onAddINpcFromAdversary={props.onAddINpcFromAdversary}
+        onAddINpcFromAdversaryCustom={props.onAddINpcFromAdversaryCustom}
         onEditINpc={props.onEditINpc}
         onDeleteINpc={props.onDeleteINpc}
         onAddINpcToEncounter={props.onAddINpcToEncounter}

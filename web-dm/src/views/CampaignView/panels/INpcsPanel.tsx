@@ -18,6 +18,7 @@ type Props = {
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
+  onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
 };
 
 export function INpcsPanel(props: Props) {
@@ -114,6 +115,11 @@ export function INpcsPanel(props: Props) {
         onClose={() => setIsPickerOpen(false)}
         onAddAdversary={(adversaryId, qty, opts) => {
           props.onAddINpcFromAdversary(adversaryId, qty, opts);
+          setIsPickerOpen(false);
+        }}
+        onAddAdversaryCustom={(adversaryId, qty, opts) => {
+          console.log("onAddAdversaryCustom fired", adversaryId, qty, opts);
+          props.onAddINpcFromAdversaryCustom(adversaryId, qty, opts);
           setIsPickerOpen(false);
         }}
       />
