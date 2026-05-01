@@ -7,7 +7,6 @@ import { theme } from "@/theme/theme";
 import { useStore, type DrawerState } from "@/store";
 import { useConfirm } from "@/confirm/ConfirmContext";
 import type { DrawerContent } from "@/drawers/types";
-import { MonsterPreview } from "@/drawers/drawers/combatant/MonsterPreview";
 
 type INpcDrawerState = Exclude<Extract<DrawerState, { type: "editINpc"; inpcId: string }>, null>;
 
@@ -18,16 +17,22 @@ export function INpcDrawer(props: {
 }): DrawerContent {
   const { state } = useStore();
   const confirm = useConfirm();
-  const inpc = React.useMemo(() => state.inpcs.find((i) => i.id === props.drawer.inpcId) ?? null, [state.inpcs, props.drawer.inpcId]);
+  const inpc = React.useMemo(
+    () => state.inpcs.find((i) => i.id === props.drawer.inpcId) ?? null,
+    [state.inpcs, props.drawer.inpcId]
+  );
 
   const [name, setName] = React.useState("");
   const [friendly, setFriendly] = React.useState<"true" | "false">("true");
   const [hpMax, setHpMax] = React.useState("10");
   const [hpCurrent, setHpCurrent] = React.useState("10");
-  const [hpDetails, setHpDetails] = React.useState("");
-  const [ac, setAc] = React.useState("10");
-  const [acDetails, setAcDetails] = React.useState("");
-  const [baseMonster, setBaseMonster] = React.useState<any | null>(null);
+  const [defensePhysical, setDefensePhysical] = React.useState("0");
+  const [defenseCognitive, setDefenseCognitive] = React.useState("0");
+  const [defenseSpiritual, setDefenseSpiritual] = React.useState("0");
+  const [deflect, setDeflect] = React.useState("0");
+  const [movement, setMovement] = React.useState("0");
+  const [focusMax, setFocusMax] = React.useState("0");
+  const [investitureMax, setInvestitureMax] = React.useState("0");
 
   React.useEffect(() => {
     if (!inpc) return;
@@ -35,17 +40,13 @@ export function INpcDrawer(props: {
     setFriendly(inpc.friendly ? "true" : "false");
     setHpMax(String(inpc.hpMax ?? 10));
     setHpCurrent(String(inpc.hpCurrent ?? inpc.hpMax ?? 10));
-    setHpDetails(String(inpc.hpDetails ?? ""));
-    setAc(String(inpc.ac ?? 10));
-    setAcDetails(String(inpc.acDetails ?? ""));
-
-    if (inpc.monsterId) {
-      api<any>(`/api/compendium/monsters/${inpc.monsterId}`)
-        .then((m) => setBaseMonster(m))
-        .catch(() => setBaseMonster(null));
-    } else {
-      setBaseMonster(null);
-    }
+    setDefensePhysical(String(inpc.defensePhysical ?? 0));
+    setDefenseCognitive(String(inpc.defenseCognitive ?? 0));
+    setDefenseSpiritual(String(inpc.defenseSpiritual ?? 0));
+    setDeflect(String(inpc.deflect ?? 0));
+    setMovement(String(inpc.movement ?? 0));
+    setFocusMax(String(inpc.focusMax ?? 0));
+    setInvestitureMax(String(inpc.investitureMax ?? 0));
   }, [inpc]);
 
   const submit = React.useCallback(async () => {
@@ -57,25 +58,27 @@ export function INpcDrawer(props: {
         friendly: friendly === "true",
         hpMax: Number(hpMax) || 1,
         hpCurrent: Math.max(0, Number(hpCurrent) || 0),
-        hpDetails: hpDetails.trim() || null,
-        ac: Number(ac) || 10,
-        acDetails: acDetails.trim() || null
+        defensePhysical: Number(defensePhysical) || 0,
+        defenseCognitive: Number(defenseCognitive) || 0,
+        defenseSpiritual: Number(defenseSpiritual) || 0,
+        deflect: Number(deflect) || 0,
+        movement: Number(movement) || 0,
+        focusMax: Number(focusMax) || 0,
+        investitureMax: Number(investitureMax) || null,
       })
     );
     await props.refreshCampaign(state.selectedCampaignId);
     props.close();
-  }, [inpc, name, friendly, hpMax, hpCurrent, hpDetails, ac, acDetails, props, state.selectedCampaignId]);
+  }, [inpc, name, friendly, hpMax, hpCurrent, defensePhysical, defenseCognitive,
+      defenseSpiritual, deflect, movement, focusMax, investitureMax, props, state.selectedCampaignId]);
 
   const deleteINpc = React.useCallback(async () => {
     if (!inpc) return;
-    if (
-      !(await confirm({
-        title: "Delete iNPC",
-        message: "Delete this iNPC? This cannot be undone.",
-        intent: "danger"
-      }))
-    )
-      return;
+    if (!(await confirm({
+      title: "Delete iNPC",
+      message: "Delete this iNPC? This cannot be undone.",
+      intent: "danger"
+    }))) return;
     await api(`/api/inpcs/${inpc.id}`, { method: "DELETE" });
     await props.refreshCampaign(state.selectedCampaignId);
     props.close();
@@ -86,6 +89,8 @@ export function INpcDrawer(props: {
       <div style={{ color: "var(--muted)" }}>iNPC not found.</div>
     ) : (
       <div style={{ display: "grid", gap: 10 }}>
+
+        {/* Identity */}
         <div style={{ display: "grid", gap: 6 }}>
           <div style={{ fontWeight: 800 }}>Name</div>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="iNPC name" />
@@ -99,6 +104,7 @@ export function INpcDrawer(props: {
           </Select>
         </div>
 
+        {/* HP */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div style={{ display: "grid", gap: 6 }}>
             <div style={{ fontWeight: 800 }}>HP Max</div>
@@ -109,29 +115,51 @@ export function INpcDrawer(props: {
             <Input value={hpCurrent} onChange={(e) => setHpCurrent(e.target.value)} inputMode="numeric" />
           </div>
         </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 800 }}>HP Details</div>
-          <Input value={hpDetails} onChange={(e) => setHpDetails(e.target.value)} placeholder="(25d8+25)" />
-        </div>
 
+        {/* Defenses */}
+        <div style={{ color: theme.colors.muted, marginBottom: 2, fontWeight: 800 }}>Defenses</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 800 }}>AC</div>
-            <Input value={ac} onChange={(e) => setAc(e.target.value)} inputMode="numeric" />
+            <div style={{ color: theme.colors.muted }}>Physical</div>
+            <Input value={defensePhysical} onChange={(e) => setDefensePhysical(e.target.value)} inputMode="numeric" />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 800 }}>AC Details</div>
-            <Input value={acDetails} onChange={(e) => setAcDetails(e.target.value)} placeholder="(natural armor)" />
+            <div style={{ color: theme.colors.muted }}>Cognitive</div>
+            <Input value={defenseCognitive} onChange={(e) => setDefenseCognitive(e.target.value)} inputMode="numeric" />
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ color: theme.colors.muted }}>Spiritual</div>
+            <Input value={defenseSpiritual} onChange={(e) => setDefenseSpiritual(e.target.value)} inputMode="numeric" />
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ color: theme.colors.muted }}>Deflect</div>
+            <Input value={deflect} onChange={(e) => setDeflect(e.target.value)} inputMode="numeric" />
           </div>
         </div>
 
-        {/* Read-only monster stat block (attacks/actions/etc.) */}
-        {baseMonster ? (
-          <div style={{ marginTop: 6 }}>
-            <div style={{ color: theme.colors.muted, marginBottom: 8, fontWeight: 800 }}>Monster Details</div>
-            <MonsterPreview monster={baseMonster} />
+        {/* Movement */}
+        <div style={{ display: "grid", gap: 6 }}>
+          <div style={{ fontWeight: 800 }}>Movement</div>
+          <Input value={movement} onChange={(e) => setMovement(e.target.value)} inputMode="numeric" />
+        </div>
+
+        {/* Resources */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontWeight: 800 }}>Focus Max</div>
+            <Input value={focusMax} onChange={(e) => setFocusMax(e.target.value)} inputMode="numeric" />
           </div>
-        ) : null}
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontWeight: 800 }}>Investiture Max</div>
+            <Input
+              value={investitureMax}
+              onChange={(e) => setInvestitureMax(e.target.value)}
+              inputMode="numeric"
+              placeholder="0"
+            />
+          </div>
+        </div>
+
       </div>
     ),
     footer: (

@@ -200,8 +200,13 @@ export interface StoredINpc extends Timestamps {
   hpMax: number;
   hpCurrent: number;
   hpDetails: string | null;
-  ac: number;
-  acDetails: string | null;
+  defensePhysical: number;
+  defenseCognitive: number;
+  defenseSpiritual: number;
+  deflect: number;
+  movement: number;
+  focusMax: number;
+  investitureMax: number | null;
   sort?: number;
 }
 

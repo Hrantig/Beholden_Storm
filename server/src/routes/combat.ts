@@ -403,7 +403,7 @@ app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) =>
 
     const { inpcId } = parseBody(AddInpcBody, req);
     const iRow = db
-      .prepare("SELECT id, name, label, friendly, hp_max, hp_current, hp_details, defense_physical FROM inpcs WHERE id = ?")
+      .prepare("SELECT id, name, label, friendly, hp_max, hp_current, hp_details, defense_physical, focus_max, investiture_max FROM inpcs WHERE id = ?")
       .get(inpcId) as Record<string, unknown> | undefined;
     if (!iRow)
       return res.status(404).json({ ok: false, message: "iNPC not found" });
@@ -427,10 +427,10 @@ app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) =>
       hpCurrent: Number(iRow.hp_current ?? iRow.hp_max ?? 1),
       hpMax: Number(iRow.hp_max ?? 1),
       hpDetails: (iRow.hp_details as string | null) ?? null,
-      focusCurrent: null,
-      focusMax: null,
-      investitureCurrent: null,
-      investitureMax: null,
+      focusCurrent: Number(iRow.focus_max ?? 0),
+      focusMax: Number(iRow.focus_max ?? 0),
+      investitureCurrent: iRow.investiture_max != null ? Number(iRow.investiture_max) : null,
+      investitureMax: iRow.investiture_max != null ? Number(iRow.investiture_max) : null,
       ac: Number(iRow.defense_physical ?? 0),
       acDetails: null,
       attackOverrides: null,

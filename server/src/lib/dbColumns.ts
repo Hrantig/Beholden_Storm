@@ -27,9 +27,17 @@ export const USER_CHARACTER_COLS =
   "int_score, wis_score, cha_score, color, image_url, character_data_json, " +
   "death_saves_json, shared_notes, created_at, updated_at";
 
+// INPC_COLS must stay in sync with:
+//   - server/src/lib/db.ts (CREATE TABLE inpcs)
+//   - server/src/lib/dbConverters.ts (rowToINpc)
+//   - server/src/server/userData.ts (StoredINpc)
+//   - web-dm/src/domain/types/domain.ts (INpc)
 export const INPC_COLS =
   "id, campaign_id, monster_id, name, label, friendly, " +
-  "hp_max, hp_current, hp_details, ac, ac_details, sort, created_at, updated_at";
+  "hp_max, hp_current, hp_details, " +
+  "defense_physical, defense_cognitive, defense_spiritual, " +
+  "deflect, movement, focus_max, investiture_max, " +
+  "sort, created_at, updated_at";
 
 export const NOTE_COLS =
   "id, campaign_id, adventure_id, title, text, sort, created_at, updated_at";

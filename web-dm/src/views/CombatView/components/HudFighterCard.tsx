@@ -325,28 +325,30 @@ export function HudFighterCard(props: Props) {
         />
 
         {props.role === "target" && c && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+          <div style={{ 
+            display: "flex", alignItems: "center", gap: 6, 
+            flexShrink: 0, marginLeft: "auto",
+          }}>
             {/* Active injury dots */}
             {Array.from({ length: Math.min(injuryCount, 6) }).map((_, i) => (
-            <span
-              key={i}
-              onClick={() => {
-                const player = c.baseType === "player" ? props.playersById[c.baseId] : null;
-                if (!player) return;
-                // Clicking dot i removes injuries down to i
-                const next = i;
-                props.onUpdateResource?.(c.id, { injuryCount: next } as any);
-              }}
-              title={`Click to reduce injuries to ${i}`}
-              style={{
-                fontSize: "var(--fs-medium)",
-                color: theme.colors.red,
-                cursor: "pointer",
-              }}
-            >●</span>
-          ))}
+              <span
+                key={i}
+                onClick={() => props.onUpdateResource?.(c.id, { injuryCount: i })}
+                title={i === 0 ? "Click to remove all injuries" : `Click to reduce injuries to ${i}`}
+                style={{
+                  fontSize: "var(--fs-medium)",
+                  color: theme.colors.red,
+                  cursor: "pointer",
+                }}
+              >●</span>
+            ))}
+            {injuryCount > 6 && (
+              <span style={{ fontSize: "var(--fs-small)", color: theme.colors.red, fontWeight: 700 }}>
+                +{injuryCount - 6}
+              </span>
+            )}
 
-            {/* Injury button */}
+            {/* Injury button — always rendered */}
             <button
               onClick={props.onOpenInjury}
               title="Trigger injury roll"
@@ -355,9 +357,7 @@ export function HudFighterCard(props: Props) {
                 color: theme.colors.red, fontSize: "var(--fs-medium)",
                 fontWeight: 700, padding: "0 4px",
               }}
-            >
-              ⚔
-            </button>
+            >⚔</button>
           </div>
         )}
       </div>
