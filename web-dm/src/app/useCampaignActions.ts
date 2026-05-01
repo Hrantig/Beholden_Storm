@@ -286,7 +286,7 @@ export function useCampaignActions(
 
   const patchPlayer = React.useCallback(async (
     playerId: string,
-    patch: { focusCurrent?: number; investitureCurrent?: number | null }
+    patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }
   ) => {
     try {
       await api(`/api/players/${playerId}`, jsonInit("PUT", patch));
@@ -296,7 +296,7 @@ export function useCampaignActions(
 
   const patchINpc = React.useCallback(async (
     inpcId: string,
-    patch: { focusCurrent?: number; investitureCurrent?: number | null }
+    patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }
   ) => {
     try {
       await api(`/api/inpcs/${inpcId}`, jsonInit("PUT", patch));

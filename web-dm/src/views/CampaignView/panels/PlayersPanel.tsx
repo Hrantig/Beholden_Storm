@@ -15,7 +15,7 @@ export function PlayersPanel(props: {
   onDeletePlayer: (playerId: string) => void;
   onAddPlayerToEncounter: (playerId: string) => void;
   onFullRest: () => void;
-  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
+  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }) => void;
 }) {
   const players = React.useMemo(() => {
     return [...props.players].sort((a, b) => a.characterName.localeCompare(b.characterName)).map((p) => {
@@ -91,6 +91,7 @@ export function PlayersPanel(props: {
                   { label: "Edit Player", onClick: () => props.onEditPlayer(p.id) },
                   { label: "Delete Player", danger: true, onClick: () => props.onDeletePlayer(p.id) },
                 ]}
+                onPatchHp={(v) => props.onPatchPlayer(p.id, { hpCurrent: v })}
                 onPatchFocus={(v) => props.onPatchPlayer(p.id, { focusCurrent: v })}
                 onPatchInvestiture={
                   p.investitureMax != null && p.investitureMax > 0

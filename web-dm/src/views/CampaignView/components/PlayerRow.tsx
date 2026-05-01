@@ -4,6 +4,7 @@ import { IconPlayer, IconHeart, IconFocus, IconMovement, IconConditions } from "
 import { PlayerConditions } from "./PlayerConditions";
 import { PlayerInjuries } from "./PlayerInjuries";
 import ResourcePopover from "./ResourcePopover";
+import HpPopover from "./HpPopover";
 import type { RowMenuItem } from "@/ui/RowMenu";
 import { RowMenu } from "@/ui/RowMenu";
 import { IconButton } from "@/ui/IconButton";
@@ -46,6 +47,7 @@ export function PlayerRow(props: {
   variant?: "campaign" | "combatList";
   onPatchFocus?: (newValue: number) => void;
   onPatchInvestiture?: (newValue: number) => void;
+  onPatchHp?: (newHpCurrent: number) => void;
 }) {
   const { dispatch } = useStore();
   const p = props.p;
@@ -158,13 +160,22 @@ export function PlayerRow(props: {
               onChange={props.onPatchInvestiture}
             />
           ) : null}
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <IconHeart size={14} style={{ color: "#f87171" }} />
-            <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
-              {cur}/{max}
-              {tempHp ? <span style={{ color: theme.colors.accentHighlight, marginLeft: 3, fontSize: "var(--fs-small)" }}>+{tempHp}</span> : null}
+          {props.onPatchHp ? (
+            <HpPopover
+              current={cur}
+              max={max}
+              tempHp={tempHp}
+              onChange={props.onPatchHp}
+            />
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <IconHeart size={14} style={{ color: "#f87171" }} />
+              <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
+                {cur}/{max}
+                {tempHp ? <span style={{ color: theme.colors.accentHighlight, marginLeft: 3, fontSize: "var(--fs-small)" }}>+{tempHp}</span> : null}
+              </span>
             </span>
-          </span>
+          )}
         </div>
 
         {/* Action area */}

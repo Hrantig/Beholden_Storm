@@ -35,8 +35,8 @@ export function CampaignView(props: {
   onEditINpc: (inpcId: string) => void;
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
-  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
-  onPatchINpc: (inpcId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
+  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }) => void;
+  onPatchINpc: (inpcId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }) => void;
   onReorderAdventures: (ids: string[]) => void;
   onReorderEncounters: (ids: string[]) => void;
   onExportAdventure: (adventureId: string) => void;

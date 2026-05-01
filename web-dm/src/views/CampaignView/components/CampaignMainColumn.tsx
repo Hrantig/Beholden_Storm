@@ -20,8 +20,8 @@ export function CampaignMainColumn(props: {
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
   onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
-  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
-  onPatchINpc: (inpcId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
+  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }) => void;
+  onPatchINpc: (inpcId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null; hpCurrent?: number }) => void;
 }) {
   return (
     <div className="campaignCol campaignColMain">
