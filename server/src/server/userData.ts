@@ -206,7 +206,9 @@ export interface StoredINpc extends Timestamps {
   deflect: number;
   movement: number;
   focusMax: number;
+  focusCurrent: number;
   investitureMax: number | null;
+  investitureCurrent: number | null;
   sort?: number;
 }
 

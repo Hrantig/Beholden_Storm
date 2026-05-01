@@ -32,11 +32,12 @@ export const USER_CHARACTER_COLS =
 //   - server/src/lib/dbConverters.ts (rowToINpc)
 //   - server/src/server/userData.ts (StoredINpc)
 //   - web-dm/src/domain/types/domain.ts (INpc)
+// focus_current and investiture_current added for resource tracking.
 export const INPC_COLS =
   "id, campaign_id, monster_id, name, label, friendly, " +
   "hp_max, hp_current, hp_details, " +
   "defense_physical, defense_cognitive, defense_spiritual, " +
-  "deflect, movement, focus_max, investiture_max, " +
+  "deflect, movement, focus_max, focus_current, investiture_max, investiture_current, " +
   "sort, created_at, updated_at";
 
 export const NOTE_COLS =

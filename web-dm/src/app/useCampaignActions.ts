@@ -284,6 +284,26 @@ export function useCampaignActions(
     } catch (e) { apiErr(e); }
   }, [state.selectedCampaignId, confirm, refreshCampaign]);
 
+  const patchPlayer = React.useCallback(async (
+    playerId: string,
+    patch: { focusCurrent?: number; investitureCurrent?: number | null }
+  ) => {
+    try {
+      await api(`/api/players/${playerId}`, jsonInit("PUT", patch));
+      await refreshCampaign(state.selectedCampaignId);
+    } catch (e) { apiErr(e); }
+  }, [state.selectedCampaignId, refreshCampaign]);
+
+  const patchINpc = React.useCallback(async (
+    inpcId: string,
+    patch: { focusCurrent?: number; investitureCurrent?: number | null }
+  ) => {
+    try {
+      await api(`/api/inpcs/${inpcId}`, jsonInit("PUT", patch));
+      await refreshCampaign(state.selectedCampaignId);
+    } catch (e) { apiErr(e); }
+  }, [state.selectedCampaignId, refreshCampaign]);
+
   const deleteAdventureNote = React.useCallback(async (noteId: string) => {
     if (!(await confirm({ title: "Delete note", message: "Delete this note?", intent: "danger" }))) return;
     try {
@@ -309,6 +329,8 @@ export function useCampaignActions(
     handleImportAdventureFile,
     addINpcToEncounter,
     addINpcFromAdversaryCustom,
+    patchPlayer,
+    patchINpc,
     deleteCampaign,
     deleteAdventure,
     duplicateEncounter,

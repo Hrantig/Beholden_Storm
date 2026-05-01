@@ -32,7 +32,9 @@ export function INpcDrawer(props: {
   const [deflect, setDeflect] = React.useState("0");
   const [movement, setMovement] = React.useState("0");
   const [focusMax, setFocusMax] = React.useState("0");
+  const [focusCurrent, setFocusCurrent] = React.useState("0");
   const [investitureMax, setInvestitureMax] = React.useState("0");
+  const [investitureCurrent, setInvestitureCurrent] = React.useState("0");
 
   React.useEffect(() => {
     if (!inpc) return;
@@ -46,7 +48,9 @@ export function INpcDrawer(props: {
     setDeflect(String(inpc.deflect ?? 0));
     setMovement(String(inpc.movement ?? 0));
     setFocusMax(String(inpc.focusMax ?? 0));
+    setFocusCurrent(String(inpc.focusCurrent ?? 0));
     setInvestitureMax(String(inpc.investitureMax ?? 0));
+    setInvestitureCurrent(String(inpc.investitureCurrent ?? 0));
   }, [inpc]);
 
   const submit = React.useCallback(async () => {
@@ -64,13 +68,16 @@ export function INpcDrawer(props: {
         deflect: Number(deflect) || 0,
         movement: Number(movement) || 0,
         focusMax: Number(focusMax) || 0,
+        focusCurrent: Math.max(0, Number(focusCurrent) || 0),
         investitureMax: Number(investitureMax) || null,
+        investitureCurrent: Number(investitureMax) > 0 ? Math.max(0, Number(investitureCurrent) || 0) : null,
       })
     );
     await props.refreshCampaign(state.selectedCampaignId);
     props.close();
   }, [inpc, name, friendly, hpMax, hpCurrent, defensePhysical, defenseCognitive,
-      defenseSpiritual, deflect, movement, focusMax, investitureMax, props, state.selectedCampaignId]);
+      defenseSpiritual, deflect, movement, focusMax, focusCurrent, investitureMax, investitureCurrent,
+      props, state.selectedCampaignId]);
 
   const deleteINpc = React.useCallback(async () => {
     if (!inpc) return;
@@ -144,20 +151,34 @@ export function INpcDrawer(props: {
         </div>
 
         {/* Resources */}
+        <div style={{ color: theme.colors.muted, marginBottom: 2, fontWeight: 800 }}>Resources</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 800 }}>Focus Max</div>
+            <div style={{ color: theme.colors.muted }}>Focus Max</div>
             <Input value={focusMax} onChange={(e) => setFocusMax(e.target.value)} inputMode="numeric" />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 800 }}>Investiture Max</div>
-            <Input
-              value={investitureMax}
-              onChange={(e) => setInvestitureMax(e.target.value)}
-              inputMode="numeric"
-              placeholder="0"
-            />
+            <div style={{ color: theme.colors.muted }}>Focus Current</div>
+            <Input value={focusCurrent} onChange={(e) => setFocusCurrent(e.target.value)} inputMode="numeric" />
           </div>
+          {Number(investitureMax) > 0 && (
+            <>
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ color: theme.colors.muted }}>Investiture Max</div>
+                <Input value={investitureMax} onChange={(e) => setInvestitureMax(e.target.value)} inputMode="numeric" placeholder="0" />
+              </div>
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ color: theme.colors.muted }}>Investiture Current</div>
+                <Input value={investitureCurrent} onChange={(e) => setInvestitureCurrent(e.target.value)} inputMode="numeric" placeholder="0" />
+              </div>
+            </>
+          )}
+          {Number(investitureMax) === 0 && (
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ color: theme.colors.muted }}>Investiture Max</div>
+              <Input value={investitureMax} onChange={(e) => setInvestitureMax(e.target.value)} inputMode="numeric" placeholder="0" />
+            </div>
+          )}
         </div>
 
       </div>

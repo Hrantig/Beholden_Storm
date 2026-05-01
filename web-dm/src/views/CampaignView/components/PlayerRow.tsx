@@ -3,6 +3,7 @@ import { theme, withAlpha } from "@/theme/theme";
 import { IconPlayer, IconHeart, IconFocus, IconMovement, IconConditions } from "@/icons";
 import { PlayerConditions } from "./PlayerConditions";
 import { PlayerInjuries } from "./PlayerInjuries";
+import ResourcePopover from "./ResourcePopover";
 import type { RowMenuItem } from "@/ui/RowMenu";
 import { RowMenu } from "@/ui/RowMenu";
 import { IconButton } from "@/ui/IconButton";
@@ -22,6 +23,8 @@ export type PlayerVM = {
   tempHp?: number;
   focusCurrent: number;
   focusMax: number;
+  investitureCurrent?: number | null;
+  investitureMax?: number | null;
   movement: number;
   injuryCount?: number;
   conditions?: { key: string; casterId?: string | null }[];
@@ -41,6 +44,8 @@ export function PlayerRow(props: {
   actions?: React.ReactNode | null;
   onEdit?: () => void;
   variant?: "campaign" | "combatList";
+  onPatchFocus?: (newValue: number) => void;
+  onPatchInvestiture?: (newValue: number) => void;
 }) {
   const { dispatch } = useStore();
   const p = props.p;
@@ -123,19 +128,38 @@ export function PlayerRow(props: {
         {/* Movement · Focus · HP */}
         <div style={{ flex: "0 1 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginLeft: "auto" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <IconMovement size={14} style={{ opacity: 0.55, color: theme.colors.muted }} />
+            <IconMovement size={18} style={{ opacity: 0.55, color: theme.colors.muted }} />
             <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
               {p.movement}ft
             </span>
           </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <IconFocus size={20} style={{ opacity: 0.55, color: theme.colors.muted }} />
-            <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
-              {p.focusCurrent}/{p.focusMax}
+          {props.onPatchFocus ? (
+            <ResourcePopover
+              label="Focus"
+              current={p.focusCurrent}
+              max={p.focusMax}
+              icon={<IconFocus size={20} style={{ color: "#7dd3fc" }}/>}
+              onChange={props.onPatchFocus}
+            />
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <IconFocus size={20} style={{ opacity: 0.55, color: theme.colors.muted }} />
+              <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
+                {p.focusCurrent}/{p.focusMax}
+              </span>
             </span>
-          </span>
+          )}
+          {p.investitureCurrent != null && props.onPatchInvestiture ? (
+            <ResourcePopover
+              label="Investiture"
+              current={p.investitureCurrent}
+              max={p.investitureMax ?? 0}
+              icon={<span style={{ color: "#f59e0b", fontSize: 20, lineHeight: 1 }}>✦</span>}
+              onChange={props.onPatchInvestiture}
+            />
+          ) : null}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <IconHeart size={14} style={{ opacity: 0.55, color: theme.colors.muted }} />
+            <IconHeart size={14} style={{ color: "#f87171" }} />
             <span style={{ fontWeight: 900, fontSize: "var(--fs-medium)", color: theme.colors.text, fontVariantNumeric: "tabular-nums" }}>
               {cur}/{max}
               {tempHp ? <span style={{ color: theme.colors.accentHighlight, marginLeft: 3, fontSize: "var(--fs-small)" }}>+{tempHp}</span> : null}

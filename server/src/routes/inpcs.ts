@@ -21,7 +21,9 @@ const InpcCreateBody = z.object({
   deflect: z.number().optional(),
   movement: z.number().optional(),
   focusMax: z.number().optional(),
+  focusCurrent: z.number().optional(),
   investitureMax: z.number().nullable().optional(),
+  investitureCurrent: z.number().nullable().optional(),
 });
 
 const InpcUpdateBody = z.object({
@@ -37,7 +39,9 @@ const InpcUpdateBody = z.object({
   deflect: z.number().optional(),
   movement: z.number().optional(),
   focusMax: z.number().optional(),
+  focusCurrent: z.number().optional(),
   investitureMax: z.number().nullable().optional(),
+  investitureCurrent: z.number().nullable().optional(),
 });
 
 export function registerInpcRoutes(app: Express, ctx: ServerContext) {
@@ -84,23 +88,25 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
       const deflect = b.deflect ?? adversary.deflect;
       const movement = b.movement ?? adversary.movement;
       const focusMax = b.focusMax ?? adversary.focusMax;
+      const focusCurrent = b.focusCurrent ?? focusMax;
       const investitureMax = b.investitureMax !== undefined ? b.investitureMax : adversary.investitureMax;
+      const investitureCurrent = b.investitureCurrent !== undefined ? b.investitureCurrent : (investitureMax ?? null);
 
       db.prepare(`
         INSERT INTO inpcs
           (id, campaign_id, monster_id, name, label, friendly,
            hp_max, hp_current, hp_details,
            defense_physical, defense_cognitive, defense_spiritual,
-           deflect, movement, focus_max, investiture_max,
+           deflect, movement, focus_max, focus_current, investiture_max, investiture_current,
            created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, campaignId, monsterId, name, label,
         friendly ? 1 : 0,
         hpMax, hpCurrent, hpDetails,
         defensePhysical, defenseCognitive, defenseSpiritual,
-        deflect, movement, focusMax,
-        investitureMax ?? null,
+        deflect, movement, focusMax, focusCurrent,
+        investitureMax ?? null, investitureCurrent,
         t, t
       );
 
@@ -136,21 +142,23 @@ export function registerInpcRoutes(app: Express, ctx: ServerContext) {
     const deflect = b.deflect ?? existing.deflect;
     const movement = b.movement ?? existing.movement;
     const focusMax = b.focusMax ?? existing.focusMax;
+    const focusCurrent = b.focusCurrent ?? existing.focusCurrent;
     const investitureMax = b.investitureMax !== undefined ? b.investitureMax : existing.investitureMax;
+    const investitureCurrent = b.investitureCurrent !== undefined ? b.investitureCurrent : existing.investitureCurrent;
 
     db.prepare(`
       UPDATE inpcs SET
         name=?, label=?, friendly=?,
         hp_max=?, hp_current=?, hp_details=?,
         defense_physical=?, defense_cognitive=?, defense_spiritual=?,
-        deflect=?, movement=?, focus_max=?, investiture_max=?,
+        deflect=?, movement=?, focus_max=?, focus_current=?, investiture_max=?, investiture_current=?,
         updated_at=?
       WHERE id=?
     `).run(
       name, label, friendly ? 1 : 0,
       hpMax, hpCurrent, hpDetails,
       defensePhysical, defenseCognitive, defenseSpiritual,
-      deflect, movement, focusMax, investitureMax ?? null,
+      deflect, movement, focusMax, focusCurrent, investitureMax ?? null, investitureCurrent,
       t, inpcId
     );
 

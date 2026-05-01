@@ -15,6 +15,7 @@ export function PlayersPanel(props: {
   onDeletePlayer: (playerId: string) => void;
   onAddPlayerToEncounter: (playerId: string) => void;
   onFullRest: () => void;
+  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
 }) {
   const players = React.useMemo(() => {
     return [...props.players].sort((a, b) => a.characterName.localeCompare(b.characterName)).map((p) => {
@@ -29,6 +30,8 @@ export function PlayersPanel(props: {
         deflect: Math.max(0, p.deflect + deflectBonus),
         hpMax: Math.max(1, p.hpMax + hpMod),
         tempHp: Math.max(0, Number(p.overrides?.tempHp ?? 0) || 0),
+        investitureCurrent: p.investitureCurrent,
+        investitureMax: p.investitureMax,
         conditions: p.conditions ?? [],
       };
     });
@@ -88,6 +91,12 @@ export function PlayersPanel(props: {
                   { label: "Edit Player", onClick: () => props.onEditPlayer(p.id) },
                   { label: "Delete Player", danger: true, onClick: () => props.onDeletePlayer(p.id) },
                 ]}
+                onPatchFocus={(v) => props.onPatchPlayer(p.id, { focusCurrent: v })}
+                onPatchInvestiture={
+                  p.investitureMax != null && p.investitureMax > 0
+                    ? (v) => props.onPatchPlayer(p.id, { investitureCurrent: v })
+                    : undefined
+                }
               />
             );
           })}

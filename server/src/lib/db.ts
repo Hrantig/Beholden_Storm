@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS inpcs (
   deflect INTEGER NOT NULL DEFAULT 0,
   movement INTEGER NOT NULL DEFAULT 0,
   focus_max INTEGER NOT NULL DEFAULT 0,
+  focus_current INTEGER NOT NULL DEFAULT 0,
   investiture_max INTEGER,
+  investiture_current INTEGER,
   sort INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -505,6 +507,15 @@ function runMigrations(db: Db): void {
   const ucharCols2 = (db.pragma("table_info(user_characters)") as { name: string }[]).map((c) => c.name);
   if (!ucharCols2.includes("shared_notes")) {
     db.exec("ALTER TABLE user_characters ADD COLUMN shared_notes TEXT NOT NULL DEFAULT ''");
+  }
+
+  // Add focus_current and investiture_current to inpcs (resource tracking).
+  const inpcCols = (db.pragma("table_info(inpcs)") as { name: string }[]).map((c) => c.name);
+  if (!inpcCols.includes("focus_current")) {
+    db.exec("ALTER TABLE inpcs ADD COLUMN focus_current INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!inpcCols.includes("investiture_current")) {
+    db.exec("ALTER TABLE inpcs ADD COLUMN investiture_current INTEGER");
   }
 }
 

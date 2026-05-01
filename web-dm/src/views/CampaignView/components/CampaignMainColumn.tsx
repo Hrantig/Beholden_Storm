@@ -20,6 +20,8 @@ export function CampaignMainColumn(props: {
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
   onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
+  onPatchPlayer: (playerId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
+  onPatchINpc: (inpcId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
 }) {
   return (
     <div className="campaignCol campaignColMain">
@@ -32,6 +34,7 @@ export function CampaignMainColumn(props: {
         onEditPlayer={props.onEditPlayer}
         onDeletePlayer={props.onDeletePlayer}
         onAddPlayerToEncounter={props.onAddPlayerToEncounter}
+        onPatchPlayer={props.onPatchPlayer}
       />
 
       <INpcsPanel
@@ -43,6 +46,7 @@ export function CampaignMainColumn(props: {
         onDeleteINpc={props.onDeleteINpc}
         onAddINpcToEncounter={props.onAddINpcToEncounter}
         onAddINpcFromAdversaryCustom={props.onAddINpcFromAdversaryCustom}
+        onPatchINpc={props.onPatchINpc}
       />
     </div>
   );

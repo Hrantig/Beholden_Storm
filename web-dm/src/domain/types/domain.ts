@@ -146,7 +146,9 @@ export interface INpc {
   deflect: number;
   movement: number;
   focusMax: number;
+  focusCurrent: number;
   investitureMax: number | null;
+  investitureCurrent: number | null;
   createdAt?: number;
   updatedAt?: number;
 }

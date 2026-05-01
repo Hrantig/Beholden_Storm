@@ -19,6 +19,7 @@ type Props = {
   onDeleteINpc: (inpcId: string) => void;
   onAddINpcToEncounter: (inpcId: string) => void;
   onAddINpcFromAdversaryCustom: (adversaryId: string, qty: number, opts: AdversaryPickerOptions) => void;
+  onPatchINpc: (inpcId: string, patch: { focusCurrent?: number; investitureCurrent?: number | null }) => void;
 };
 
 export function INpcsPanel(props: Props) {
@@ -88,8 +89,10 @@ export function INpcsPanel(props: Props) {
                   level: 0,
                   hpMax: i.hpMax,
                   hpCurrent: i.hpCurrent,
-                  focusCurrent: i.focusMax,
+                  focusCurrent: i.focusCurrent,
                   focusMax: i.focusMax,
+                  investitureCurrent: i.investitureCurrent,
+                  investitureMax: i.investitureMax ?? 0,
                   movement: i.movement,
                 }}
                 icon={
@@ -117,6 +120,12 @@ export function INpcsPanel(props: Props) {
                   { label: "Edit iNPC", onClick: () => props.onEditINpc(i.id) },
                   { label: "Delete iNPC", danger: true, onClick: () => props.onDeleteINpc(i.id) },
                 ]}
+                onPatchFocus={(v) => props.onPatchINpc(i.id, { focusCurrent: v })}
+                onPatchInvestiture={
+                  i.investitureMax != null && i.investitureMax > 0
+                    ? (v) => props.onPatchINpc(i.id, { investitureCurrent: v })
+                    : undefined
+                }
               />
             );
           })}
