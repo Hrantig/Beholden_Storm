@@ -402,6 +402,7 @@ export function CombatView() {
         onApplyCondition={handleApplyInjuryCondition}
         onIncrementInjuryCount={handleIncrementInjuryCount}
         onApplyNarrativeInjury={handleApplyNarrativeInjury}
+        onDeferToPlayer={() => setInjuryDialogOpen(false)}
       />
     </div>
   );

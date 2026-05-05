@@ -232,4 +232,19 @@ export function registerCampaignRoutes(app: Express, ctx: ServerContext) {
     ctx.broadcast("campaigns:changed", { campaignId });
     res.json({ ok: true });
   });
+
+  // List campaign members — for DM use (linking players to user accounts)
+  app.get("/api/campaigns/:campaignId/members", dmOrAdmin(db), (req, res) => {
+    const campaignId = requireParam(req, res, "campaignId");
+    if (!campaignId) return;
+    const rows = db.prepare(`
+      SELECT u.id, u.username, u.name
+      FROM campaign_membership cm
+      JOIN users u ON u.id = cm.user_id
+      WHERE cm.campaign_id = ?
+      ORDER BY u.name ASC
+    `).all(campaignId) as { id: string; username: string; name: string }[];
+    res.json(rows);
+  });
 }
+

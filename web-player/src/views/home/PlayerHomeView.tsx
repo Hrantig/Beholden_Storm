@@ -34,12 +34,12 @@ interface UserCharacter {
   id: string;
   name: string;
   playerName: string;
-  className: string;
-  species: string;
+  ancestry: string;
+  paths: string[];
   level: number;
   hpMax: number;
   hpCurrent: number;
-  ac: number;
+  defensePhysical: number;
   color: string | null;
   imageUrl: string | null;
   campaigns: CharacterCampaign[];
@@ -225,19 +225,19 @@ function CharacterRow({ ch, onOpen, onRefresh }: {
           <div style={{ fontSize: "var(--fs-body)", fontWeight: 800, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {ch.name}
           </div>
-          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2 }}>
-            {[ch.className, ch.species].filter(Boolean).join(" · ")}
+          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {[ch.ancestry, ...(ch.paths ?? [])].filter(Boolean).join(" · ")}
           </div>
           <div style={{ fontSize: "var(--fs-small)", color, fontWeight: 700, marginTop: 1 }}>Level {ch.level}</div>
         </div>
 
-        {/* AC badge */}
+        {/* Defense badge */}
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
           background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "4px 10px", flexShrink: 0,
         }}>
-          <span style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: C.text }}>{ch.ac}</span>
-          <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 600 }}>AC</span>
+          <span style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: C.text }}>{ch.defensePhysical}</span>
+          <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 600 }}>PHY</span>
         </div>
       </div>
 

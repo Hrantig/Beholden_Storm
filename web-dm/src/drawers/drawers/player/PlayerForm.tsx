@@ -5,6 +5,7 @@ import { IconCamera } from "@/icons";
 
 export type PlayerFormState = {
   playerName: string;
+  userId: string;
   characterName: string;
   ancestry: string;
   paths: string;
@@ -25,6 +26,7 @@ export type PlayerFormState = {
 
 export type PlayerFormHandlers = {
   setPlayerName: (v: string) => void;
+  setUserId: (v: string) => void;
   setCharacterName: (v: string) => void;
   setAncestry: (v: string) => void;
   setPaths: (v: string) => void;
@@ -93,6 +95,7 @@ export function PlayerForm(props: {
   imageUrl?: string | null;
   onImageClick?: () => void;
   onImageRemove?: () => void;
+  campaignMembers?: { id: string; username: string; name: string }[];
 }) {
   const s = props.state;
   const h = props.handlers;
@@ -146,6 +149,28 @@ export function PlayerForm(props: {
           <Input value={s.characterName} onChange={(e) => h.setCharacterName(e.target.value)} />
         </div>
       </div>
+
+      <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Linked User Account</div>
+        <select
+          value={props.state.userId}
+          onChange={(e) => props.handlers.setUserId(e.target.value)}
+          style={{
+            width: "100%",
+            background: theme.colors.inputBg,
+            color: theme.colors.text,
+            border: `1px solid ${theme.colors.panelBorder}`,
+            borderRadius: 6,
+            padding: "6px 8px",
+            fontSize: "var(--fs-body)",
+          }}
+        >
+          <option value="">— No user linked —</option>
+          {(props.campaignMembers ?? []).map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name || u.username} (@{u.username})
+            </option>
+          ))}
+        </select>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>

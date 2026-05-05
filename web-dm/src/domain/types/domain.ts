@@ -45,6 +45,7 @@ export interface Player {
   id: Id;
   campaignId: Id;
   playerName: string;
+  userId: string | null;
   characterName: string;
   ancestry: string;
   paths: string[];

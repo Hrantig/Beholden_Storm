@@ -10,6 +10,7 @@ interface SharedNote {
   id: string;
   title: string;
   text: string;
+  source?: "dm" | "player";
 }
 
 function uid(): string {
@@ -87,7 +88,7 @@ export function SharedNotesPanel(props: {
       if (editTarget.source === "campaign") {
         let updated: SharedNote[];
         if (editTarget.noteId === null) {
-          updated = [...dmNotes, { id: uid(), title: drawerTitle || "Note", text: drawerText }];
+          updated = [...dmNotes, { id: uid(), title: drawerTitle || "Note", text: drawerText, source: "dm" as const }];
         } else {
           updated = dmNotes.map((n) =>
             n.id === editTarget.noteId ? { ...n, title: drawerTitle || "Note", text: drawerText } : n
@@ -152,17 +153,21 @@ export function SharedNotesPanel(props: {
                 onDelete={() => handleDeleteDm(note.id)}
               />
             ))}
-            {playerNotes.map(({ note, playerId }) => (
-              <NoteRow
-                key={note.id}
-                note={note}
-                expanded={expandedIds.includes(note.id)}
-                accentColor={accent}
-                onToggle={() => toggle(note.id)}
-                onEdit={() => openEditPlayer(note.id, playerId)}
-                onDelete={() => handleDeletePlayer(note.id, playerId)}
-              />
-            ))}
+            {playerNotes.map(({ note, playerId }) => {
+              const player = props.players.find((p) => p.id === playerId);
+              return (
+                <NoteRow
+                  key={note.id}
+                  note={note}
+                  expanded={expandedIds.includes(note.id)}
+                  accentColor={accent}
+                  onToggle={() => toggle(note.id)}
+                  onEdit={() => openEditPlayer(note.id, playerId)}
+                  onDelete={() => handleDeletePlayer(note.id, playerId)}
+                  subtitle={player ? `${player.characterName} (${player.playerName})` : undefined}
+                />
+              );
+            })}
           </div>
         )}
       </Panel>
@@ -227,6 +232,7 @@ function NoteRow(props: {
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  subtitle?: string; 
 }) {
   const { note, expanded, accentColor } = props;
   return (
@@ -242,6 +248,12 @@ function NoteRow(props: {
         >
           {note.title || "Untitled"}
         </button>
+
+        {props.subtitle && (
+          <div style={{ fontSize: "var(--fs-medium)", color: theme.colors.muted, marginTop: 2, paddingLeft: 2 }}>
+            {props.subtitle}
+          </div>
+        )}
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); props.onEdit(); }}
           style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, color: theme.colors.muted, cursor: "pointer", padding: "2px 7px", fontSize: "var(--fs-small)" }}

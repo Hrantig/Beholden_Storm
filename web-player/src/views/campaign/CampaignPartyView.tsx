@@ -4,35 +4,32 @@ import { C } from "@/lib/theme";
 import { api } from "@/services/api";
 import { IconPlayer, IconConditionByKey } from "@/icons";
 import { useWs } from "@/services/ws";
-import { hpColor } from "@/views/character/CharacterSheetUtils";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ConditionInstance { key: string; [k: string]: unknown }
+import type { ConditionInstance } from "@/domain/conditions";
 
 export interface PartyMember {
   id: string;
-  userId: string | null;
+  userId: string | null; 
   playerName: string;
   characterName: string;
-  className: string;
-  species: string;
+  ancestry: string;
+  paths: string[];
   level: number;
-  hpPercent: number;
-  ac: number;
-  speed: number | null;
-  strScore: number | null;
-  dexScore: number | null;
-  conScore: number | null;
-  intScore: number | null;
-  wisScore: number | null;
-  chaScore: number | null;
+  hpMax: number;
+  hpCurrent: number;
+  focusMax: number;
+  focusCurrent: number;
+  investitureMax: number | null;
+  investitureCurrent: number | null;
+  movement: number;
+  defensePhysical: number;
+  defenseCognitive: number;
+  defenseSpiritual: number;
+  deflect: number;
+  injuryCount: number;
   color: string | null;
   imageUrl: string | null;
   conditions: ConditionInstance[];
-  characterData: Record<string, unknown> | null;
+  sharedNotes?: string;
 }
 
 function hpLabel(pct: number): string {
@@ -50,7 +47,9 @@ function hpLabel(pct: number): string {
 function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
   const navigate = useNavigate();
   const color = m.color ?? C.accentHl;
-  const hpC = hpColor(m.hpPercent);
+  const hpPct = m.hpMax > 0 ? Math.max(0, Math.min(100, Math.round((m.hpCurrent / m.hpMax) * 100))) : 0;
+  const hpC = hpPct <= 0 ? "#6b7280" : hpPct < 25 ? "#f87171" : hpPct < 50 ? "#fb923c" : hpPct < 75 ? "#fbbf24" : "#4ade80";
+  const subtitle = [m.ancestry, ...(m.paths ?? [])].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -90,9 +89,11 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
           <div style={{ fontWeight: 800, fontSize: "var(--fs-body)", color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {m.characterName || "Unnamed"}
           </div>
-          <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2 }}>
-            {[m.className, m.species].filter(Boolean).join(" · ")}
-          </div>
+          {subtitle && (
+            <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {subtitle}
+            </div>
+          )}
           <div style={{ fontSize: "var(--fs-small)", color: color, fontWeight: 700, marginTop: 1 }}>Level {m.level}</div>
           {m.playerName && (
             <div style={{ fontSize: "var(--fs-small)", color: "rgba(160,180,220,0.4)", marginTop: 1 }}>
@@ -100,26 +101,26 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
             </div>
           )}
         </div>
-        {/* AC badge */}
+        {/* Defense badge */}
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
           background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "4px 8px", flexShrink: 0,
         }}>
-          <span style={{ fontSize: "var(--fs-body)", fontWeight: 900, color: C.text }}>{m.ac}</span>
-          <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 600 }}>AC</span>
+          <span style={{ fontSize: "var(--fs-body)", fontWeight: 900, color: C.text }}>{m.defensePhysical}</span>
+          <span style={{ fontSize: "var(--fs-tiny)", color: C.muted, fontWeight: 600 }}>PHY</span>
         </div>
       </div>
 
       {/* HP bar */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: "var(--fs-small)", color: hpC, fontWeight: 700 }}>{hpLabel(m.hpPercent)}</span>
-          <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>{m.hpPercent}%</span>
+          <span style={{ fontSize: "var(--fs-small)", color: hpC, fontWeight: 700 }}>{hpLabel(hpPct)}</span>
+          <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>{m.hpCurrent}/{m.hpMax}</span>
         </div>
         <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
           <div style={{
             height: "100%", borderRadius: 3,
-            width: `${m.hpPercent}%`,
+            width: `${hpPct}%`,
             background: hpC,
             transition: "width 0.4s ease",
           }} />

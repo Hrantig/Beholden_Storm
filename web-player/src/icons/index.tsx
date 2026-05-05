@@ -1,4 +1,9 @@
 import * as React from "react";
+import focusSvg from "./svg/focus.svg?raw";
+import movementSvg from "./svg/movement.svg?raw";
+import compendiumSvg from "./svg/compendium.svg?raw";
+import { Icon, type SvgIconProps } from "@/icons/Icon";
+
 
 // Minimal icon set for web-player.
 // SVG strings are inlined to avoid Vite import.meta.glob outside project root issues.
@@ -122,3 +127,49 @@ export function IconConditionByKey({ condKey, ...p }: IconProps & { condKey: str
   const svg = conditionIconSvgByKey[condKey];
   return svg ? <SvgIcon svg={svg} {...p} /> : null;
 }
+
+export function IconFocus(p: IconProps) {
+  return <SvgIcon svg={focusSvg} {...p} />;
+}
+
+export function IconMovement(p: IconProps) {
+  return <SvgIcon svg={movementSvg} {...p} />;
+}
+
+export function IconCompendium(p: IconProps) {
+  return <SvgIcon svg={compendiumSvg} {...p} />;
+}
+
+const svgs = import.meta.glob("./svg/*.svg", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+}) as Record<string, string>;
+
+function fromFile(file: string) {
+  const key = `./svg/${file}.svg`;
+  return (
+    svgs[key] ??
+    '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+  );
+}
+
+function make(file: string) {
+  return (p: Omit<SvgIconProps, "svg">) => <Icon svg={fromFile(file)} {...p} />;
+}
+
+// Condition icons — Stormlight
+export const IconAfflicted = make("afflicted");
+export const IconDetermined = make("determined");
+export const IconDisoriented = make("disoriented");
+export const IconEmpowered = make("empowered");
+export const IconEnhanced = make("enhanced");
+export const IconExhausted = make("exhausted");
+export const IconFocused = make("focused");
+export const IconImmobilized = make("immobilized");
+export const IconProne = make("prone");
+export const IconRestrained = make("restrained");
+export const IconSlowed = make("slowed");
+export const IconStunned = make("stunned");
+export const IconSurprised = make("surprised");
+export const IconUnconscious = make("unconscious");

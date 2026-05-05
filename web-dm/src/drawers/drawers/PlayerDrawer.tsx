@@ -9,7 +9,7 @@ import { useConfirm } from "@/confirm/ConfirmContext";
 type PlayerDrawerState = Exclude<Extract<DrawerState, { type: "createPlayer"; campaignId: string } | { type: "editPlayer"; playerId: string }>, null>;
 
 const DEFAULT_PLAYER_FORM: PlayerFormState = {
-  playerName: "", characterName: "", ancestry: "", paths: "",
+  playerName: "", userId: "", characterName: "", ancestry: "", paths: "",
   lvl: "1", movement: "0",
   defensePhysical: "0", defenseCognitive: "0", defenseSpiritual: "0", deflect: "0",
   hpMax: "10", hpCur: "10",
@@ -27,6 +27,21 @@ export function PlayerDrawer(props: {
   const confirm = useConfirm();
 
   const [form, setForm] = React.useState<PlayerFormState>(DEFAULT_PLAYER_FORM);
+  const [campaignMembers, setCampaignMembers] = React.useState<{ id: string; username: string; name: string }[]>([]);
+
+  React.useEffect(() => {
+    const { drawer } = props;
+    let campaignId: string | undefined;
+    if (drawer.type === "createPlayer") {
+      campaignId = drawer.campaignId;
+    } else if (drawer.type === "editPlayer") {
+      campaignId = state.players.find((p) => p.id === drawer.playerId)?.campaignId;
+    }
+    if (!campaignId) return;
+    api<{ id: string; username: string; name: string }[]>(
+      `/api/campaigns/${campaignId}/members`
+    ).then(setCampaignMembers).catch(() => {});
+  }, [props.drawer, state.players]);
 
   const [pendingImage, setPendingImage] = React.useState<{ file: File; previewUrl: string } | null>(null);
   const imageInputRef = React.useRef<HTMLInputElement>(null);
@@ -42,9 +57,11 @@ export function PlayerDrawer(props: {
 
     if (d.type !== "editPlayer") return;
     const p = state.players.find((x) => x.id === d.playerId);
+    
     if (!p) return;
     setForm({
       playerName: p.playerName ?? "",
+      userId: p.userId ?? "",
       characterName: p.characterName ?? "",
       ancestry: p.ancestry ?? "",
       paths: (p.paths ?? []).join(", "),
@@ -63,9 +80,10 @@ export function PlayerDrawer(props: {
       injuryCount: String(p.injuryCount ?? 0),
     });
   }, [props.drawer, state.players]);
-
-  const editPlayer = props.drawer.type === "editPlayer"
-    ? state.players.find((p) => p.id === props.drawer.playerId)
+  
+  const { drawer } = props;
+  const editPlayer = drawer.type === "editPlayer"
+    ? state.players.find((p) => p.id === drawer.playerId)
     : null;
   const displayImageUrl = pendingImage?.previewUrl ?? editPlayer?.imageUrl ?? null;
 
@@ -109,6 +127,7 @@ export function PlayerDrawer(props: {
 
     const payload = {
       playerName: form.playerName.trim() || "Player",
+      userId: form.userId || null,
       characterName: form.characterName.trim() || "Character",
       ancestry: form.ancestry.trim() || "Unknown",
       paths: pathsArray,
@@ -170,6 +189,7 @@ export function PlayerDrawer(props: {
   const handlers: PlayerFormHandlers = React.useMemo(
     () => ({
       setPlayerName: (v) => setForm((s) => ({ ...s, playerName: v })),
+      setUserId: (v) => setForm((s) => ({ ...s, userId: v })),
       setCharacterName: (v) => setForm((s) => ({ ...s, characterName: v })),
       setAncestry: (v) => setForm((s) => ({ ...s, ancestry: v })),
       setPaths: (v) => setForm((s) => ({ ...s, paths: v })),
@@ -207,6 +227,7 @@ export function PlayerDrawer(props: {
           imageUrl={displayImageUrl}
           onImageClick={() => imageInputRef.current?.click()}
           onImageRemove={handleImageRemove}
+          campaignMembers={campaignMembers}
         />
       </>
     ),

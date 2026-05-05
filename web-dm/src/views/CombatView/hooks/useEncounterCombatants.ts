@@ -33,5 +33,10 @@ export function useEncounterCombatants(encounterId: string | undefined, dispatch
     if (typeof encId === "string" && encId === encounterId) refresh();
   });
 
+  useWs((msg) => {
+    if (msg.type !== "players:changed") return;
+    refresh();
+  });
+
   return { refresh };
 }

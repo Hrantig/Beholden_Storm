@@ -13,6 +13,7 @@ type Props = {
   onApplyCondition: (conditionKey: string, detail?: string) => void;
   onIncrementInjuryCount?: () => void;
   onApplyNarrativeInjury?: () => void;
+  onDeferToPlayer?: () => void;
 };
 
 const TH_STYLE: React.CSSProperties = {
@@ -24,7 +25,7 @@ const TH_STYLE: React.CSSProperties = {
   fontWeight: 700,
 };
 
-export function InjuryDialog({ isOpen, combatant, player, onClose, onApplyCondition, onIncrementInjuryCount, onApplyNarrativeInjury }: Props) {
+export function InjuryDialog({ isOpen, combatant, player, onClose, onApplyCondition, onIncrementInjuryCount, onApplyNarrativeInjury, onDeferToPlayer }: Props) {
   const [selectedEffect, setSelectedEffect] = React.useState<EffectRow | null>(null);
 
   React.useEffect(() => {
@@ -76,20 +77,39 @@ export function InjuryDialog({ isOpen, combatant, player, onClose, onApplyCondit
           <span style={{ fontSize: "var(--fs-title)", fontWeight: 900, color: theme.colors.text }}>
             Injury Roll{combatant ? ` — ${combatant.name}` : ""}
           </span>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: theme.colors.muted,
-              fontSize: "var(--fs-large)",
-              lineHeight: 1,
-              padding: "4px 8px",
-            }}
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {onDeferToPlayer && (
+              <button
+                onClick={onDeferToPlayer}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${theme.colors.panelBorder}`,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  color: theme.colors.muted,
+                  fontSize: "var(--fs-small)",
+                  fontWeight: 700,
+                  padding: "4px 12px",
+                }}
+              >
+                Defer to Player
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: theme.colors.muted,
+                fontSize: "var(--fs-large)",
+                lineHeight: 1,
+                padding: "4px 8px",
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Injury count notice */}
