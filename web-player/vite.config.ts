@@ -17,7 +17,7 @@ export default defineConfig({
   define: {
     __SERVER_PORT__: SERVER_PORT,
   },
-  base: "/",
+  base: "/player/",
   build: {
     outDir: "dist",
     rollupOptions: {

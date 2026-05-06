@@ -74,6 +74,36 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
   const { db } = ctx;
   const { now, uid } = ctx.helpers;
 
+  // ── Persisted combat state (round + active combatant + phase) ─────────────
+  app.get("/api/encounters/:encounterId/combatState", memberOrAdmin(db), (req, res) => {
+    const encounterId = requireParam(req, res, "encounterId");
+    if (!encounterId) return;
+    ensureCombat(db, encounterId);
+    
+    // Touch so /api/me/combatant can find the most recently active encounter
+    db.prepare("UPDATE encounters SET updated_at = ? WHERE id = ?").run(now(), encounterId);
+
+    const encRow = db
+      .prepare(`SELECT combat_round, combat_active_combatant_id, 
+                combat_phase, declarations_locked FROM encounters WHERE id = ?`)
+      .get(encounterId) as { 
+        combat_round: number | null; 
+        combat_active_combatant_id: string | null;
+        combat_phase: string | null;
+        declarations_locked: number | null;
+      } | undefined;
+
+    const roundVal = Number(encRow?.combat_round);
+    const state = {
+      round: Number.isFinite(roundVal) && roundVal >= 1 ? roundVal : 1,
+      activeCombatantId: (encRow?.combat_active_combatant_id ?? null) as string | null,
+      currentPhase: (encRow?.combat_phase ?? "fast-pc") as CombatPhase,
+      declarationsLocked: Boolean(encRow?.declarations_locked),
+    };
+
+    res.json(state);
+  });
+
   // ── Encounter combatants (merged view) ────────────────────────────────────
   app.get("/api/encounters/:encounterId/combatants", memberOrAdmin(db), (req, res) => {
     const encounterId = requireParam(req, res, "encounterId");
@@ -121,32 +151,6 @@ const merged = rows.map((row) => {
 
     res.json(merged);
   });
-// ── Persisted combat state (round + active combatant + phase) ─────────────
-app.get("/api/encounters/:encounterId/combatState", memberOrAdmin(db), (req, res) => {
-  const encounterId = requireParam(req, res, "encounterId");
-  if (!encounterId) return;
-  ensureCombat(db, encounterId);
-
-  const encRow = db
-    .prepare(`SELECT combat_round, combat_active_combatant_id, 
-              combat_phase, declarations_locked FROM encounters WHERE id = ?`)
-    .get(encounterId) as { 
-      combat_round: number | null; 
-      combat_active_combatant_id: string | null;
-      combat_phase: string | null;
-      declarations_locked: number | null;
-    } | undefined;
-
-  const roundVal = Number(encRow?.combat_round);
-  const state = {
-    round: Number.isFinite(roundVal) && roundVal >= 1 ? roundVal : 1,
-    activeCombatantId: (encRow?.combat_active_combatant_id ?? null) as string | null,
-    currentPhase: (encRow?.combat_phase ?? "fast-pc") as CombatPhase,
-    declarationsLocked: Boolean(encRow?.declarations_locked),
-  };
-
-  res.json(state);
-});
 
 // Find the current user's combatant in any active encounter for a campaign
 app.get("/api/me/combatant", requireAuth, (req, res) => {
@@ -159,19 +163,21 @@ app.get("/api/me/combatant", requireAuth, (req, res) => {
   if (!playerRow) return res.json(null);
 
   const combatantRow = db.prepare(`
-    SELECT c.id, c.encounter_id, c.phase, c.action_points_used
+    SELECT c.id, c.encounter_id, c.phase, c.action_points_used, e.name as encounter_name
     FROM combatants c
     JOIN encounters e ON e.id = c.encounter_id
     JOIN adventures a ON a.id = e.adventure_id
     WHERE a.campaign_id = ?
       AND c.base_type = 'player'
       AND c.base_id = ?
+    ORDER BY e.updated_at DESC
     LIMIT 1
   `).get(campaignId, playerRow.id) as {
     id: string;
     encounter_id: string;
     phase: string | null;
     action_points_used: number;
+    encounter_name: string;
   } | undefined;
 
   if (!combatantRow) return res.json(null);
@@ -179,6 +185,7 @@ app.get("/api/me/combatant", requireAuth, (req, res) => {
   res.json({
     id: combatantRow.id,
     encounterId: combatantRow.encounter_id,
+  encounterName: combatantRow.encounter_name,
     phase: combatantRow.phase as "fast" | "slow" | null,
     actionPointsUsed: combatantRow.action_points_used ?? 0,
   });
@@ -321,6 +328,9 @@ app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) =>
       combat_phase: string;
       declarations_locked: number;
     };
+
+  // Touch encounter updated_at so player app can find the active encounter
+  db.prepare("UPDATE encounters SET updated_at = ? WHERE id = ?").run(now(), encounterId);
 
   res.json({ 
     ok: true, 

@@ -47,10 +47,11 @@ function hpLabel(pct: number): string {
 // Party member card
 // ---------------------------------------------------------------------------
 
-function MemberCard({ m, campaignId, onClaim }: { 
+function MemberCard({ m, campaignId, onClaim, isOwn }: { 
   m: PartyMember; 
   campaignId: string;
   onClaim?: (memberId: string) => void;
+  isOwn?: boolean;
 }) {
   const navigate = useNavigate();
   const color = m.color ?? C.accentHl;
@@ -65,8 +66,8 @@ function MemberCard({ m, campaignId, onClaim }: {
         navigate(`/campaigns/${campaignId}/members/${m.id}`);
       }}
       style={{
-        background: "rgba(255,255,255,0.04)",
-        border: `1px solid ${color}33`,
+        border: `1px solid ${isOwn ? color : color + "33"}`,
+        background: isOwn ? "rgba(74,222,128,0.07)" : "rgba(255,255,255,0.04)",
         borderRadius: 14,
         padding: 16,
         cursor: "pointer",
@@ -111,7 +112,7 @@ function MemberCard({ m, campaignId, onClaim }: {
             </div>
           )}
         </div>
-
+          
         {/* Defense badge */}
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
@@ -230,7 +231,8 @@ export function CampaignPartyView() {
         gap: 16,
       }}>
         {party.map((m) => (
-          <MemberCard key={m.id} m={m} campaignId={campaignId!} onClaim={handleClaim} />
+          <MemberCard key={m.id} m={m} campaignId={campaignId!} onClaim={handleClaim} 
+            isOwn={m.userId !== null && m.userId === authUser?.id} />
         ))}
       </div>
     );

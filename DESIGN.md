@@ -283,23 +283,39 @@ additional_features_json, created_at, updated_at
 - All routes, converters, schemas updated
 - Build clean, server running
 
-### Phase 2 — UI (in progress)
+### Phase 2 — UI ✅ Complete
 - ✅ Player create/edit form
 - ✅ Player row display in Campaign view
-- ✅ Conditions system — Stormlight list, stackable conditions, player conditions from Campaign view
+- ✅ Conditions system — Stormlight list, stackable conditions, player conditions
 - ✅ Player combat panel — Stormlight stats display
 - ✅ Overrides panel — deflectBonus replacing acBonus
-- ⬜ Four-phase combat tracker
-- ⬜ Injury roll dialog
-- ⬜ General D&D cleanup (remaining)
+- ✅ Four-phase combat tracker
+- ✅ Injury roll dialog — DM and player sides
+- ✅ Quick resource controls (campaign view popovers)
+- ✅ Phase sections visual feedback
+- ⬜ General D&D cleanup (remaining — see backlog)
 
 ### Phase 3 — Compendium (in progress)
 - ✅ Adversary database table and API routes
-- ⬜ Adversary import tool
-- ⬜ Adversary browser UI
-- ⬜ Encounter integration (add adversary to encounter)
+- ✅ Adversary import tool (JSON via admin panel)
+- ✅ Adversary browser UI
+- ✅ Encounter integration (add adversary to encounter)
+- ⬜ HP range picker on encounter add
 - ⬜ Talents, Surges, Equipment (deferred)
 - ⬜ Rules Reference (deferred)
+
+### Phase 4 — Player App ✅ Complete (Phase 2 scope)
+- ✅ Full Stormlight character view (PartyMemberView)
+- ✅ Resource controls (HP DMG/HEAL, Focus dots, Investiture dots)
+- ✅ Conditions management (add/remove, icons, tooltips)
+- ✅ Injury roll dialog with auto-trigger at 0 HP
+- ✅ Phase declaration and AP tracking during combat
+- ✅ Player notes (own notes + read-only DM notes)
+- ✅ Self-edit form (level-up stats)
+- ✅ Character creation by players
+- ✅ Three-path player-to-character linking
+- ⬜ Rules Reference (when compendium is built)
+- ⬜ D&D cleanup pass
 
 ---
 

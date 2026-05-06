@@ -2,7 +2,7 @@ import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
 import { api, jsonInit } from "@/services/api";
-import { IconPlayer, IconHeart, IconMovement } from "@/icons";
+import { IconPlayer, IconHeart, IconMovement, IconShield } from "@/icons";
 import { useWs } from "@/services/ws";
 import { useAuth } from "@/contexts/AuthContext";
 import type { PartyMember } from "./CampaignPartyView";
@@ -170,12 +170,14 @@ export function PartyMemberView() {
   const [campaignNotes, setCampaignNotes] = React.useState<SharedNote[]>([]);
   const [encounterId, setEncounterId] = React.useState<string | null>(null);
   const [combatantId, setCombatantId] = React.useState<string | null>(null);
-  const [currentPhase, setCurrentPhase] = React.useState<string | null>(null);
   const [declarationsLocked, setDeclarationsLocked] = React.useState(false);
   const [myPhase, setMyPhase] = React.useState<"fast" | "slow" | null>(null);
+  const [currentPhase, setCurrentPhase] = React.useState<string | null>(null);
   const [round, setRound] = React.useState<number>(1);
 
   const [actionPointsUsed, setActionPointsUsed] = React.useState(0);
+  
+  const [encounterName, setEncounterName] = React.useState<string | null>(null);
 
   const fetchMember = React.useCallback(() => {
     if (!campaignId) return;
@@ -195,6 +197,7 @@ export function PartyMemberView() {
       const combatant = await api<{
         id: string;
         encounterId: string;
+        encounterName: string;
         phase: "fast" | "slow" | null;
         actionPointsUsed: number;
       } | null>(`/api/me/combatant?campaignId=${campaignId}`);
@@ -214,15 +217,25 @@ export function PartyMemberView() {
         setCurrentPhase(state.currentPhase);
         setDeclarationsLocked(state.declarationsLocked);
         setRound(state.round);
+        setEncounterName(combatant.encounterName);
       } else {
         setCombatantId(null);
         setEncounterId(null);
         setMyPhase(null);
         setCurrentPhase(null);
         setDeclarationsLocked(false);
+        setEncounterName(null);
       }
     } catch { /* best effort */ }
   }, [campaignId]);
+
+  // Poll combat state every 5 seconds to catch encounter switches
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchCombatState();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchCombatState]);
 
   React.useEffect(() => { fetchMember(); }, [fetchMember]);
   React.useEffect(() => { void fetchCombatState();}, [fetchCombatState]);
@@ -237,6 +250,14 @@ export function PartyMemberView() {
       .catch(() => {});
   }, [campaignId]);
 
+  // Poll combat state every 5 seconds to catch encounter switches
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchCombatState();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchCombatState]);
+
   useWs(React.useCallback((msg) => {
     if (msg.type === "players:changed") {
       const cId = (msg.payload as any)?.campaignId as string | undefined;
@@ -245,10 +266,14 @@ export function PartyMemberView() {
   }, [campaignId, fetchMember]));
 
   useWs(React.useCallback((msg) => {
-    if (msg.type === "encounter:combatStateChanged" || msg.type === "encounter:combatantsChanged") {
-      void fetchCombatState();
-    }
-  }, [fetchCombatState]));
+  if (
+    msg.type === "encounter:combatStateChanged" ||
+    msg.type === "encounter:combatantsChanged" ||
+    msg.type === "players:changed"
+  ) {
+    void fetchCombatState();
+  }
+}, [fetchCombatState]));
 
   React.useEffect(() => {
     if (!member) return;
@@ -291,7 +316,6 @@ export function PartyMemberView() {
 
   const m = member;
   const isOwn = m.userId !== null && m.userId === authUser?.id;
-  console.log("isOwn check", { mUserId: m.userId, authId: authUser?.id, isOwn });
   const color = m.color ?? C.accentHl;
   const subtitle = [m.ancestry, ...(m.paths ?? [])].filter(Boolean).join(" · ");
 
@@ -555,9 +579,10 @@ export function PartyMemberView() {
           )}
         </Panel>
 
+        
         {isOwn && combatantId && (
           <Panel style={{ marginBottom: 12 }}>
-            <SectionLabel>Combat — Round {round}</SectionLabel>
+            <SectionLabel>{encounterName ?? "Combat"} — Round {round}</SectionLabel>
 
             {/* Phase declaration */}
             <div style={{ marginBottom: 10 }}>
@@ -593,13 +618,13 @@ export function PartyMemberView() {
             {/* Action points */}
             <div>
               <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 6 }}>
-                Action Points — {currentPhase?.includes("fast") ? "Fast turn (2 AP)" : "Slow turn (3 AP)"}
+                Action Points — {myPhase?.includes("fast") ? "Fast turn (2 AP)" : "Slow turn (3 AP)"}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button type="button"
                   onClick={async () => {
                     if (!combatantId || !encounterId) return;
-                    const maxAp = currentPhase?.includes("fast") ? 2 : 3;
+                    const maxAp = myPhase?.includes("fast") ? 2 : 3;
                     const next = Math.min(actionPointsUsed + 1, maxAp);
                     setActionPointsUsed(next);
                     await api(`/api/encounters/${encounterId}/combatants/${combatantId}/phase`,
@@ -607,8 +632,8 @@ export function PartyMemberView() {
                   }}
                   style={{ background: "transparent", border: "none", cursor: "pointer", color: C.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}>−</button>
                 <div style={{ display: "flex", gap: 3 }}>
-                  {Array.from({ length: currentPhase?.includes("fast") ? 2 : 3 }).map((_, i) => {
-                    const maxAp = currentPhase?.includes("fast") ? 2 : 3;
+                  {Array.from({ length: myPhase?.includes("fast") ? 2 : 3 }).map((_, i) => {
+                    const maxAp = myPhase?.includes("fast") ? 2 : 3;
                     const remaining = Math.max(0, maxAp - actionPointsUsed);
                     return (
                       <span key={i}
@@ -647,11 +672,16 @@ export function PartyMemberView() {
         <Panel style={{ marginBottom: 12 }}>
           <SectionLabel>Defenses & Movement</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-            <MiniStat label="Physical" value={String(m.defensePhysical)} accent={color} />
-            <MiniStat label="Cognitive" value={String(m.defenseCognitive)} accent={color} />
-            <MiniStat label="Spiritual" value={String(m.defenseSpiritual)} accent={color} />
-            <MiniStat label="Deflect" value={String(m.deflect)} />
-            <MiniStat label="Movement" value={`${m.movement}ft`} icon={<IconMovement size={10} />} />
+            <MiniStat label="Physical" value={String(m.defensePhysical)} accent={color} 
+              icon={<IconShield size={14} style={{ color: "#f87171" }} />} />
+            <MiniStat label="Cognitive" value={String(m.defenseCognitive)} accent={color} 
+              icon={<IconShield size={14} style={{ color: "#7dd3fc" }} />} />
+            <MiniStat label="Spiritual" value={String(m.defenseSpiritual)} accent={color} 
+              icon={<IconShield size={14} style={{ color: "#a78bfa" }} />} />
+            <MiniStat label="Deflect" value={String(m.deflect)} 
+              icon={<IconShield size={14} style={{ color: "#fbbf24" }} />} />
+            <MiniStat label="Movement" value={`${m.movement}ft`} 
+              icon={<IconMovement size={14} />} />
           </div>
         </Panel>
 
