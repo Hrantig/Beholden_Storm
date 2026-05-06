@@ -9,7 +9,7 @@ import { useConfirm } from "@/confirm/ConfirmContext";
 type PlayerDrawerState = Exclude<Extract<DrawerState, { type: "createPlayer"; campaignId: string } | { type: "editPlayer"; playerId: string }>, null>;
 
 const DEFAULT_PLAYER_FORM: PlayerFormState = {
-  playerName: "", userId: "", characterName: "", ancestry: "", paths: "",
+  playerName: "Unclaimed", userId: "", characterName: "", ancestry: "", paths: "",
   lvl: "1", movement: "0",
   defensePhysical: "0", defenseCognitive: "0", defenseSpiritual: "0", deflect: "0",
   hpMax: "10", hpCur: "10",
@@ -60,7 +60,7 @@ export function PlayerDrawer(props: {
     
     if (!p) return;
     setForm({
-      playerName: p.playerName ?? "",
+      playerName: p.userId ? (p.playerName ?? "") : "Unclaimed",
       userId: p.userId ?? "",
       characterName: p.characterName ?? "",
       ancestry: p.ancestry ?? "",
@@ -186,29 +186,44 @@ export function PlayerDrawer(props: {
     props.close();
   }, [confirm, props, state.selectedCampaignId]);
 
-  const handlers: PlayerFormHandlers = React.useMemo(
-    () => ({
-      setPlayerName: (v) => setForm((s) => ({ ...s, playerName: v })),
-      setUserId: (v) => setForm((s) => ({ ...s, userId: v })),
-      setCharacterName: (v) => setForm((s) => ({ ...s, characterName: v })),
-      setAncestry: (v) => setForm((s) => ({ ...s, ancestry: v })),
-      setPaths: (v) => setForm((s) => ({ ...s, paths: v })),
-      setLvl: (v) => setForm((s) => ({ ...s, lvl: v })),
-      setMovement: (v) => setForm((s) => ({ ...s, movement: v })),
-      setDefensePhysical: (v) => setForm((s) => ({ ...s, defensePhysical: v })),
-      setDefenseCognitive: (v) => setForm((s) => ({ ...s, defenseCognitive: v })),
-      setDefenseSpiritual: (v) => setForm((s) => ({ ...s, defenseSpiritual: v })),
-      setDeflect: (v) => setForm((s) => ({ ...s, deflect: v })),
-      setHpMax: (v) => setForm((s) => ({ ...s, hpMax: v })),
-      setHpCur: (v) => setForm((s) => ({ ...s, hpCur: v })),
-      setFocusMax: (v) => setForm((s) => ({ ...s, focusMax: v })),
-      setFocusCur: (v) => setForm((s) => ({ ...s, focusCur: v })),
-      setInvestitureMax: (v) => setForm((s) => ({ ...s, investitureMax: v })),
-      setInvestitureCur: (v) => setForm((s) => ({ ...s, investitureCur: v })),
-      setInjuryCount: (v) => setForm((s) => ({ ...s, injuryCount: v })),
-    }),
-    []
-  );
+  const prevUserIdRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (form.userId === prevUserIdRef.current) return;
+    prevUserIdRef.current = form.userId;
+    
+    if (!form.userId) {
+      setForm((s) => ({ ...s, playerName: "Unclaimed" }));
+      return;
+    }
+    const member = campaignMembers.find((m) => m.id === form.userId);
+    if (member) {
+      setForm((s) => ({ ...s, playerName: member.name || member.username }));
+    }
+  }, [form.userId, campaignMembers]);
+
+  const handlers: PlayerFormHandlers = {
+    setPlayerName: (v) => setForm((s) => ({ ...s, playerName: v })),
+    setUserId: (v) => {
+      setForm((s) => ({ ...s, userId: v }));
+    },
+    setCharacterName: (v) => setForm((s) => ({ ...s, characterName: v })),
+    setAncestry: (v) => setForm((s) => ({ ...s, ancestry: v })),
+    setPaths: (v) => setForm((s) => ({ ...s, paths: v })),
+    setLvl: (v) => setForm((s) => ({ ...s, lvl: v })),
+    setMovement: (v) => setForm((s) => ({ ...s, movement: v })),
+    setDefensePhysical: (v) => setForm((s) => ({ ...s, defensePhysical: v })),
+    setDefenseCognitive: (v) => setForm((s) => ({ ...s, defenseCognitive: v })),
+    setDefenseSpiritual: (v) => setForm((s) => ({ ...s, defenseSpiritual: v })),
+    setDeflect: (v) => setForm((s) => ({ ...s, deflect: v })),
+    setHpMax: (v) => setForm((s) => ({ ...s, hpMax: v })),
+    setHpCur: (v) => setForm((s) => ({ ...s, hpCur: v })),
+    setFocusMax: (v) => setForm((s) => ({ ...s, focusMax: v })),
+    setFocusCur: (v) => setForm((s) => ({ ...s, focusCur: v })),
+    setInvestitureMax: (v) => setForm((s) => ({ ...s, investitureMax: v })),
+    setInvestitureCur: (v) => setForm((s) => ({ ...s, investitureCur: v })),
+    setInjuryCount: (v) => setForm((s) => ({ ...s, injuryCount: v })),
+  };
 
   return {
     body: (

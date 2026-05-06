@@ -7,9 +7,6 @@ import { PlayerHomeView } from "@/views/home/PlayerHomeView";
 import { AppShell } from "./AppShell";
 
 const CompendiumView = React.lazy(() => import("@/views/CompendiumView/CompendiumView").then(m => ({ default: m.CompendiumView })));
-const CharacterCreatorView = React.lazy(() => import("@/views/character-creator/CharacterCreatorView").then(m => ({ default: m.CharacterCreatorView })));
-const CharacterView = React.lazy(() => import("@/views/character/CharacterView").then(m => ({ default: m.CharacterView })));
-const LevelUpView = React.lazy(() => import("@/views/level-up/LevelUpView").then(m => ({ default: m.LevelUpView })));
 const ProfileView = React.lazy(() => import("@/views/profile/ProfileView").then(m => ({ default: m.ProfileView })));
 const CampaignPartyView = React.lazy(() => import("@/views/campaign/CampaignPartyView").then(m => ({ default: m.CampaignPartyView })));
 const PartyMemberView = React.lazy(() => import("@/views/campaign/PartyMemberView").then(m => ({ default: m.PartyMemberView })));
@@ -47,10 +44,6 @@ function AuthGate() {
           <Routes>
             <Route path="/" element={<PlayerHomeView />} />
             <Route path="/compendium" element={<CompendiumView />} />
-            <Route path="/characters/new" element={<CharacterCreatorView />} />
-            <Route path="/characters/:id" element={<CharacterView />} />
-            <Route path="/characters/:id/edit" element={<CharacterCreatorView />} />
-            <Route path="/characters/:id/levelup" element={<LevelUpView />} />
             <Route path="/profile" element={<ProfileView />} />
             <Route path="/campaigns/:id" element={<CampaignPartyView />} />
             <Route path="/campaigns/:id/members/:playerId" element={<PartyMemberView />} />

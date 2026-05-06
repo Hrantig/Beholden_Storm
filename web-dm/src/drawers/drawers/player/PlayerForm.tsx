@@ -142,7 +142,12 @@ export function PlayerForm(props: {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
           <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Player name</div>
-          <Input value={s.playerName} onChange={(e) => h.setPlayerName(e.target.value)} />
+          <Input 
+            value={props.state.playerName} 
+            onChange={() => {}} 
+            readOnly
+            style={{ opacity: 0.6, cursor: "default" }}
+          />
         </div>
         <div>
           <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Character name</div>
@@ -153,7 +158,8 @@ export function PlayerForm(props: {
       <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Linked User Account</div>
         <select
           value={props.state.userId}
-          onChange={(e) => props.handlers.setUserId(e.target.value)}
+          onChange={(e) => {
+            props.handlers.setUserId(e.target.value)}}
           style={{
             width: "100%",
             background: theme.colors.inputBg,

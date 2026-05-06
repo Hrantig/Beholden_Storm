@@ -8,10 +8,12 @@ import { AddMemberModal } from "./AddMemberModal";
 const ROLE_LABELS: Record<string, string> = { dm: "Dungeon Master", player: "Player" };
 const ROLE_COLORS: Record<string, string> = { dm: theme.colors.accentPrimary, player: theme.colors.accentHighlight };
 
-function MemberRow({ member, onChangeRole, onRemove }: {
+function MemberRow({ member, players, onChangeRole, onRemove, onAssignCharacter }: {
   member: Member;
+  players: { id: string; characterName: string; userId: string | null }[];
   onChangeRole: (id: string, role: "dm" | "player") => void;
   onRemove: (id: string, name: string) => void;
+  onAssignCharacter: (userId: string, playerId: string | null) => void;
 }) {
   const tdStyle: React.CSSProperties = {
     padding: "10px 14px", fontSize: "var(--fs-medium)",
@@ -45,6 +47,29 @@ function MemberRow({ member, onChangeRole, onRemove }: {
           <option value="player">Player</option>
         </select>
       </td>
+      <td style={tdStyle}>
+        <select
+          value={players.find((p) => p.userId === member.user.id)?.id ?? ""}
+          onChange={(e) => onAssignCharacter(member.user.id, e.target.value || null)}
+          style={{
+            padding: "4px 8px",
+            borderRadius: theme.radius.control,
+            border: `1px solid ${theme.colors.panelBorder}`,
+            background: theme.colors.inputBg,
+            color: theme.colors.text,
+            fontSize: "var(--fs-small)",
+            cursor: "pointer", outline: "none",
+            maxWidth: 160,
+          }}
+        >
+          <option value="">— Unlinked —</option>
+          {players
+            .filter((p) => p.userId === null || p.userId === member.user.id)
+            .map((p) => (
+              <option key={p.id} value={p.id}>{p.characterName}</option>
+            ))}
+        </select>
+      </td>
       <td style={{ ...tdStyle, textAlign: "right" }}>
         <Button
           variant="danger"
@@ -63,6 +88,35 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
   const [expanded, setExpanded] = useState(false);
   const [addModal, setAddModal] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [players, setPlayers] = useState<{ id: string; characterName: string; userId: string | null }[]>([]);
+
+  const fetchPlayers = useCallback(async () => {
+    const data = await api<{ id: string; characterName: string; userId: string | null }[]>(
+      `/api/campaigns/${campaign.id}/players`
+    );
+    setPlayers(data);
+  }, [campaign.id]);
+
+  useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
+  useEffect(() => { if (expanded) fetchPlayers(); }, [expanded, fetchPlayers]);
+
+  async function handleAssignCharacter(userId: string, playerId: string | null) {
+  if (playerId) {
+    const member = members.find((m) => m.user.id === userId);
+    const playerName = member ? (member.user.name || member.user.username) : undefined;
+    await api(`/api/players/${playerId}`, jsonInit("PUT", { 
+      userId,
+      ...(playerName ? { playerName } : {}),
+    }));
+  } else {
+    const current = players.find((p) => p.userId === userId);
+    if (current) {
+      await api(`/api/players/${current.id}`, jsonInit("PUT", { userId: null, playerName: "Unclaimed" }));
+    }
+  }
+  fetchPlayers();
+}
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
@@ -148,9 +202,9 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Member", "Role", ""].map((h, i) => (
+                  {["Member", "Role", "Character", ""].map((h, i) => (
                     <th key={i} style={{
-                      padding: "8px 14px", textAlign: i === 2 ? "right" : "left",
+                      padding: "8px 14px", textAlign: i === 3 ? "right" : "left",
                       fontSize: "var(--fs-small)", fontWeight: 700, color: theme.colors.muted,
                       textTransform: "uppercase", letterSpacing: "0.06em",
                       borderBottom: `1px solid ${theme.colors.panelBorder}`,
@@ -163,8 +217,10 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
                   <MemberRow
                     key={m.id}
                     member={m}
+                    players={players}
                     onChangeRole={handleChangeRole}
                     onRemove={handleRemove}
+                    onAssignCharacter={handleAssignCharacter}
                   />
                 ))}
               </tbody>

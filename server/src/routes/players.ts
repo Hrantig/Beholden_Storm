@@ -136,14 +136,79 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rowToPlayer(row));
   });
 
-  app.put("/api/players/:playerId", dmOrAdmin(db), (req, res) => {
+  // Member self-enroll — a campaign member can create their own player record
+  // if they don't already have one in this campaign
+  app.post("/api/campaigns/:campaignId/players/self", memberOrAdmin(db), (req, res) => {
+    const campaignId = requireParam(req, res, "campaignId");
+    if (!campaignId) return;
+
+    const existing = db
+      .prepare("SELECT id FROM players WHERE campaign_id = ? AND user_id = ?")
+      .get(campaignId, req.user!.userId) as { id: string } | undefined;
+    if (existing) {
+      return res.status(409).json({ ok: false, message: "You already have a character in this campaign" });
+    }
+
+    const p = parseBody(PlayerCreateBody, req);
+    const id = uid();
+    const t = now();
+
+    db.prepare(`
+      INSERT INTO players
+        (id, campaign_id, user_id, player_name, character_name, ancestry, paths_json, level,
+         hp_max, hp_current, focus_max, focus_current, investiture_max, investiture_current,
+         movement, defense_physical, defense_cognitive, defense_spiritual, deflect,
+         color, overrides_json, conditions_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      campaignId,
+      req.user!.userId,
+      p.playerName || "Player",
+      p.characterName || "Character",
+      p.ancestry || "Unknown",
+      JSON.stringify(p.paths ?? []),
+      p.level ?? 1,
+      p.hpMax ?? 10,
+      p.hpCurrent ?? p.hpMax ?? 10,
+      p.focusMax ?? 0,
+      p.focusCurrent ?? p.focusMax ?? 0,
+      p.investitureMax ?? null,
+      p.investitureCurrent ?? null,
+      p.movement ?? 0,
+      p.defensePhysical ?? 0,
+      p.defenseCognitive ?? 0,
+      p.defenseSpiritual ?? 0,
+      p.deflect ?? 0,
+      p.color ?? "green",
+      JSON.stringify(DEFAULT_OVERRIDES),
+      JSON.stringify([]),
+      t,
+      t
+    );
+
+    ctx.broadcast("players:changed", { campaignId });
+    const row = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(id) as Record<string, unknown>;
+    res.json(rowToPlayer(row));
+  });
+
+  // Player self-edit — a player may update their own player record
+  app.put("/api/me/players/:playerId", requireAuth, (req, res) => {
     const playerId = requireParam(req, res, "playerId");
     if (!playerId) return;
+
     const existingRow = db
       .prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`)
       .get(playerId) as Record<string, unknown> | undefined;
-    if (!existingRow) return res.status(404).json({ ok: false, message: "Not found" });
+    if (!existingRow) return res.status(404).json({ ok: false, message: "Player not found" });
+
+    const linkedUserId = existingRow.user_id as string | null;
+    if (!req.user!.isAdmin && linkedUserId !== null && linkedUserId !== req.user!.userId) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+
     const existing = rowToPlayer(existingRow);
+    const campaignId = existingRow.campaign_id as string;
     const p = parseBody(PlayerUpdateBody, req);
     const t = now();
     const playerName = p.playerName ?? existing.playerName;
@@ -177,6 +242,61 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
         injury_count=?, overrides_json=?, conditions_json=?, updated_at=?
       WHERE id=?
     `).run(
+      playerName, userId, characterName, ancestry, JSON.stringify(paths), level,
+      hpMax, hpCurrent, focusMax, focusCurrent,
+      investitureMax, investitureCurrent,
+      movement, defensePhysical, defenseCognitive, defenseSpiritual, deflect,
+      injuryCount,
+      JSON.stringify(overrides),
+      JSON.stringify(conditions),
+      t
+    );
+
+    ctx.broadcast("players:changed", { campaignId });
+    const updated = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(playerId) as Record<string, unknown>;
+    res.json(rowToPlayer(updated));
+  });
+
+  app.put("/api/players/:playerId", dmOrAdmin(db), (req, res) => {
+    const playerId = requireParam(req, res, "playerId");
+    if (!playerId) return;
+    const existingRow = db
+      .prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`)
+      .get(playerId) as Record<string, unknown> | undefined;
+    if (!existingRow) return res.status(404).json({ ok: false, message: "Not found" });
+    const existing = rowToPlayer(existingRow);
+    const p = parseBody(PlayerUpdateBody, req);
+    const t = now();
+    const playerName = p.playerName ?? existing.playerName;
+    const userId = p.userId !== undefined ? p.userId : existing.userId;
+    const characterName = p.characterName ?? existing.characterName;
+    const ancestry = p.ancestry ?? existing.ancestry;
+    const paths = p.paths ?? existing.paths ?? [];
+    const level = p.level ?? existing.level;
+    const hpMax = p.hpMax ?? existing.hpMax;
+    const hpCurrent = p.hpCurrent ?? existing.hpCurrent;
+    const focusMax = p.focusMax ?? existing.focusMax;
+    const focusCurrent = p.focusCurrent ?? existing.focusCurrent;
+    const investitureMax = p.investitureMax !== undefined ? p.investitureMax : existing.investitureMax;
+    const investitureCurrent = p.investitureCurrent !== undefined ? p.investitureCurrent : existing.investitureCurrent;
+    const movement = p.movement ?? existing.movement;
+    const defensePhysical = p.defensePhysical ?? existing.defensePhysical;
+    const defenseCognitive = p.defenseCognitive ?? existing.defenseCognitive;
+    const defenseSpiritual = p.defenseSpiritual ?? existing.defenseSpiritual;
+    const deflect = p.deflect ?? existing.deflect;
+    const conditions = p.conditions ?? existing.conditions ?? [];
+    const overrides = p.overrides ?? existing.overrides ?? DEFAULT_OVERRIDES;
+    const injuryCount = p.injuryCount ?? existing.injuryCount ?? 0;
+
+    db.prepare(`
+      UPDATE players SET
+        player_name=?, user_id=?, character_name=?, ancestry=?, paths_json=?, level=?,
+        hp_max=?, hp_current=?, focus_max=?, focus_current=?,
+        investiture_max=?, investiture_current=?,
+        movement=?, defense_physical=?, defense_cognitive=?, defense_spiritual=?, deflect=?,
+        injury_count=?, overrides_json=?, conditions_json=?, updated_at=?
+      WHERE id=?
+    `).run(
       playerName, userId,  characterName, ancestry, JSON.stringify(paths), level,
       hpMax, hpCurrent, focusMax, focusCurrent,
       investitureMax, investitureCurrent,
@@ -193,20 +313,7 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json(rowToPlayer(updated));
   });
 
-  // DM can update a player's shared notes (edit/delete individual notes).
-  app.patch("/api/players/:playerId/sharedNotes", dmOrAdmin(db), (req, res) => {
-    const playerId = requireParam(req, res, "playerId");
-    if (!playerId) return;
-    const existingRow = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(playerId) as Record<string, unknown> | undefined;
-    if (!existingRow) return res.status(404).json({ ok: false, message: "Not found" });
-    const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
-    const t = now();
-    db.prepare("UPDATE players SET shared_notes = ?, updated_at = ? WHERE id = ?").run(sharedNotes, t, playerId);
-    const existing = rowToPlayer(existingRow);
-    ctx.broadcast("players:changed", { campaignId: existing.campaignId });
-    res.json({ ok: true, sharedNotes });
-  });
-
+  
   // Player self-notes — a player may update their own shared notes
   app.patch("/api/me/players/:playerId/sharedNotes", requireAuth, (req, res) => {
     const playerId = requireParam(req, res, "playerId");
@@ -222,6 +329,20 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
       return res.status(403).json({ ok: false, message: "Forbidden" });
     }
 
+    const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
+    const t = now();
+    db.prepare("UPDATE players SET shared_notes = ?, updated_at = ? WHERE id = ?").run(sharedNotes, t, playerId);
+    const existing = rowToPlayer(existingRow);
+    ctx.broadcast("players:changed", { campaignId: existing.campaignId });
+    res.json({ ok: true, sharedNotes });
+  });
+
+  // DM can update a player's shared notes (edit/delete individual notes).
+  app.patch("/api/players/:playerId/sharedNotes", dmOrAdmin(db), (req, res) => {
+    const playerId = requireParam(req, res, "playerId");
+    if (!playerId) return;
+    const existingRow = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(playerId) as Record<string, unknown> | undefined;
+    if (!existingRow) return res.status(404).json({ ok: false, message: "Not found" });
     const sharedNotes: string = typeof req.body?.sharedNotes === "string" ? req.body.sharedNotes : "";
     const t = now();
     db.prepare("UPDATE players SET shared_notes = ?, updated_at = ? WHERE id = ?").run(sharedNotes, t, playerId);
@@ -299,69 +420,6 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
     res.json({ ok: true, imageUrl: absolutizePublicUrl(imageUrl) });
   });
 
-  // Player self-edit — a player may update their own player record
-  app.put("/api/me/players/:playerId", requireAuth, (req, res) => {
-    const playerId = requireParam(req, res, "playerId");
-    if (!playerId) return;
-
-    const existingRow = db
-      .prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`)
-      .get(playerId) as Record<string, unknown> | undefined;
-    if (!existingRow) return res.status(404).json({ ok: false, message: "Player not found" });
-
-    const linkedUserId = existingRow.user_id as string | null;
-    if (!req.user!.isAdmin && linkedUserId !== req.user!.userId) {
-      return res.status(403).json({ ok: false, message: "Forbidden" });
-    }
-
-    const existing = rowToPlayer(existingRow);
-    const campaignId = existingRow.campaign_id as string;
-    const p = parseBody(PlayerUpdateBody, req);
-    const t = now();
-    const playerName = p.playerName ?? existing.playerName;
-    const characterName = p.characterName ?? existing.characterName;
-    const ancestry = p.ancestry ?? existing.ancestry;
-    const paths = p.paths ?? existing.paths ?? [];
-    const level = p.level ?? existing.level;
-    const hpMax = p.hpMax ?? existing.hpMax;
-    const hpCurrent = p.hpCurrent ?? existing.hpCurrent;
-    const focusMax = p.focusMax ?? existing.focusMax;
-    const focusCurrent = p.focusCurrent ?? existing.focusCurrent;
-    const investitureMax = p.investitureMax !== undefined ? p.investitureMax : existing.investitureMax;
-    const investitureCurrent = p.investitureCurrent !== undefined ? p.investitureCurrent : existing.investitureCurrent;
-    const movement = p.movement ?? existing.movement;
-    const defensePhysical = p.defensePhysical ?? existing.defensePhysical;
-    const defenseCognitive = p.defenseCognitive ?? existing.defenseCognitive;
-    const defenseSpiritual = p.defenseSpiritual ?? existing.defenseSpiritual;
-    const deflect = p.deflect ?? existing.deflect;
-    const conditions = p.conditions ?? existing.conditions ?? [];
-    const overrides = p.overrides ?? existing.overrides ?? DEFAULT_OVERRIDES;
-    const injuryCount = p.injuryCount ?? existing.injuryCount ?? 0;
-
-    db.prepare(`
-      UPDATE players SET
-        player_name=?, character_name=?, ancestry=?, paths_json=?, level=?,
-        hp_max=?, hp_current=?, focus_max=?, focus_current=?,
-        investiture_max=?, investiture_current=?,
-        movement=?, defense_physical=?, defense_cognitive=?, defense_spiritual=?, deflect=?,
-        injury_count=?, overrides_json=?, conditions_json=?, updated_at=?
-      WHERE id=?
-    `).run(
-      playerName, characterName, ancestry, JSON.stringify(paths), level,
-      hpMax, hpCurrent, focusMax, focusCurrent,
-      investitureMax, investitureCurrent,
-      movement, defensePhysical, defenseCognitive, defenseSpiritual, deflect,
-      injuryCount,
-      JSON.stringify(overrides),
-      JSON.stringify(conditions),
-      t,
-      playerId
-    );
-
-    ctx.broadcast("players:changed", { campaignId });
-    const updated = db.prepare(`SELECT ${PLAYER_COLS} FROM players WHERE id = ?`).get(playerId) as Record<string, unknown>;
-    res.json(rowToPlayer(updated));
-  });
 
   // Remove player character image.
   app.delete("/api/players/:playerId/image", dmOrAdmin(db), (req, res) => {

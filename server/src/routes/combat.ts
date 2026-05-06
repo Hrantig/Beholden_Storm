@@ -5,6 +5,7 @@ import type { StoredCombatant, StoredCombatState, StoredConditionInstance, Store
 import { requireParam } from "../lib/routeHelpers.js";
 import { parseBody } from "../shared/validate.js";
 import { dmOrAdmin, memberOrAdmin } from "../middleware/campaignAuth.js";
+import { requireAuth } from "../middleware/auth.js";
 import { rowToPlayer, rowToCombatant, rowToAdversary, parseJson, PLAYER_COLS, COMBATANT_COLS, ADVERSARY_COLS} from "../lib/db.js";
 import { extractLeadingNumber, extractDetails } from "../lib/text.js";
 import {
@@ -146,6 +147,100 @@ app.get("/api/encounters/:encounterId/combatState", memberOrAdmin(db), (req, res
 
   res.json(state);
 });
+
+// Find the current user's combatant in any active encounter for a campaign
+app.get("/api/me/combatant", requireAuth, (req, res) => {
+  const campaignId = req.query.campaignId as string | undefined;
+  if (!campaignId) return res.status(400).json({ ok: false, message: "campaignId required" });
+
+  const playerRow = db
+    .prepare("SELECT id FROM players WHERE campaign_id = ? AND user_id = ?")
+    .get(campaignId, req.user!.userId) as { id: string } | undefined;
+  if (!playerRow) return res.json(null);
+
+  const combatantRow = db.prepare(`
+    SELECT c.id, c.encounter_id, c.phase, c.action_points_used
+    FROM combatants c
+    JOIN encounters e ON e.id = c.encounter_id
+    JOIN adventures a ON a.id = e.adventure_id
+    WHERE a.campaign_id = ?
+      AND c.base_type = 'player'
+      AND c.base_id = ?
+    LIMIT 1
+  `).get(campaignId, playerRow.id) as {
+    id: string;
+    encounter_id: string;
+    phase: string | null;
+    action_points_used: number;
+  } | undefined;
+
+  if (!combatantRow) return res.json(null);
+
+  res.json({
+    id: combatantRow.id,
+    encounterId: combatantRow.encounter_id,
+    phase: combatantRow.phase as "fast" | "slow" | null,
+    actionPointsUsed: combatantRow.action_points_used ?? 0,
+  });
+});
+
+// Player phase declaration — a player may set Fast/Slow on their own combatant
+app.patch(
+  "/api/encounters/:encounterId/combatants/:combatantId/phase",
+  memberOrAdmin(db),
+  (req, res) => {
+    const encounterId = requireParam(req, res, "encounterId");
+    if (!encounterId) return;
+    const combatantId = requireParam(req, res, "combatantId");
+    if (!combatantId) return;
+
+    const t = now();
+
+    const enc = db
+      .prepare("SELECT declarations_locked FROM encounters WHERE id = ?")
+      .get(encounterId) as { declarations_locked: number } | undefined;
+    if (!enc) return res.status(404).json({ ok: false, message: "Encounter not found" });
+    // if (enc.declarations_locked) {
+    //   return res.status(403).json({ ok: false, message: "Declarations are locked" });
+    // }
+
+    const row = db
+      .prepare(`SELECT ${COMBATANT_COLS} FROM combatants WHERE id = ? AND encounter_id = ?`)
+      .get(combatantId, encounterId) as Record<string, unknown> | undefined;
+    if (!row) return res.status(404).json({ ok: false, message: "Combatant not found" });
+    if (row.base_type !== "player") {
+      return res.status(403).json({ ok: false, message: "Only player combatants can use this route" });
+    }
+
+    const playerRow = db
+      .prepare("SELECT user_id FROM players WHERE id = ?")
+      .get(row.base_id) as { user_id: string | null } | undefined;
+    if (!req.user!.isAdmin && playerRow?.user_id !== req.user!.userId) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+
+    const phase = req.body?.phase;
+    const actionPointsUsed = req.body?.actionPointsUsed;
+
+    if (phase !== undefined && phase !== "fast" && phase !== "slow" && phase !== null) {
+      return res.status(400).json({ ok: false, message: "phase must be 'fast', 'slow', or null" });
+    }
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    if (phase !== undefined) { updates.push("phase = ?"); params.push(phase ?? null); }
+    if (actionPointsUsed !== undefined) { updates.push("action_points_used = ?"); params.push(Number(actionPointsUsed) || 0); }
+    if (updates.length === 0) return res.status(400).json({ ok: false, message: "Nothing to update" });
+    params.push(t, combatantId);
+    db.prepare(`UPDATE combatants SET ${updates.join(", ")}, updated_at = ? WHERE id = ?`).run(...params);
+
+    ctx.broadcast("encounter:combatantsChanged", { encounterId });
+    const updated = rowToCombatant(
+      db.prepare(`SELECT ${COMBATANT_COLS} FROM combatants WHERE id = ?`).get(combatantId) as Record<string, unknown>
+    );
+    res.json(updated);
+  }
+);
 
 app.put("/api/encounters/:encounterId/combatState", dmOrAdmin(db), (req, res) => {
   const encounterId = requireParam(req, res, "encounterId");

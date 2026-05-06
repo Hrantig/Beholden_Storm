@@ -1,10 +1,11 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
-import { api } from "@/services/api";
+import { api, jsonInit } from "@/services/api";
 import { IconPlayer, IconConditionByKey } from "@/icons";
 import { useWs } from "@/services/ws";
 import type { ConditionInstance } from "@/domain/conditions";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface PartyMember {
   id: string;
@@ -30,6 +31,8 @@ export interface PartyMember {
   imageUrl: string | null;
   conditions: ConditionInstance[];
   sharedNotes?: string;
+  combatantId?: string | null;
+  combatantPhase?: "fast" | "slow" | null;
 }
 
 function hpLabel(pct: number): string {
@@ -44,7 +47,11 @@ function hpLabel(pct: number): string {
 // Party member card
 // ---------------------------------------------------------------------------
 
-function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
+function MemberCard({ m, campaignId, onClaim }: { 
+  m: PartyMember; 
+  campaignId: string;
+  onClaim?: (memberId: string) => void;
+}) {
   const navigate = useNavigate();
   const color = m.color ?? C.accentHl;
   const hpPct = m.hpMax > 0 ? Math.max(0, Math.min(100, Math.round((m.hpCurrent / m.hpMax) * 100))) : 0;
@@ -53,7 +60,10 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
 
   return (
     <div
-      onClick={() => navigate(`/campaigns/${campaignId}/members/${m.id}`)}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        navigate(`/campaigns/${campaignId}/members/${m.id}`);
+      }}
       style={{
         background: "rgba(255,255,255,0.04)",
         border: `1px solid ${color}33`,
@@ -101,6 +111,7 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
             </div>
           )}
         </div>
+
         {/* Defense badge */}
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
@@ -143,6 +154,19 @@ function MemberCard({ m, campaignId }: { m: PartyMember; campaignId: string }) {
           ))}
         </div>
       )}
+
+      {/* Claim button — only for unowned characters */}
+      {m.userId === null && onClaim && (
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault();}}
+          style={{
+            width: "100%", padding: "6px 0", borderRadius: 8,
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
+            color: C.muted, fontWeight: 700, fontSize: "var(--fs-small)", cursor: "pointer",
+          }}>
+          Claim this character
+        </button>
+      )}
     </div>
   );
 }
@@ -158,6 +182,7 @@ export function CampaignPartyView() {
   const [campaignName, setCampaignName] = React.useState<string>("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const { user: authUser } = useAuth();
 
   const fetchParty = React.useCallback(() => {
     if (!campaignId) return;
@@ -178,6 +203,14 @@ export function CampaignPartyView() {
       .catch(() => {});
   }, [campaignId, fetchParty]);
 
+  const handleClaim = async (memberId: string) => {
+    try {
+      await api(`/api/me/players/${memberId}`, jsonInit("PUT", { userId: authUser!.id }));
+      fetchParty();
+    } catch(e) { 
+    console.error("claim failed", e);}
+  };
+
   // Re-fetch when DM changes player stats
   useWs(React.useCallback((msg) => {
     if (msg.type === "players:changed") {
@@ -197,7 +230,7 @@ export function CampaignPartyView() {
         gap: 16,
       }}>
         {party.map((m) => (
-          <MemberCard key={m.id} m={m} campaignId={campaignId!} />
+          <MemberCard key={m.id} m={m} campaignId={campaignId!} onClaim={handleClaim} />
         ))}
       </div>
     );

@@ -2,7 +2,7 @@ import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
 import { api, jsonInit } from "@/services/api";
-import { IconPlayer, IconHeart, IconFocus, IconMovement, IconShield } from "@/icons";
+import { IconPlayer, IconHeart, IconMovement } from "@/icons";
 import { useWs } from "@/services/ws";
 import { useAuth } from "@/contexts/AuthContext";
 import type { PartyMember } from "./CampaignPartyView";
@@ -118,19 +118,19 @@ function ResourceRow({
       </div>
       {canEdit && onApply && (
         <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
-          <button type="button" disabled={!isValid} onClick={() => { if (isValid) { onApply(Math.max(0, current - amount)); setInput(""); } }}
-            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#f87171", borderRadius: 6, padding: "3px 10px", fontSize: "var(--fs-small)", fontWeight: 700, cursor: isValid ? "pointer" : "default", opacity: isValid ? 1 : 0.4 }}>
-            −
+          <button type="button" disabled={!isValid}
+            onClick={() => { if (isValid) { onApply(Math.max(0, current - amount)); setInput(""); } }}
+            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#f87171", borderRadius: 6, padding: "3px 0", flex: 1, cursor: isValid ? "pointer" : "default", opacity: isValid ? 1 : 0.4, fontSize: "var(--fs-small)", fontWeight: 700 }}>
+            {label === "HP" ? "DMG" : "−"}
           </button>
-          <input
-            type="number" min={1} value={input} onChange={(e) => setInput(e.target.value)}
+          <input type="number" min={1} value={input} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && isValid && onApply) { onApply(Math.max(0, current - amount)); setInput(""); } }}
             placeholder="Amount"
-            style={{ flex: 1, border: `1px solid rgba(255,255,255,0.12)`, background: "transparent", color: C.text, borderRadius: 6, padding: "3px 8px", fontSize: "var(--fs-small)", outline: "none" }}
-          />
-          <button type="button" disabled={!isValid} onClick={() => { if (isValid) { onApply(Math.min(max, current + amount)); setInput(""); } }}
-            style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.4)", color: "#4ade80", borderRadius: 6, padding: "3px 10px", fontSize: "var(--fs-small)", fontWeight: 700, cursor: isValid ? "pointer" : "default", opacity: isValid ? 1 : 0.4 }}>
-            +
+            style={{ flex: 1, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: C.text, borderRadius: 6, padding: "3px 8px", fontSize: "var(--fs-small)", outline: "none", textAlign: "center" }} />
+          <button type="button" disabled={!isValid}
+            onClick={() => { if (isValid) { onApply(Math.min(max, current + amount)); setInput(""); } }}
+            style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.4)", color: "#4ade80", borderRadius: 6, padding: "3px 0", flex: 1, cursor: isValid ? "pointer" : "default", opacity: isValid ? 1 : 0.4, fontSize: "var(--fs-small)", fontWeight: 700 }}>
+            {label === "HP" ? "HEAL" : "+"}
           </button>
         </div>
       )}
@@ -168,6 +168,14 @@ export function PartyMemberView() {
   const [conditionSearch, setConditionSearch] = React.useState("");
 
   const [campaignNotes, setCampaignNotes] = React.useState<SharedNote[]>([]);
+  const [encounterId, setEncounterId] = React.useState<string | null>(null);
+  const [combatantId, setCombatantId] = React.useState<string | null>(null);
+  const [currentPhase, setCurrentPhase] = React.useState<string | null>(null);
+  const [declarationsLocked, setDeclarationsLocked] = React.useState(false);
+  const [myPhase, setMyPhase] = React.useState<"fast" | "slow" | null>(null);
+  const [round, setRound] = React.useState<number>(1);
+
+  const [actionPointsUsed, setActionPointsUsed] = React.useState(0);
 
   const fetchMember = React.useCallback(() => {
     if (!campaignId) return;
@@ -181,7 +189,43 @@ export function PartyMemberView() {
       .finally(() => setLoading(false));
   }, [campaignId, playerId]);
 
+  const fetchCombatState = React.useCallback(async () => {
+    if (!campaignId) return;
+    try {
+      const combatant = await api<{
+        id: string;
+        encounterId: string;
+        phase: "fast" | "slow" | null;
+        actionPointsUsed: number;
+      } | null>(`/api/me/combatant?campaignId=${campaignId}`);
+
+      if (combatant) {
+        setCombatantId(combatant.id);
+        setEncounterId(combatant.encounterId);
+        setMyPhase(combatant.phase);
+        setActionPointsUsed(combatant.actionPointsUsed ?? 0);
+
+        const state = await api<{
+          currentPhase: string;
+          declarationsLocked: boolean;
+          round: number;
+        }>(`/api/encounters/${combatant.encounterId}/combatState`);
+
+        setCurrentPhase(state.currentPhase);
+        setDeclarationsLocked(state.declarationsLocked);
+        setRound(state.round);
+      } else {
+        setCombatantId(null);
+        setEncounterId(null);
+        setMyPhase(null);
+        setCurrentPhase(null);
+        setDeclarationsLocked(false);
+      }
+    } catch { /* best effort */ }
+  }, [campaignId]);
+
   React.useEffect(() => { fetchMember(); }, [fetchMember]);
+  React.useEffect(() => { void fetchCombatState();}, [fetchCombatState]);
 
   React.useEffect(() => {
     if (!campaignId) return;
@@ -199,7 +243,13 @@ export function PartyMemberView() {
       if (cId === campaignId) fetchMember();
     }
   }, [campaignId, fetchMember]));
-  
+
+  useWs(React.useCallback((msg) => {
+    if (msg.type === "encounter:combatStateChanged" || msg.type === "encounter:combatantsChanged") {
+      void fetchCombatState();
+    }
+  }, [fetchCombatState]));
+
   React.useEffect(() => {
     if (!member) return;
     setEditForm({
@@ -241,6 +291,7 @@ export function PartyMemberView() {
 
   const m = member;
   const isOwn = m.userId !== null && m.userId === authUser?.id;
+  console.log("isOwn check", { mUserId: m.userId, authId: authUser?.id, isOwn });
   const color = m.color ?? C.accentHl;
   const subtitle = [m.ancestry, ...(m.paths ?? [])].filter(Boolean).join(" · ");
 
@@ -445,36 +496,162 @@ export function PartyMemberView() {
             canEdit={isOwn}
             onApply={(v) => patchSelf({ hpCurrent: v })}
           />
-          <ResourceRow
-            label="Focus"
-            current={m.focusCurrent}
-            max={m.focusMax}
-            color={color}
-            icon={<IconFocus size={10} />}
-            canEdit={isOwn}
-            onApply={(v) => patchSelf({ focusCurrent: v })}
-          />
-          {m.investitureMax !== null && (
-            <ResourceRow
-              label="Investiture"
-              current={m.investitureCurrent ?? 0}
-              max={m.investitureMax}
-              color="#a78bfa"
-              canEdit={isOwn}
-              onApply={(v) => patchSelf({ investitureCurrent: v })}
-            />
+          {/* Focus dots */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: "var(--fs-small)", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                Focus
+              </span>
+              <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: "#7dd3fc", fontVariantNumeric: "tabular-nums" }}>
+                {m.focusCurrent}/{m.focusMax}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {Array.from({ length: m.focusMax }).map((_, i) => (
+                <span
+                  key={i}
+                  onClick={isOwn ? () => {
+                    const cur = m.focusCurrent;
+                    const next = i < cur ? i : i + 1;
+                    patchSelf({ focusCurrent: Math.max(0, Math.min(next, m.focusMax)) });
+                  } : undefined}
+                  style={{
+                    fontSize: "var(--fs-large)", cursor: isOwn ? "pointer" : "default",
+                    color: i < m.focusCurrent ? "#7dd3fc" : "rgba(255,255,255,0.2)",
+                  }}
+                >
+                  {i < m.focusCurrent ? "◉" : "○"}
+                </span>
+              ))}
+            </div>
+          </div>
+          {m.investitureMax !== null && m.investitureMax > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: "var(--fs-small)", color: C.muted }}>Investiture</span>
+                <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, color: "#f59e0b", fontVariantNumeric: "tabular-nums" }}>
+                  {m.investitureCurrent ?? 0}/{m.investitureMax}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {Array.from({ length: m.investitureMax }).map((_, i) => (
+                  <span
+                    key={i}
+                    onClick={isOwn ? () => {
+                      const cur = m.investitureCurrent ?? 0;
+                      const next = i < cur ? i : i + 1;
+                      patchSelf({ investitureCurrent: Math.max(0, Math.min(next, m.investitureMax!)) });
+                    } : undefined}
+                    style={{
+                      fontSize: "var(--fs-large)", cursor: isOwn ? "pointer" : "default",
+                      color: i < (m.investitureCurrent ?? 0) ? "#f59e0b" : "rgba(255,255,255,0.2)",
+                    }}
+                  >
+                    {i < (m.investitureCurrent ?? 0) ? "✦" : "✧"}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
         </Panel>
+
+        {isOwn && combatantId && (
+          <Panel style={{ marginBottom: 12 }}>
+            <SectionLabel>Combat — Round {round}</SectionLabel>
+
+            {/* Phase declaration */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 6 }}>
+                Phase Declaration {declarationsLocked ? "(locked)" : ""}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["fast", "slow"] as const).map((p) => (
+                  <button key={p} type="button"
+                    disabled={declarationsLocked}
+                    onClick={async () => {
+                      if (declarationsLocked || !combatantId || !encounterId) return;
+                      try {
+                        await api(`/api/encounters/${encounterId}/combatants/${combatantId}/phase`,
+                          jsonInit("PATCH", { phase: p }));
+                        setMyPhase(p);
+                      } catch { /* best effort */ }
+                    }}
+                    style={{
+                      flex: 1, padding: "8px 0", borderRadius: 8, fontWeight: 700,
+                      fontSize: "var(--fs-body)", cursor: declarationsLocked ? "default" : "pointer",
+                      border: myPhase === p ? `2px solid ${color}` : "1px solid rgba(255,255,255,0.15)",
+                      background: myPhase === p ? `${color}22` : "transparent",
+                      color: myPhase === p ? color : C.muted,
+                      opacity: declarationsLocked && myPhase !== p ? 0.4 : 1,
+                    }}>
+                    {p === "fast" ? "⚡ Fast" : "🐢 Slow"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action points */}
+            <div>
+              <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 6 }}>
+                Action Points — {currentPhase?.includes("fast") ? "Fast turn (2 AP)" : "Slow turn (3 AP)"}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button type="button"
+                  onClick={async () => {
+                    if (!combatantId || !encounterId) return;
+                    const maxAp = currentPhase?.includes("fast") ? 2 : 3;
+                    const next = Math.min(actionPointsUsed + 1, maxAp);
+                    setActionPointsUsed(next);
+                    await api(`/api/encounters/${encounterId}/combatants/${combatantId}/phase`,
+                      jsonInit("PATCH", { actionPointsUsed: next })).catch(() => {});
+                  }}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: C.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}>−</button>
+                <div style={{ display: "flex", gap: 3 }}>
+                  {Array.from({ length: currentPhase?.includes("fast") ? 2 : 3 }).map((_, i) => {
+                    const maxAp = currentPhase?.includes("fast") ? 2 : 3;
+                    const remaining = Math.max(0, maxAp - actionPointsUsed);
+                    return (
+                      <span key={i}
+                        onClick={async () => {
+                          if (!combatantId || !encounterId) return;
+                          const next = i < remaining ? i : i + 1;
+                          const nextUsed = maxAp - Math.max(0, Math.min(next, maxAp));
+                          setActionPointsUsed(nextUsed);
+                          await api(`/api/encounters/${encounterId}/combatants/${combatantId}/phase`,
+                            jsonInit("PATCH", { actionPointsUsed: nextUsed })).catch(() => {});
+                        }}
+                        title={i < remaining ? "Click to spend" : "Click to restore"}
+                        style={{
+                          fontSize: 22, cursor: "pointer",
+                          color: i < remaining ? color : C.muted,
+                          opacity: i < remaining ? 1 : 0.4,
+                        }}>▶</span>
+                    );
+                  })}
+                </div>
+                <button type="button"
+                  onClick={async () => {
+                    if (!combatantId || !encounterId) return;
+                    const next = Math.max(actionPointsUsed - 1, 0);
+                    setActionPointsUsed(next);
+                    await api(`/api/encounters/${encounterId}/combatants/${combatantId}/phase`,
+                      jsonInit("PATCH", { actionPointsUsed: next })).catch(() => {});
+                  }}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: C.muted, fontSize: "var(--fs-medium)", padding: "0 2px" }}>+</button>
+              </div>
+            </div>
+          </Panel>
+        )}
 
         {/* Defenses + Movement */}
         <Panel style={{ marginBottom: 12 }}>
           <SectionLabel>Defenses & Movement</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-            <MiniStat label="PHY" value={String(m.defensePhysical)} accent={color} icon={<IconShield size={10} />} />
-            <MiniStat label="COG" value={String(m.defenseCognitive)} accent={color} />
-            <MiniStat label="SPI" value={String(m.defenseSpiritual)} accent={color} />
-            <MiniStat label="DEF" value={String(m.deflect)} />
-            <MiniStat label="MOV" value={String(m.movement)} icon={<IconMovement size={10} />} />
+            <MiniStat label="Physical" value={String(m.defensePhysical)} accent={color} />
+            <MiniStat label="Cognitive" value={String(m.defenseCognitive)} accent={color} />
+            <MiniStat label="Spiritual" value={String(m.defenseSpiritual)} accent={color} />
+            <MiniStat label="Deflect" value={String(m.deflect)} />
+            <MiniStat label="Movement" value={`${m.movement}ft`} icon={<IconMovement size={10} />} />
           </div>
         </Panel>
 
