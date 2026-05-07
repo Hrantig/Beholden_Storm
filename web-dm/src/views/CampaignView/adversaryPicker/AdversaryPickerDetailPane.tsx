@@ -162,6 +162,18 @@ export function AdversaryPickerDetailPane(props: {
                   min={a.hpRangeMin}
                   max={a.hpRangeMax}
                 />
+                <input
+                  type="range"
+                  min={a.hpRangeMin}
+                  max={a.hpRangeMax}
+                  value={Number(props.hp) || a.hpRangeMin}
+                  onChange={(e) => props.onChangeHp(e.target.value)}
+                  style={{
+                    width: "100%",
+                    marginTop: 6,
+                    accentColor: theme.colors.accentPrimary,
+                  }}
+                />
               </>
             )}
           {/* Quick-set HP buttons */}

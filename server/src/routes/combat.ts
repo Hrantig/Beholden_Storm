@@ -83,14 +83,16 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
     // Touch so /api/me/combatant can find the most recently active encounter
     db.prepare("UPDATE encounters SET updated_at = ? WHERE id = ?").run(now(), encounterId);
 
-    const encRow = db
+      const encRow = db
       .prepare(`SELECT combat_round, combat_active_combatant_id, 
-                combat_phase, declarations_locked FROM encounters WHERE id = ?`)
+              combat_phase, declarations_locked, campaign_id 
+        FROM encounters WHERE id = ?`)
       .get(encounterId) as { 
         combat_round: number | null; 
         combat_active_combatant_id: string | null;
         combat_phase: string | null;
         declarations_locked: number | null;
+        campaign_id: string;
       } | undefined;
 
     const roundVal = Number(encRow?.combat_round);
@@ -100,6 +102,15 @@ export function registerCombatRoutes(app: Express, ctx: ServerContext) {
       currentPhase: (encRow?.combat_phase ?? "fast-pc") as CombatPhase,
       declarationsLocked: Boolean(encRow?.declarations_locked),
     };
+
+    // Notify players that this encounter is now active
+    const isDm = db.prepare(
+      "SELECT 1 FROM campaign_membership WHERE user_id = ? AND campaign_id = ? AND role = 'dm'"
+    ).get(req.user!.userId, encRow?.campaign_id);
+    
+    if (encRow?.campaign_id && (isDm || req.user!.isAdmin)) {
+      ctx.broadcast("encounter:activated", { encounterId, campaignId: encRow.campaign_id });
+    }
 
     res.json(state);
   });

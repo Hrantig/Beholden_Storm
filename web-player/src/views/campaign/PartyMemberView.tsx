@@ -250,13 +250,13 @@ export function PartyMemberView() {
       .catch(() => {});
   }, [campaignId]);
 
-  // Poll combat state every 5 seconds to catch encounter switches
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      void fetchCombatState();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchCombatState]);
+  // // Poll combat state every 5 seconds to catch encounter switches
+  // React.useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     void fetchCombatState();
+  //   }, 5000);
+  //   return () => clearInterval(interval);
+  // }, [fetchCombatState]);
 
   useWs(React.useCallback((msg) => {
     if (msg.type === "players:changed") {
@@ -269,7 +269,8 @@ export function PartyMemberView() {
   if (
     msg.type === "encounter:combatStateChanged" ||
     msg.type === "encounter:combatantsChanged" ||
-    msg.type === "players:changed"
+    msg.type === "players:changed" ||
+    msg.type === "encounter:activated"
   ) {
     void fetchCombatState();
   }
