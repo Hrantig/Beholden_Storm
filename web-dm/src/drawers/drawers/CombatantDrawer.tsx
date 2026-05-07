@@ -5,7 +5,6 @@ import { api, jsonInit } from "@/services/api";
 import { theme } from "@/theme/theme";
 import { useStore, type DrawerState } from "@/store";
 import type { DrawerContent } from "@/drawers/types";
-import { MonsterPreview } from "@/drawers/drawers/combatant/MonsterPreview";
 import { MonsterActions } from "@/views/CombatView/components/MonsterActions";
 import type { AttackOverride } from "@/domain/types/domain";
 import type { MonsterDetail } from "@/domain/types/compendium";
@@ -20,7 +19,10 @@ export function CombatantDrawer(props: {
   const { state } = useStore();
   const [label, setLabel] = React.useState("");
   const [friendly, setFriendly] = React.useState(false);
-  const [ac, setAc] = React.useState("");
+  const [defensePhysical, setDefensePhysical] = React.useState("");
+  const [defenseCognitive, setDefenseCognitive] = React.useState("");
+  const [defenseSpiritual, setDefenseSpiritual] = React.useState("");
+  const [deflect, setDeflect] = React.useState("");
   const [hpMax, setHpMax] = React.useState("");
   const [hpCur, setHpCur] = React.useState("");
   const [baseMonster, setBaseMonster] = React.useState<MonsterDetail | null>(null);
@@ -31,7 +33,10 @@ export function CombatantDrawer(props: {
     const c = state.combatants.find((x) => x.id === d.combatantId);
     setLabel(c ? String(c.label) : "");
     setFriendly(Boolean(c?.friendly));
-    setAc(c?.ac != null ? String(c.ac) : "");
+    setDefensePhysical(c?.ac != null ? String(c.ac) : "");
+    setDefenseCognitive(c?.defenseCognitive != null ? String(c.defenseCognitive) : "");
+    setDefenseSpiritual(c?.defenseSpiritual != null ? String(c.defenseSpiritual) : "");
+    setDeflect(c?.deflect != null ? String(c.deflect) : "");
     setHpMax(c?.hpMax != null ? String(c.hpMax) : "");
     setHpCur(c?.hpCurrent != null ? String(c.hpCurrent) : "");
     setAttackOverrides((c?.attackOverrides as Record<string, AttackOverride>) ?? {});
@@ -52,7 +57,10 @@ export function CombatantDrawer(props: {
       jsonInit("PUT", {
         label,
         friendly,
-        ac: ac !== "" ? Number(ac) : undefined,
+        ac: defensePhysical !== "" ? Number(defensePhysical) : undefined,
+        defenseCognitive: defenseCognitive !== "" ? Number(defenseCognitive) : undefined,
+        defenseSpiritual: defenseSpiritual !== "" ? Number(defenseSpiritual) : undefined,
+        deflect: deflect !== "" ? Number(deflect) : undefined,
         hpMax: hpMax !== "" ? Number(hpMax) : undefined,
         hpCurrent: hpCur !== "" ? Number(hpCur) : undefined,
         attackOverrides
@@ -60,7 +68,7 @@ export function CombatantDrawer(props: {
     );
     await props.refreshEncounter(d.encounterId);
     props.close();
-  }, [ac, friendly, hpCur, hpMax, label, props]);
+  }, [defensePhysical, defenseCognitive, defenseSpiritual, deflect, friendly, hpCur, hpMax, label, props]);
 
   return {
     body: (
@@ -73,17 +81,31 @@ export function CombatantDrawer(props: {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Defense (Physical)</div>
-            <Input value={ac} onChange={(e) => setAc(e.target.value)} placeholder="10" />
+            <Input value={defensePhysical} onChange={(e) => setDefensePhysical(e.target.value)} placeholder="10" />
           </div>
+          <div>
+            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Defense (Cognitive)</div>
+            <Input value={defenseCognitive} onChange={(e) => setDefenseCognitive(e.target.value)} placeholder="10" />
+          </div>
+          <div>
+            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Defense (Spiritual)</div>
+            <Input value={defenseSpiritual} onChange={(e) => setDefenseSpiritual(e.target.value)} placeholder="10" />
+          </div>
+          <div>
+            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Deflect</div>
+            <Input value={deflect} onChange={(e) => setDeflect(e.target.value)} placeholder="0" />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Max HP</div>
             <Input value={hpMax} onChange={(e) => setHpMax(e.target.value)} placeholder="10" />
           </div>
-        </div>
-
-        <div>
-          <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Current HP</div>
-          <Input value={hpCur} onChange={(e) => setHpCur(e.target.value)} placeholder="10" />
+          <div>
+            <div style={{ color: theme.colors.muted, marginBottom: 6 }}>Current HP</div>
+            <Input value={hpCur} onChange={(e) => setHpCur(e.target.value)} placeholder="10" />
+          </div>
         </div>
 
         <label style={{ color: theme.colors.text, display: "flex", gap: 10, alignItems: "center" }}>

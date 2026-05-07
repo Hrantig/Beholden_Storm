@@ -116,6 +116,9 @@ export interface Combatant {
   hpDetails: string | null;
   ac: number | null;
   acDetails: string | null;
+  defenseCognitive: number | null;
+  defenseSpiritual: number | null;
+  deflect: number | null;
   focusCurrent?: number | null;
   focusMax?: number | null;
   investitureCurrent?: number | null;
