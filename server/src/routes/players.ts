@@ -249,7 +249,8 @@ export function registerPlayerRoutes(app: Express, ctx: ServerContext) {
       injuryCount,
       JSON.stringify(overrides),
       JSON.stringify(conditions),
-      t
+      t,
+      playerId
     );
 
     ctx.broadcast("players:changed", { campaignId });

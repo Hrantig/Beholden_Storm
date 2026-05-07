@@ -304,6 +304,15 @@ export function PartyMemberView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member?.hpCurrent]);
 
+  React.useEffect(() => {
+    if (!member || !combatantId || !encounterId) return;
+    if (member.hpCurrent <= 0 && myPhase !== "slow") {
+      setMyPhase("slow");
+      api(`/api/encounters/${encounterId}/combatants/${combatantId}/phase`,
+        jsonInit("PATCH", { phase: "slow" })).catch(() => {});
+    }
+  }, [member?.hpCurrent, combatantId, encounterId]);
+
   if (loading) return (
     <div style={{ height: "100%", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>
       Loading…
@@ -588,12 +597,12 @@ export function PartyMemberView() {
             {/* Phase declaration */}
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: "var(--fs-small)", color: C.muted, marginBottom: 6 }}>
-                Phase Declaration {declarationsLocked ? "(locked)" : ""}
+                Phase Declaration Phase Declaration {declarationsLocked ? "(locked)" : m.hpCurrent <= 0 ? "(downed — Slow only)" : ""}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 {(["fast", "slow"] as const).map((p) => (
                   <button key={p} type="button"
-                    disabled={declarationsLocked}
+                    disabled={declarationsLocked || m.hpCurrent <= 0}
                     onClick={async () => {
                       if (declarationsLocked || !combatantId || !encounterId) return;
                       try {
@@ -604,11 +613,12 @@ export function PartyMemberView() {
                     }}
                     style={{
                       flex: 1, padding: "8px 0", borderRadius: 8, fontWeight: 700,
-                      fontSize: "var(--fs-body)", cursor: declarationsLocked ? "default" : "pointer",
+                      fontSize: "var(--fs-body)", cursor: (declarationsLocked || m.hpCurrent <= 0) ? "default" : "pointer",
                       border: myPhase === p ? `2px solid ${color}` : "1px solid rgba(255,255,255,0.15)",
                       background: myPhase === p ? `${color}22` : "transparent",
                       color: myPhase === p ? color : C.muted,
-                      opacity: declarationsLocked && myPhase !== p ? 0.4 : 1,
+                      opacity: (declarationsLocked || m.hpCurrent <= 0) && myPhase !== p ? 0.4 : 1,
+      
                     }}>
                     {p === "fast" ? "⚡ Fast" : "🐢 Slow"}
                   </button>

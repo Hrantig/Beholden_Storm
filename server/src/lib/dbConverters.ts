@@ -15,8 +15,6 @@ import type {
   StoredCondition,
   StoredCombatant,
   StoredCombatantBaseType,
-  StoredCharacter,
-  StoredUserCharacter,
   StoredAdversary
 } from "../server/userData.js";
 
@@ -50,32 +48,6 @@ export function rowToUser(row: Record<string, unknown>) {
     username: row.username as string,
     name: row.name as string,
     isAdmin: Boolean(row.is_admin),
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  };
-}
-
-export function rowToCharacter(row: Record<string, unknown>): StoredCharacter {
-  return {
-    id: row.id as string,
-    userId: (row.user_id as string | null) ?? null,
-    campaignId: row.campaign_id as string,
-    name: row.name as string,
-    className: (row.class_name as string) ?? "",
-    species: (row.species as string) ?? "",
-    level: (row.level as number) ?? 1,
-    hpMax: (row.hp_max as number) ?? 1,
-    hpCurrent: (row.hp_current as number) ?? 1,
-    tempHp: (row.temp_hp as number) ?? 0,
-    ac: (row.ac as number) ?? 10,
-    speed: (row.speed as number) ?? 30,
-    strScore: (row.str_score as number) ?? 10,
-    dexScore: (row.dex_score as number) ?? 10,
-    conScore: (row.con_score as number) ?? 10,
-    intScore: (row.int_score as number) ?? 10,
-    wisScore: (row.wis_score as number) ?? 10,
-    chaScore: (row.cha_score as number) ?? 10,
-    notes: (row.notes as string) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
@@ -156,37 +128,6 @@ export function rowToPlayer(row: Record<string, unknown>): StoredPlayer {
     imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
     overrides: parseJson(row.overrides_json, DEFAULT_OVERRIDES),
     conditions: parseJson(row.conditions_json, []),
-    sharedNotes: (row.shared_notes as string | null) ?? "",
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  };
-}
-
-export function rowToUserCharacter(row: Record<string, unknown>): StoredUserCharacter {
-  return {
-    id: row.id as string,
-    userId: row.user_id as string,
-    name: row.name as string,
-    playerName: (row.player_name as string) ?? "",
-    className: (row.class_name as string) ?? "",
-    species: (row.species as string) ?? "",
-    level: (row.level as number) ?? 1,
-    hpMax: (row.hp_max as number) ?? 0,
-    hpCurrent: (row.hp_current as number) ?? 0,
-    ac: (row.ac as number) ?? 10,
-    speed: (row.speed as number) ?? 30,
-    strScore: (row.str_score as number | null) ?? null,
-    dexScore: (row.dex_score as number | null) ?? null,
-    conScore: (row.con_score as number | null) ?? null,
-    intScore: (row.int_score as number | null) ?? null,
-    wisScore: (row.wis_score as number | null) ?? null,
-    chaScore: (row.cha_score as number | null) ?? null,
-    color: (row.color as string | null) ?? null,
-    imageUrl: absolutizePublicUrl((row.image_url as string | null) ?? null),
-    characterData: normalizeCharacterData(parseJson(row.character_data_json, null)),
-    ...(row.death_saves_json
-  ? { deathSaves: parseJson(row.death_saves_json, { success: 0, fail: 0 }) }
-  : {}),
     sharedNotes: (row.shared_notes as string | null) ?? "",
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,

@@ -41,7 +41,6 @@ import { registerMetaRoutes } from "../routes/meta.js";
 import { registerCompendiumRoutes } from "../routes/compendium.js";
 import { registerCampaignRoutes } from "../routes/campaigns.js";
 import { registerPlayerRoutes } from "../routes/players.js";
-import { registerCharacterRoutes } from "../routes/characters.js";
 import { registerInpcRoutes } from "../routes/inpcs.js";
 import { registerAdventureRoutes } from "../routes/adventures.js";
 import { registerEncounterRoutes } from "../routes/encounters.js";
@@ -134,7 +133,6 @@ export function createServer() {
   registerCompendiumRoutes(app, ctx);
   registerCampaignRoutes(app, ctx);
   registerPlayerRoutes(app, ctx);
-  registerCharacterRoutes(app, ctx);
   registerInpcRoutes(app, ctx);
   registerAdventureRoutes(app, ctx);
   registerEncounterRoutes(app, ctx);

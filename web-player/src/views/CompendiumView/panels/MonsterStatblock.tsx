@@ -1,9 +1,11 @@
 import * as React from "react";
 import { C, withAlpha } from "@/lib/theme";
 import { formatCr } from "@/lib/monsterPicker/utils";
-import { formatModifier } from "@/views/character/CharacterSheetUtils";
-
 // ─── Utilities ───────────────────────────────────────────────────────────────
+
+function formatModifier(mod: number): string {
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+}
 
 function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);

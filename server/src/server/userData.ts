@@ -45,28 +45,6 @@ export interface StoredUser extends Timestamps {
   isAdmin: boolean;
 }
 
-export interface StoredCharacter extends Timestamps {
-  id: Id;
-  userId: Id | null;
-  campaignId: Id;
-  name: string;
-  className: string;
-  species: string;
-  level: number;
-  hpMax: number;
-  hpCurrent: number;
-  tempHp: number;
-  ac: number;
-  speed: number;
-  strScore: number;
-  dexScore: number;
-  conScore: number;
-  intScore: number;
-  wisScore: number;
-  chaScore: number;
-  notes: string;
-}
-
 export interface StoredCampaign extends Timestamps {
   id: Id;
   name: string;
@@ -156,38 +134,6 @@ export interface StoredPlayer extends Timestamps {
   color?: string;
   imageUrl?: string | null;
   sharedNotes?: string;
-}
-
-export interface StoredUserCharacter extends Timestamps {
-  id: Id;
-  userId: Id;
-  name: string;
-  playerName: string;
-  className: string;
-  species: string;
-  level: number;
-  hpMax: number;
-  hpCurrent: number;
-  ac: number;
-  speed: number;
-  strScore: number | null;
-  dexScore: number | null;
-  conScore: number | null;
-  intScore: number | null;
-  wisScore: number | null;
-  chaScore: number | null;
-  color: string | null;
-  imageUrl: string | null;
-  characterData: Record<string, unknown> | null;
-  deathSaves?: StoredDeathSaves;
-  sharedNotes: string;
-}
-
-export interface StoredCharacterCampaign {
-  id: Id;
-  characterId: Id;
-  campaignId: Id;
-  playerId: Id | null;
 }
 
 export interface StoredINpc extends Timestamps {
